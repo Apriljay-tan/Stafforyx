@@ -352,7 +352,10 @@
     <div class="sidebar-section-label">Finance</div>
     <ul class="nav flex-column sidebar-nav">
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-cash-stack"></i> Payroll</a>
+        <a href="{% url 'payroll:payroll_record_list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'payroll' %}active{% endif %}">
+          <i class="bi bi-cash-stack"></i> Payroll
+        </a>
       </li>
     </ul>
 

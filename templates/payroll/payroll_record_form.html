@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Payroll Record{% endblock %}
+{% block page_title %}{{ action }} Payroll Record{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'payroll:payroll_record_list' %}" class="text-decoration-none">Payroll</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Payroll Record</h1>
+  <p>
+    {% if action == 'Add' %}Create an employee payroll record.
+    {% else %}Update this payroll record.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-person-vcard me-1" style="color:#1565C0;"></i>Record Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.payroll_period.label }}</label>
+          {{ form.payroll_period }}
+          {% if form.payroll_period.errors %}<div class="text-danger small mt-1">{{ form.payroll_period.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.employee.label }}</label>
+          {{ form.employee }}
+          {% if form.employee.errors %}<div class="text-danger small mt-1">{{ form.employee.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.status.label }}</label>
+          {{ form.status }}
+          {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-plus-circle me-1" style="color:#059669;"></i>Earnings
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.basic_pay.label }}</label>
+          {{ form.basic_pay }}
+          {% if form.basic_pay.errors %}<div class="text-danger small mt-1">{{ form.basic_pay.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.allowances.label }}</label>
+          {{ form.allowances }}
+          {% if form.allowances.errors %}<div class="text-danger small mt-1">{{ form.allowances.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.overtime_pay.label }}</label>
+          {{ form.overtime_pay }}
+          {% if form.overtime_pay.errors %}<div class="text-danger small mt-1">{{ form.overtime_pay.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-dash-circle me-1" style="color:#D97706;"></i>Deductions
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.sss_deduction.label }}</label>
+          {{ form.sss_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.philhealth_deduction.label }}</label>
+          {{ form.philhealth_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.pagibig_deduction.label }}</label>
+          {{ form.pagibig_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.tax_deduction.label }}</label>
+          {{ form.tax_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.late_deduction.label }}</label>
+          {{ form.late_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.absence_deduction.label }}</label>
+          {{ form.absence_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.other_deductions.label }}</label>
+          {{ form.other_deductions }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if record %}
+    <div class="card mb-4">
+      <div class="card-header">
+        <i class="bi bi-calculator me-1" style="color:#7C3AED;"></i>Calculated Pay
+      </div>
+      <div class="card-body p-4">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <div class="text-muted small">Gross Pay</div>
+            <div class="fw-bold">PHP {{ record.gross_pay }}</div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="text-muted small">Net Pay</div>
+            <div class="fw-bold">PHP {{ record.net_pay }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Payroll Record{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+  {{ employee_salary_map|json_script:"employee-salary-map" }}
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const employeeSelect = document.getElementById('id_employee');
+      const basicPayInput = document.getElementById('id_basic_pay');
+      const salaryDataElement = document.getElementById('employee-salary-map');
+
+      if (!employeeSelect || !basicPayInput || !salaryDataElement) {
+        return;
+      }
+
+      const employeeSalaryMap = JSON.parse(salaryDataElement.textContent);
+
+      function basicPayIsBlankOrZero() {
+        const value = basicPayInput.value.trim();
+        return value === '' || Number(value) === 0;
+      }
+
+      function fillBasicPayFromEmployee() {
+        const salary = employeeSalaryMap[employeeSelect.value];
+
+        if (salary && basicPayIsBlankOrZero()) {
+          basicPayInput.value = salary;
+        }
+      }
+
+      employeeSelect.addEventListener('change', fillBasicPayFromEmployee);
+      fillBasicPayFromEmployee();
+    });
+  </script>
+{% endblock %}

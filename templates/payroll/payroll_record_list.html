@@ -1,0 +1,160 @@
+{% extends 'base.html' %}
+{% block title %}Payroll{% endblock %}
+{% block page_title %}Payroll{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Payroll</h1>
+    <p>Manage employee payroll records and pay status.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'payroll:payroll_period_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-calendar-range me-1"></i>Payroll Periods
+    </a>
+    <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Payroll Record
+    </a>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Payroll Period</label>
+        <select name="payroll_period" class="form-select form-select-sm">
+          <option value="">All Periods</option>
+          {% for period in payroll_periods %}
+            <option value="{{ period.pk }}"
+              {% if payroll_period_filter == period.pk|stringformat:"s" %}selected{% endif %}>
+              {{ period.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All Employees</option>
+          {% for employee in employees %}
+            <option value="{{ employee.pk }}"
+              {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>
+              {{ employee.last_name }}, {{ employee.first_name }} - {{ employee.employee_id }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Statuses</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Company</label>
+        <select name="company" class="form-select form-select-sm">
+          <option value="">All Companies</option>
+          {% for company in companies %}
+            <option value="{{ company.pk }}"
+              {% if company_filter == company.pk|stringformat:"s" %}selected{% endif %}>
+              {{ company.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill" title="Filter">
+          <i class="bi bi-funnel"></i>
+        </button>
+        {% if payroll_period_filter or employee_filter or status_filter or company_filter %}
+          <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary btn-sm" title="Clear">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-cash-stack me-1" style="color:#1565C0;"></i>Payroll Records</span>
+    <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Employee</th>
+          <th>Period</th>
+          <th>Basic Pay</th>
+          <th>Gross Pay</th>
+          <th>Net Pay</th>
+          <th>Status</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="ps-3">
+              <span class="fw-semibold" style="color:#0D1B2A;">{{ record.employee.full_name }}</span>
+              <div class="text-muted" style="font-size:.73rem;">
+                {{ record.employee.employee_id }}{% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
+              </div>
+            </td>
+            <td>
+              {{ record.payroll_period.name }}
+              <div class="text-muted" style="font-size:.73rem;">{{ record.company.name }}</div>
+            </td>
+            <td>PHP {{ record.basic_pay }}</td>
+            <td>PHP {{ record.gross_pay }}</td>
+            <td class="fw-semibold">PHP {{ record.net_pay }}</td>
+            <td>
+              {% if record.status == 'draft' %}
+                <span class="badge text-bg-secondary">Draft</span>
+              {% elif record.status == 'approved' %}
+                <span class="badge text-bg-success">Approved</span>
+              {% elif record.status == 'paid' %}
+                <span class="badge text-bg-primary">Paid</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ record.get_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{% url 'payroll:payroll_record_edit' record.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'payroll:payroll_record_delete' record.pk %}"
+                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                <i class="bi bi-trash"></i>
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5">
+              <i class="bi bi-cash-stack fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+              <span class="text-muted">No payroll records found.</span>
+              {% if not payroll_period_filter and not employee_filter and not status_filter and not company_filter %}
+                <div class="mt-2">
+                  <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>Add First Payroll Record
+                  </a>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

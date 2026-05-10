@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Payroll Period{% endblock %}
+{% block page_title %}{{ action }} Payroll Period{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'payroll:payroll_period_list' %}" class="text-decoration-none">Payroll Periods</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Payroll Period</h1>
+  <p>
+    {% if action == 'Add' %}Create a payroll cycle.
+    {% else %}Update this payroll cycle.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-calendar-range me-1" style="color:#1565C0;"></i>Payroll Period Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.start_date.label }}</label>
+          {{ form.start_date }}
+          {% if form.start_date.errors %}<div class="text-danger small mt-1">{{ form.start_date.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.end_date.label }}</label>
+          {{ form.end_date }}
+          {% if form.end_date.errors %}<div class="text-danger small mt-1">{{ form.end_date.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.status.label }}</label>
+          {{ form.status }}
+          {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Payroll Period{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'payroll:payroll_period_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
