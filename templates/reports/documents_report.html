@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Documents Report{% endblock %}
+{% block page_title %}Documents Report{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Documents Report</h1>
+    <p>Filter employee documents and export the result to CSV.</p>
+  </div>
+  <a href="{% url 'reports:documents_report_export' %}?{{ request.GET.urlencode }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-download me-1"></i>Export CSV
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small fw-semibold mb-1">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All Employees</option>
+          {% for employee in employees %}
+            <option value="{{ employee.pk }}" {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>{{ employee.last_name }}, {{ employee.first_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Document Type</label>
+        <select name="document_type" class="form-select form-select-sm">
+          <option value="">All Types</option>
+          {% for value, label in document_type_choices %}
+            <option value="{{ value }}" {% if document_type_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Company</label>
+        <select name="company" class="form-select form-select-sm">
+          <option value="">All Companies</option>
+          {% for company in companies %}
+            <option value="{{ company.pk }}" {% if company_filter == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+        {% if employee_filter or document_type_filter or company_filter %}
+          <a href="{% url 'reports:documents_report' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-file-earmark-text me-1" style="color:#EA580C;"></i>Employee Documents</span>
+    <span class="badge bg-primary rounded-pill">{{ documents.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Employee</th>
+          <th>Title</th>
+          <th>Type</th>
+          <th>Company</th>
+          <th>Expiration</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
+          <tr>
+            <td class="ps-3">{{ document.employee.full_name }}</td>
+            <td>{{ document.title }}</td>
+            <td><span class="badge text-bg-secondary">{{ document.get_document_type_display }}</span></td>
+            <td>{{ document.company.name }}</td>
+            <td>{{ document.expiration_date|date:"M d, Y"|default:"-" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-center py-5 text-muted">No employee documents found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

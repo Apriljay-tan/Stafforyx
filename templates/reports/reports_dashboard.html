@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Reports</h1>
+  <p>Review Stafforyx HR data and export CSV files for each module.</p>
+</div>
+
+<div class="row g-3">
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url 'reports:employee_report' %}" class="text-decoration-none">
+      <div class="stat-card h-100">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="stat-value">{{ employee_count }}</div>
+            <div class="stat-label">Employee Report</div>
+          </div>
+          <div class="stat-icon" style="background:#EFF6FF;">
+            <i class="bi bi-people-fill" style="color:#1565C0;"></i>
+          </div>
+        </div>
+        <div class="mt-2 stat-trend text-muted">Company, status, and department filters</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url 'reports:attendance_report' %}" class="text-decoration-none">
+      <div class="stat-card h-100">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="stat-value">{{ attendance_count }}</div>
+            <div class="stat-label">Attendance Report</div>
+          </div>
+          <div class="stat-icon" style="background:#ECFDF5;">
+            <i class="bi bi-clock-history" style="color:#059669;"></i>
+          </div>
+        </div>
+        <div class="mt-2 stat-trend text-muted">Employee, status, and date filters</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url 'reports:leave_report' %}" class="text-decoration-none">
+      <div class="stat-card h-100">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="stat-value">{{ leave_count }}</div>
+            <div class="stat-label">Leave Report</div>
+          </div>
+          <div class="stat-icon" style="background:#FFFBEB;">
+            <i class="bi bi-calendar2-check" style="color:#D97706;"></i>
+          </div>
+        </div>
+        <div class="mt-2 stat-trend text-muted">Employee, leave type, status, and dates</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url 'reports:payroll_report' %}" class="text-decoration-none">
+      <div class="stat-card h-100">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="stat-value">{{ payroll_count }}</div>
+            <div class="stat-label">Payroll Report</div>
+          </div>
+          <div class="stat-icon" style="background:#FDF4FF;">
+            <i class="bi bi-cash-stack" style="color:#7C3AED;"></i>
+          </div>
+        </div>
+        <div class="mt-2 stat-trend text-muted">Period, employee, status, and company</div>
+      </div>
+    </a>
+  </div>
+
+  <div class="col-12 col-md-6 col-xl-4">
+    <a href="{% url 'reports:documents_report' %}" class="text-decoration-none">
+      <div class="stat-card h-100">
+        <div class="d-flex align-items-start justify-content-between">
+          <div>
+            <div class="stat-value">{{ document_count }}</div>
+            <div class="stat-label">Documents Report</div>
+          </div>
+          <div class="stat-icon" style="background:#FFF7ED;">
+            <i class="bi bi-file-earmark-text" style="color:#EA580C;"></i>
+          </div>
+        </div>
+        <div class="mt-2 stat-trend text-muted">Employee, type, and company filters</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+{% endblock %}

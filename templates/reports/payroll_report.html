@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}Payroll Report{% endblock %}
+{% block page_title %}Payroll Report{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Payroll Report</h1>
+    <p>Filter payroll records and export the result to CSV.</p>
+  </div>
+  <a href="{% url 'reports:payroll_report_export' %}?{{ request.GET.urlencode }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-download me-1"></i>Export CSV
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Payroll Period</label>
+        <select name="payroll_period" class="form-select form-select-sm">
+          <option value="">All Periods</option>
+          {% for period in payroll_periods %}
+            <option value="{{ period.pk }}" {% if payroll_period_filter == period.pk|stringformat:"s" %}selected{% endif %}>{{ period.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All Employees</option>
+          {% for employee in employees %}
+            <option value="{{ employee.pk }}" {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>{{ employee.last_name }}, {{ employee.first_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Statuses</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Company</label>
+        <select name="company" class="form-select form-select-sm">
+          <option value="">All Companies</option>
+          {% for company in companies %}
+            <option value="{{ company.pk }}" {% if company_filter == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-1 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel"></i></button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-cash-stack me-1" style="color:#7C3AED;"></i>Payroll Records</span>
+    <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Period</th>
+          <th>Employee</th>
+          <th>Gross Pay</th>
+          <th>Net Pay</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="ps-3">{{ record.payroll_period.name }}</td>
+            <td>{{ record.employee.full_name }}</td>
+            <td>PHP {{ record.gross_pay }}</td>
+            <td class="fw-semibold">PHP {{ record.net_pay }}</td>
+            <td><span class="badge text-bg-secondary">{{ record.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="text-center py-5 text-muted">No payroll records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

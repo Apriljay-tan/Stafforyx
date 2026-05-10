@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "payroll",
     "documents",
     "announcements",
+    "reports",
     "dashboard",
 ]
 

@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+{% block title %}Attendance Report{% endblock %}
+{% block page_title %}Attendance Report{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Attendance Report</h1>
+    <p>Filter attendance records and export the result to CSV.</p>
+  </div>
+  <a href="{% url 'reports:attendance_report_export' %}?{{ request.GET.urlencode }}" class="btn btn-primary btn-sm">
+    <i class="bi bi-download me-1"></i>Export CSV
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All Employees</option>
+          {% for employee in employees %}
+            <option value="{{ employee.pk }}" {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>{{ employee.last_name }}, {{ employee.first_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All Statuses</option>
+          {% for value, label in status_choices %}
+            <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Date From</label>
+        <input type="date" name="date_from" class="form-control form-control-sm" value="{{ date_from_filter }}">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Date To</label>
+        <input type="date" name="date_to" class="form-control form-control-sm" value="{{ date_to_filter }}">
+      </div>
+      <div class="col-6 col-md-3 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill"><i class="bi bi-funnel me-1"></i>Filter</button>
+        {% if employee_filter or status_filter or date_from_filter or date_to_filter %}
+          <a href="{% url 'reports:attendance_report' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-x-lg"></i></a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-clock-history me-1" style="color:#059669;"></i>Attendance</span>
+    <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Date</th>
+          <th>Employee</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Total Hours</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="ps-3">{{ record.date|date:"M d, Y" }}</td>
+            <td>{{ record.employee.full_name }}</td>
+            <td>{{ record.time_in|time:"g:i A"|default:"-" }}</td>
+            <td>{{ record.time_out|time:"g:i A"|default:"-" }}</td>
+            <td>{{ record.total_hours }}</td>
+            <td><span class="badge text-bg-secondary">{{ record.get_status_display }}</span></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center py-5 text-muted">No attendance records found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

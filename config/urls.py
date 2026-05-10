@@ -13,6 +13,7 @@ urlpatterns = [
     path('payroll/', include('payroll.urls')),
     path('documents/', include('documents.urls')),
     path('announcements/', include('announcements.urls')),
+    path('reports/', include('reports.urls')),
 ]
 
 if settings.DEBUG:

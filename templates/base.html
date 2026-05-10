@@ -374,6 +374,12 @@
         </a>
       </li>
       <li class="nav-item">
+        <a href="{% url 'reports:reports_dashboard' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'reports' %}active{% endif %}">
+          <i class="bi bi-bar-chart"></i> Reports
+        </a>
+      </li>
+      <li class="nav-item">
         <a href="/admin/" class="nav-link"><i class="bi bi-shield-lock"></i> Admin Panel</a>
       </li>
     </ul>
