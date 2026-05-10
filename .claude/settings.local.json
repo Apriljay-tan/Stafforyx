@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Stafforyx\\\\licenses\\\\migrations\")",
+      "PowerShell(New-Item -ItemType Directory -Force \"d:\\\\Stafforyx\\\\templates\\\\licenses\")"
+    ]
+  }
+}

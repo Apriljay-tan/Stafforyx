@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+{% block title %}License Status{% endblock %}
+{% block page_title %}License Status{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>License Status</h1>
+  <p>View the current Stafforyx HR license information for this installation.</p>
+</div>
+
+{% if not license %}
+
+  <div class="row justify-content-center">
+    <div class="col-12 col-md-6">
+      <div class="card text-center">
+        <div class="card-body py-5">
+          <i class="bi bi-key fs-1 d-block mb-3 text-muted" style="opacity:.35;"></i>
+          <h5 class="fw-bold mb-1" style="color:#0D1B2A;">No License Configured</h5>
+          <p class="text-muted mb-4" style="font-size:.9rem;">
+            No license record has been added yet.<br>
+            Add a license through the <a href="/admin/licenses/license/add/" class="text-decoration-none">Admin Panel</a>.
+          </p>
+          <a href="/admin/licenses/license/add/" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>Add License in Admin
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+{% else %}
+
+  <!-- Status Banner -->
+  {% if license.status == 'active' %}
+    <div class="alert border-0 d-flex align-items-center gap-3 mb-4"
+         style="background:#ECFDF5;border-left:4px solid #059669 !important;">
+      <i class="bi bi-check-circle-fill fs-5" style="color:#059669;flex-shrink:0;"></i>
+      <div>
+        <strong style="color:#065F46;">License Active</strong>
+        {% if license.is_lifetime %}
+          — Lifetime license, no expiration.
+        {% elif license.days_remaining is not None %}
+          —
+          {% if license.days_remaining > 0 %}
+            {{ license.days_remaining }} day{{ license.days_remaining|pluralize }} remaining.
+          {% else %}
+            Expires today.
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  {% elif license.status == 'trial' %}
+    <div class="alert border-0 d-flex align-items-center gap-3 mb-4"
+         style="background:#FFFBEB;border-left:4px solid #D97706 !important;">
+      <i class="bi bi-hourglass-split fs-5" style="color:#D97706;flex-shrink:0;"></i>
+      <div>
+        <strong style="color:#92400E;">Trial License</strong>
+        {% if license.days_remaining is not None %}
+          — {{ license.days_remaining }} day{{ license.days_remaining|pluralize }} remaining.
+        {% endif %}
+      </div>
+    </div>
+  {% elif license.status == 'expired' or license.is_expired %}
+    <div class="alert border-0 d-flex align-items-center gap-3 mb-4"
+         style="background:#FEF2F2;border-left:4px solid #DC2626 !important;">
+      <i class="bi bi-x-circle-fill fs-5" style="color:#DC2626;flex-shrink:0;"></i>
+      <div>
+        <strong style="color:#991B1B;">License Expired</strong>
+        — Please renew to continue using Stafforyx HR.
+      </div>
+    </div>
+  {% elif license.status == 'suspended' %}
+    <div class="alert border-0 d-flex align-items-center gap-3 mb-4"
+         style="background:#FEF2F2;border-left:4px solid #7C3AED !important;">
+      <i class="bi bi-slash-circle-fill fs-5" style="color:#7C3AED;flex-shrink:0;"></i>
+      <div>
+        <strong style="color:#4C1D95;">License Suspended</strong>
+        — Contact support for assistance.
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3">
+
+    <!-- Main License Card -->
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-key me-1" style="color:#1565C0;"></i>License Details
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm mb-0" style="font-size:.875rem;">
+            <tbody>
+              <tr>
+                <td class="text-muted ps-4 py-3" style="width:38%;font-weight:500;">Client Name</td>
+                <td class="py-3 fw-semibold">{{ license.client_name }}</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Company</td>
+                <td class="py-3">{{ license.company.name|default:"—" }}</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">License Key</td>
+                <td class="py-3">
+                  <code style="font-size:.82rem;color:#1565C0;background:#EFF6FF;padding:2px 8px;border-radius:4px;">
+                    {{ license.license_key }}
+                  </code>
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Plan</td>
+                <td class="py-3">
+                  {% if license.plan == 'lifetime' %}
+                    <span class="badge" style="background:#059669;color:#fff;">
+                      <i class="bi bi-infinity me-1"></i>Lifetime
+                    </span>
+                  {% elif license.plan == 'annual' %}
+                    <span class="badge text-bg-primary">Annual</span>
+                  {% elif license.plan == 'monthly' %}
+                    <span class="badge text-bg-info">Monthly</span>
+                  {% else %}
+                    <span class="badge text-bg-warning">Trial</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Status</td>
+                <td class="py-3">
+                  {% if license.status == 'active' %}
+                    <span class="badge text-bg-success">Active</span>
+                  {% elif license.status == 'trial' %}
+                    <span class="badge text-bg-warning">Trial</span>
+                  {% elif license.status == 'expired' %}
+                    <span class="badge text-bg-danger">Expired</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">Suspended</span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Valid From</td>
+                <td class="py-3">{{ license.valid_from|date:"M d, Y" }}</td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Valid Until</td>
+                <td class="py-3">
+                  {% if license.is_lifetime %}
+                    <span class="text-muted"><i class="bi bi-infinity me-1"></i>No Expiration</span>
+                  {% elif license.valid_until %}
+                    {{ license.valid_until|date:"M d, Y" }}
+                    {% if license.days_remaining is not None %}
+                      <span class="ms-2 text-muted" style="font-size:.8rem;">
+                        ({% if license.days_remaining > 0 %}{{ license.days_remaining }} day{{ license.days_remaining|pluralize }} left{% elif license.days_remaining == 0 %}expires today{% else %}{{ license.days_remaining|cut:"-" }} day{{ license.days_remaining|pluralize }} overdue{% endif %})
+                      </span>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
+                <td class="text-muted ps-4 py-3">Max Employees</td>
+                <td class="py-3 fw-semibold">{{ license.max_employees }}</td>
+              </tr>
+              {% if license.machine_id %}
+              <tr>
+                <td class="text-muted ps-4 py-3">Machine ID</td>
+                <td class="py-3">
+                  <code style="font-size:.82rem;color:#475569;">{{ license.machine_id }}</code>
+                </td>
+              </tr>
+              {% endif %}
+              {% if license.notes %}
+              <tr>
+                <td class="text-muted ps-4 py-3">Notes</td>
+                <td class="py-3" style="white-space:pre-line;">{{ license.notes }}</td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Card -->
+    <div class="col-12 col-lg-4">
+      <div class="card mb-3">
+        <div class="card-header">
+          <i class="bi bi-info-circle me-1" style="color:#1565C0;"></i>Summary
+        </div>
+        <div class="card-body p-3">
+
+          <!-- Status indicator -->
+          <div class="text-center py-3 mb-3 rounded-3"
+               style="background:{% if license.status == 'active' %}#ECFDF5{% elif license.status == 'trial' %}#FFFBEB{% else %}#FEF2F2{% endif %};">
+            <i class="bi bi-{% if license.status == 'active' %}shield-check{% elif license.status == 'trial' %}hourglass-split{% else %}shield-x{% endif %} fs-2 d-block mb-1"
+               style="color:{% if license.status == 'active' %}#059669{% elif license.status == 'trial' %}#D97706{% else %}#DC2626{% endif %};"></i>
+            <div class="fw-bold" style="font-size:.9rem;color:{% if license.status == 'active' %}#065F46{% elif license.status == 'trial' %}#92400E{% else %}#991B1B{% endif %};">
+              {{ license.get_status_display }}
+            </div>
+          </div>
+
+          <div class="d-flex flex-column gap-2" style="font-size:.85rem;">
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Plan</span>
+              <span class="fw-semibold">{{ license.get_plan_display }}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Max Employees</span>
+              <span class="fw-semibold">{{ license.max_employees }}</span>
+            </div>
+            {% if not license.is_lifetime and license.valid_until %}
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Days Remaining</span>
+              <span class="fw-semibold {% if license.days_remaining <= 0 %}text-danger{% elif license.days_remaining <= 30 %}text-warning{% else %}text-success{% endif %}">
+                {% if license.days_remaining > 0 %}{{ license.days_remaining }}{% elif license.days_remaining == 0 %}0 (today){% else %}Overdue{% endif %}
+              </span>
+            </div>
+            {% endif %}
+            {% if not license.is_lifetime and license.valid_until and license.days_remaining is not None and license.days_remaining >= 0 %}
+            <div class="mt-1">
+              {% with total=365 remaining=license.days_remaining %}
+              <div class="d-flex justify-content-between mb-1" style="font-size:.75rem;">
+                <span class="text-muted">License period</span>
+              </div>
+              <div class="progress" style="height:6px;border-radius:3px;">
+                <div class="progress-bar {% if remaining <= 30 %}bg-danger{% elif remaining <= 90 %}bg-warning{% else %}bg-success{% endif %}"
+                     role="progressbar"
+                     style="width:{% if remaining >= total %}100{% else %}{{ remaining|floatformat:0 }}{% endif %}%">
+                </div>
+              </div>
+              {% endwith %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body p-3">
+          <p class="text-muted mb-2" style="font-size:.8rem;">
+            <i class="bi bi-info-circle me-1"></i>
+            License management is handled through the Admin Panel.
+          </p>
+          <a href="/admin/licenses/license/" class="btn btn-outline-secondary btn-sm w-100">
+            <i class="bi bi-shield-lock me-1"></i>Manage in Admin
+          </a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+{% endif %}
+{% endblock %}

@@ -22,9 +22,13 @@ class PositionAdmin(admin.ModelAdmin):
 class EmployeeAdmin(admin.ModelAdmin):
     list_display = (
         'employee_id', 'last_name', 'first_name', 'company',
-        'department', 'position', 'employment_type', 'status'
+        'department', 'position', 'employment_type', 'status',
+        'biometric_user_id',
     )
-    search_fields = ('employee_id', 'first_name', 'last_name', 'email', 'phone')
+    search_fields = (
+        'employee_id', 'biometric_user_id',
+        'first_name', 'last_name', 'email', 'phone',
+    )
     list_filter = ('company', 'department', 'employment_type', 'status')
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
@@ -39,6 +43,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             'fields': (
                 'date_hired', 'department', 'position',
                 'employment_type', 'status', 'basic_salary',
+                'biometric_user_id',
             )
         }),
         ('Government IDs', {

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "announcements",
     "reports",
     "dashboard",
+    "licenses",
 ]
 
 MIDDLEWARE = [

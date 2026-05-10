@@ -1,0 +1,43 @@
+STAFFORYX HR - CURRENT STABLE STATE
+
+Project path:
+D:\stafforyx
+
+Tech:
+Python Django 6.0.5
+SQLite local database
+Bootstrap 5 templates
+
+Completed:
+- Dashboard real counts
+- Company admin
+- Employee/Department/Position CRUD
+- Attendance CRUD
+- Leave Management CRUD
+- Payroll Period/Record CRUD
+- Payroll salary auto-fill from Employee.basic_salary
+- Payroll gross/net auto-calculation
+- Employee Documents CRUD with upload/download
+- Announcements/Memo CRUD
+- Reports CSV export
+- Designed Export All Data to Excel using openpyxl
+- User roles/access control
+- Custom designed 403 Access Restricted page
+- Employee biometric_user_id field added for future biometric integration
+
+Current latest stable checkpoint:
+Biometric-ready employee field added.
+No full biometric device sync yet.
+No license key system yet.
+No email notification queue yet.
+No offline packaging yet.
+
+Next recommended feature:
+License Key System
+
+Build order next:
+1. License Key System
+2. Email Notification Queue
+3. Offline/Desktop Packaging
+4. Full Biometric Device Integration
+5. Polish UI/dashboard

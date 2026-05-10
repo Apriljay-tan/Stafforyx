@@ -88,6 +88,10 @@
             <div class="text-muted">Basic Salary</div>
             <div class="fw-semibold">&#8369;{{ employee.basic_salary|floatformat:2 }}</div>
           </div>
+          <div>
+            <div class="text-muted">Biometric ID</div>
+            <div class="fw-semibold" style="font-family:monospace;">{{ employee.biometric_user_id|default:"-" }}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -172,6 +176,10 @@
             <tr>
               <td class="text-muted ps-3 py-2">Basic Salary</td>
               <td class="fw-semibold py-2">&#8369;{{ employee.basic_salary|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Biometric User ID</td>
+              <td class="py-2" style="font-family:monospace;">{{ employee.biometric_user_id|default:"-" }}</td>
             </tr>
           </tbody>
         </table>

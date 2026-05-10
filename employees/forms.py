@@ -44,6 +44,7 @@ class EmployeeForm(forms.ModelForm):
             'email', 'phone', 'address',
             'date_hired', 'department', 'position',
             'employment_type', 'status', 'basic_salary',
+            'biometric_user_id',
             'sss_number', 'philhealth_number', 'pagibig_number', 'tin_number',
             'emergency_contact_name', 'emergency_contact_phone',
         ]

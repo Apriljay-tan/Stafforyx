@@ -72,6 +72,12 @@ class Employee(models.Model):
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES, default='regular')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    biometric_user_id = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='ID number used by the biometric attendance device',
+    )
     sss_number = models.CharField(max_length=30, blank=True)
     philhealth_number = models.CharField(max_length=30, blank=True)
     pagibig_number = models.CharField(max_length=30, blank=True)

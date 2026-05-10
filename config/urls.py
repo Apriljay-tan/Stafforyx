@@ -16,6 +16,7 @@ urlpatterns = [
     path('documents/', include('documents.urls')),
     path('announcements/', include('announcements.urls')),
     path('reports/', include('reports.urls')),
+    path('licenses/', include('licenses.urls')),
 ]
 
 if settings.DEBUG:

@@ -158,6 +158,19 @@
             <div class="text-danger small mt-1">{{ form.basic_salary.errors.as_text }}</div>
           {% endif %}
         </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label fw-semibold small">
+            {{ form.biometric_user_id.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.biometric_user_id }}
+          {% if form.biometric_user_id.help_text %}
+            <div class="form-text">{{ form.biometric_user_id.help_text }}</div>
+          {% endif %}
+          {% if form.biometric_user_id.errors %}
+            <div class="text-danger small mt-1">{{ form.biometric_user_id.errors.as_text }}</div>
+          {% endif %}
+        </div>
       </div>
     </div>
   </div>
