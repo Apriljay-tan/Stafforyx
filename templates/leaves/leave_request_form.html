@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Leave Request{% endblock %}
+{% block page_title %}{{ action }} Leave Request{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'leaves:leave_request_list' %}" class="text-decoration-none">Leave Management</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Leave Request</h1>
+  <p>
+    {% if action == 'Add' %}Create a new employee leave request.
+    {% else %}Update this leave request.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-calendar2-check me-1" style="color:#1565C0;"></i>Leave Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.employee.label }}</label>
+          {{ form.employee }}
+          {% if form.employee.errors %}<div class="text-danger small mt-1">{{ form.employee.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.leave_type.label }}</label>
+          {{ form.leave_type }}
+          {% if form.leave_type.errors %}<div class="text-danger small mt-1">{{ form.leave_type.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.status.label }}</label>
+          {{ form.status }}
+          {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-calendar-range me-1" style="color:#059669;"></i>Date Range
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.start_date.label }}</label>
+          {{ form.start_date }}
+          {% if form.start_date.errors %}<div class="text-danger small mt-1">{{ form.start_date.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.end_date.label }}</label>
+          {{ form.end_date }}
+          {% if form.end_date.errors %}<div class="text-danger small mt-1">{{ form.end_date.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.total_days.label }}</label>
+          {{ form.total_days }}
+          {% if form.total_days.errors %}<div class="text-danger small mt-1">{{ form.total_days.errors.as_text }}</div>{% endif %}
+          <div class="form-text">Calculated from the selected start and end dates when saved.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-card-text me-1" style="color:#D97706;"></i>Request Notes
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label fw-semibold small">{{ form.reason.label }}</label>
+          {{ form.reason }}
+          {% if form.reason.errors %}<div class="text-danger small mt-1">{{ form.reason.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">
+            {{ form.remarks.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.remarks }}
+          {% if form.remarks.errors %}<div class="text-danger small mt-1">{{ form.remarks.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Leave Request{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'leaves:leave_request_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Leave Type{% endblock %}
+{% block page_title %}{{ action }} Leave Type{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'leaves:leave_type_list' %}" class="text-decoration-none">Leave Types</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Leave Type</h1>
+  <p>
+    {% if action == 'Add' %}Create a leave category for employee requests.
+    {% else %}Update this leave category.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-tag me-1" style="color:#1565C0;"></i>Leave Type Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.default_days.label }}</label>
+          {{ form.default_days }}
+          {% if form.default_days.errors %}<div class="text-danger small mt-1">{{ form.default_days.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4 d-flex align-items-end">
+          <div class="form-check mb-2">
+            {{ form.is_paid }}
+            <label class="form-check-label fw-semibold small" for="{{ form.is_paid.id_for_label }}">
+              {{ form.is_paid.label }}
+            </label>
+            {% if form.is_paid.errors %}<div class="text-danger small mt-1">{{ form.is_paid.errors.as_text }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Leave Type{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'leaves:leave_type_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

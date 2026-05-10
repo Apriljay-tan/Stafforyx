@@ -342,7 +342,10 @@
         </a>
       </li>
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-calendar2-check"></i> Leave Management</a>
+        <a href="{% url 'leaves:leave_request_list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'leaves' %}active{% endif %}">
+          <i class="bi bi-calendar2-check"></i> Leave Management
+        </a>
       </li>
     </ul>
 

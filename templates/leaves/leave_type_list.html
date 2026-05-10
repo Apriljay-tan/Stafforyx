@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Leave Types{% endblock %}
+{% block page_title %}Leave Types{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Leave Types</h1>
+    <p>Manage the leave categories available for requests.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'leaves:leave_request_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Leave Requests
+    </a>
+    <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Leave Type
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-tags me-1" style="color:#1565C0;"></i>Leave Types</span>
+    <span class="badge bg-primary rounded-pill">{{ leave_types.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Name</th>
+          <th>Company</th>
+          <th>Default Days</th>
+          <th>Paid</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for leave_type in leave_types %}
+          <tr>
+            <td class="ps-3 fw-semibold" style="color:#0D1B2A;">{{ leave_type.name }}</td>
+            <td class="text-muted">{{ leave_type.company.name }}</td>
+            <td>{{ leave_type.default_days }}</td>
+            <td>
+              {% if leave_type.is_paid %}
+                <span class="badge text-bg-success">Paid</span>
+              {% else %}
+                <span class="badge text-bg-secondary">Unpaid</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{% url 'leaves:leave_type_edit' leave_type.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'leaves:leave_type_delete' leave_type.pk %}"
+                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                <i class="bi bi-trash"></i>
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="5" class="text-center py-5">
+              <i class="bi bi-tags fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+              <span class="text-muted">No leave types found.</span>
+              <div class="mt-2">
+                <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
+                  <i class="bi bi-plus-circle me-1"></i>Add First Leave Type
+                </a>
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}
