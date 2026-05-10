@@ -1,7 +1,14 @@
+from django.contrib.auth import views as auth_views
 from django.urls import path
+
+from . import views
 
 app_name = 'accounts'
 
 urlpatterns = [
-    # Login / logout views will be added here
+    path('login/', auth_views.LoginView.as_view(template_name='accounts/login.html'), name='login'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='accounts:login'), name='logout'),
+    path('users/', views.user_list, name='user_list'),
+    path('users/add/', views.user_add, name='user_add'),
+    path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
 ]

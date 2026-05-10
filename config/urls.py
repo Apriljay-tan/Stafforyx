@@ -3,10 +3,12 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from dashboard.views import dashboard_home
+from accounts.access import module_access_required
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', dashboard_home, name='dashboard_home'),
+    path('', module_access_required('can_access_dashboard')(dashboard_home), name='dashboard_home'),
+    path('accounts/', include('accounts.urls')),
     path('employees/', include('employees.urls')),
     path('attendance/', include('attendance.urls')),
     path('leaves/', include('leaves.urls')),
@@ -18,3 +20,5 @@ urlpatterns = [
 
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+handler403 = 'accounts.views.permission_denied_view'

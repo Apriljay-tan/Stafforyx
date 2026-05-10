@@ -387,10 +387,22 @@
     <div class="sidebar-section-label">Account</div>
     <ul class="nav flex-column sidebar-nav">
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-person-circle"></i> Profile</a>
+        <a href="{% url 'accounts:user_list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name != 'login' %}active{% endif %}">
+          <i class="bi bi-person-circle"></i> Users
+        </a>
       </li>
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-gear"></i> Settings</a>
+        {% if request.user.is_authenticated %}
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-link border-0 w-100 text-start" style="background:transparent;">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </form>
+        {% else %}
+          <a href="{% url 'accounts:login' %}" class="nav-link"><i class="bi bi-box-arrow-in-right"></i> Login</a>
+        {% endif %}
       </li>
     </ul>
 
