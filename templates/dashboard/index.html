@@ -1,0 +1,197 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- Page Header -->
+<div class="page-header">
+  <h1>Welcome back, Admin</h1>
+  <p>Here's what's happening in your organization today.</p>
+</div>
+
+<!-- Stat Cards -->
+<div class="row g-3 mb-4">
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-start justify-content-between">
+        <div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Total Employees</div>
+        </div>
+        <div class="stat-icon" style="background:#EFF6FF;">
+          <i class="bi bi-people-fill" style="color:#1565C0;"></i>
+        </div>
+      </div>
+      <div class="mt-2 stat-trend text-muted">
+        <i class="bi bi-arrow-up-right text-success"></i> No data yet
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-start justify-content-between">
+        <div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Present Today</div>
+        </div>
+        <div class="stat-icon" style="background:#ECFDF5;">
+          <i class="bi bi-person-check-fill" style="color:#059669;"></i>
+        </div>
+      </div>
+      <div class="mt-2 stat-trend text-muted">
+        <i class="bi bi-dash text-secondary"></i> Attendance not tracked yet
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-start justify-content-between">
+        <div>
+          <div class="stat-value">0</div>
+          <div class="stat-label">Pending Leaves</div>
+        </div>
+        <div class="stat-icon" style="background:#FFFBEB;">
+          <i class="bi bi-calendar2-x-fill" style="color:#D97706;"></i>
+        </div>
+      </div>
+      <div class="mt-2 stat-trend text-muted">
+        <i class="bi bi-dash text-secondary"></i> No leave requests
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="d-flex align-items-start justify-content-between">
+        <div>
+          <div class="stat-value">₱0</div>
+          <div class="stat-label">Payroll This Month</div>
+        </div>
+        <div class="stat-icon" style="background:#FDF4FF;">
+          <i class="bi bi-cash-stack" style="color:#7C3AED;"></i>
+        </div>
+      </div>
+      <div class="mt-2 stat-trend text-muted">
+        <i class="bi bi-dash text-secondary"></i> No payroll processed
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Second Row: Quick Actions + Recent Activity -->
+<div class="row g-3">
+
+  <!-- Quick Actions -->
+  <div class="col-12 col-lg-4">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-lightning-charge me-1" style="color:#FFC107;"></i> Quick Actions
+      </div>
+      <div class="card-body p-3">
+        <div class="d-grid gap-2">
+          <a href="#" class="btn btn-outline-primary btn-sm text-start">
+            <i class="bi bi-person-plus me-2"></i>Add New Employee
+          </a>
+          <a href="#" class="btn btn-outline-secondary btn-sm text-start">
+            <i class="bi bi-clock me-2"></i>Log Attendance
+          </a>
+          <a href="#" class="btn btn-outline-warning btn-sm text-start">
+            <i class="bi bi-calendar2-plus me-2"></i>File a Leave
+          </a>
+          <a href="#" class="btn btn-outline-success btn-sm text-start">
+            <i class="bi bi-receipt me-2"></i>Run Payroll
+          </a>
+          <a href="#" class="btn btn-outline-info btn-sm text-start">
+            <i class="bi bi-megaphone me-2"></i>Post Announcement
+          </a>
+          <a href="/admin/" class="btn btn-outline-dark btn-sm text-start">
+            <i class="bi bi-shield-lock me-2"></i>Admin Panel
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Modules -->
+  <div class="col-12 col-lg-8">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-grid me-1" style="color:#1565C0;"></i> System Modules
+      </div>
+      <div class="card-body p-3">
+        <div class="row g-3">
+
+          {% with modules=modules_list %}
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#EFF6FF; border:1px solid #BFDBFE;">
+              <i class="bi bi-people-fill fs-4" style="color:#1565C0;"></i>
+              <div class="mt-1 fw-600" style="font-size:0.85rem; color:#1E3A5F; font-weight:600;">Employees</div>
+              <div style="font-size:0.7rem; color:#64748b;">Manage staff records</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#ECFDF5; border:1px solid #A7F3D0;">
+              <i class="bi bi-clock-history fs-4" style="color:#059669;"></i>
+              <div class="mt-1" style="font-size:0.85rem; color:#064E3B; font-weight:600;">Attendance</div>
+              <div style="font-size:0.7rem; color:#64748b;">Track daily presence</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#FFFBEB; border:1px solid #FDE68A;">
+              <i class="bi bi-calendar2-check fs-4" style="color:#D97706;"></i>
+              <div class="mt-1" style="font-size:0.85rem; color:#78350F; font-weight:600;">Leave</div>
+              <div style="font-size:0.7rem; color:#64748b;">Manage time off</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#FDF4FF; border:1px solid #E9D5FF;">
+              <i class="bi bi-cash-stack fs-4" style="color:#7C3AED;"></i>
+              <div class="mt-1" style="font-size:0.85rem; color:#4C1D95; font-weight:600;">Payroll</div>
+              <div style="font-size:0.7rem; color:#64748b;">Process salaries</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#FFF7ED; border:1px solid #FED7AA;">
+              <i class="bi bi-file-earmark-text fs-4" style="color:#EA580C;"></i>
+              <div class="mt-1" style="font-size:0.85rem; color:#7C2D12; font-weight:600;">Documents</div>
+              <div style="font-size:0.7rem; color:#64748b;">Employee files</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4">
+            <div class="p-3 rounded-3 text-center" style="background:#F0FDF4; border:1px solid #BBF7D0;">
+              <i class="bi bi-megaphone fs-4" style="color:#16A34A;"></i>
+              <div class="mt-1" style="font-size:0.85rem; color:#14532D; font-weight:600;">Announcements</div>
+              <div style="font-size:0.7rem; color:#64748b;">Company updates</div>
+            </div>
+          </div>
+          {% endwith %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Setup Notice -->
+<div class="mt-4">
+  <div class="alert alert-info d-flex align-items-start gap-3 border-0 rounded-3"
+       style="background:#EFF6FF; border-left: 4px solid #1565C0 !important;">
+    <i class="bi bi-info-circle-fill fs-5 mt-1" style="color:#1565C0;"></i>
+    <div>
+      <strong style="color:#1E3050;">Stafforyx HR Foundation is ready.</strong><br />
+      <span style="font-size:0.875rem; color:#334155;">
+        You are currently in the initial setup phase. Start by adding your company and employees to unlock all modules.
+        Run <code>python manage.py migrate</code> and <code>python manage.py createsuperuser</code> to finish setup.
+      </span>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block title %}Employees{% endblock %}
+{% block page_title %}Employees{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Employees</h1>
+    <p>Manage all employee records across your organization.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'employees:department_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-diagram-3 me-1"></i>Departments
+    </a>
+    <a href="{% url 'employees:position_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-briefcase me-1"></i>Positions
+    </a>
+    <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-person-plus me-1"></i>Add Employee
+    </a>
+  </div>
+</div>
+
+<!-- Search & Filters -->
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-5">
+        <label class="form-label small fw-semibold mb-1">Search</label>
+        <div class="input-group input-group-sm">
+          <span class="input-group-text bg-white border-end-0">
+            <i class="bi bi-search text-muted" style="font-size:.8rem;"></i>
+          </span>
+          <input type="text" name="q" class="form-control border-start-0 ps-1"
+                 placeholder="Name, ID, or email…" value="{{ q }}">
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Status</label>
+        <select name="status" class="form-select form-select-sm">
+          <option value="">All</option>
+          {% for val, label in status_choices %}
+            <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Department</label>
+        <select name="department" class="form-select form-select-sm">
+          <option value="">All Departments</option>
+          {% for dept in departments %}
+            <option value="{{ dept.pk }}"
+              {% if dept_filter == dept.pk|stringformat:"s" %}selected{% endif %}>
+              {{ dept.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        {% if q or status_filter or dept_filter %}
+          <a href="{% url 'employees:employee_list' %}" class="btn btn-outline-secondary btn-sm" title="Clear">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-people me-1" style="color:#1565C0;"></i>Employee Records</span>
+    <span class="badge bg-primary rounded-pill">{{ employees.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th style="width:44px;" class="ps-3"></th>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Position</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for emp in employees %}
+        <tr>
+          <td class="ps-3">
+            {% if emp.photo %}
+              <img src="{{ emp.photo.url }}" class="rounded-circle"
+                   style="width:36px;height:36px;object-fit:cover;" alt="">
+            {% else %}
+              <div class="rounded-circle d-flex align-items-center justify-content-center fw-semibold"
+                   style="width:36px;height:36px;background:#1565C0;color:#fff;font-size:.75rem;flex-shrink:0;">
+                {{ emp.first_name.0 }}{{ emp.last_name.0 }}
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            <span class="text-muted" style="font-size:.8rem;font-family:monospace;">{{ emp.employee_id }}</span>
+          </td>
+          <td>
+            <a href="{% url 'employees:employee_detail' emp.pk %}"
+               class="fw-semibold text-decoration-none" style="color:#0D1B2A;">
+              {{ emp.last_name }}, {{ emp.first_name }}
+            </a>
+            <div class="text-muted" style="font-size:.73rem;">{{ emp.email }}</div>
+          </td>
+          <td class="text-muted">{{ emp.department.name|default:"—" }}</td>
+          <td class="text-muted">{{ emp.position.title|default:"—" }}</td>
+          <td>
+            {% if emp.employment_type == 'regular' %}
+              <span class="badge text-bg-primary">Regular</span>
+            {% elif emp.employment_type == 'probationary' %}
+              <span class="badge text-bg-info">Probationary</span>
+            {% elif emp.employment_type == 'contractual' %}
+              <span class="badge text-bg-warning">Contractual</span>
+            {% elif emp.employment_type == 'part_time' %}
+              <span class="badge" style="background:#7C3AED;color:#fff;">Part-time</span>
+            {% else %}
+              <span class="badge text-bg-secondary">{{ emp.get_employment_type_display }}</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if emp.status == 'active' %}
+              <span class="badge text-bg-success">Active</span>
+            {% elif emp.status == 'resigned' %}
+              <span class="badge text-bg-warning">Resigned</span>
+            {% elif emp.status == 'terminated' %}
+              <span class="badge text-bg-danger">Terminated</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-end pe-3">
+            <a href="{% url 'employees:employee_detail' emp.pk %}"
+               class="btn btn-sm btn-outline-secondary" title="View">
+              <i class="bi bi-eye"></i>
+            </a>
+            <a href="{% url 'employees:employee_edit' emp.pk %}"
+               class="btn btn-sm btn-outline-primary ms-1" title="Edit">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <a href="{% url 'employees:employee_delete' emp.pk %}"
+               class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+              <i class="bi bi-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="text-center py-5">
+            <i class="bi bi-people fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+            <span class="text-muted">No employees found.</span>
+            {% if not q and not status_filter and not dept_filter %}
+              <div class="mt-2">
+                <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
+                  <i class="bi bi-person-plus me-1"></i>Add First Employee
+                </a>
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

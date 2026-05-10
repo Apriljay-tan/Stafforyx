@@ -1,0 +1,229 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Employee{% endblock %}
+{% block page_title %}{{ action }} Employee{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'employees:employee_list' %}" class="text-decoration-none">Employees</a>
+    </li>
+    {% if employee %}
+      <li class="breadcrumb-item">
+        <a href="{% url 'employees:employee_detail' employee.pk %}" class="text-decoration-none">
+          {{ employee.full_name }}
+        </a>
+      </li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Employee</h1>
+  <p>
+    {% if action == 'Add' %}Create a new employee record.
+    {% else %}Update this employee's information.{% endif %}
+  </p>
+</div>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <!-- Section: Basic Information -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-person me-1" style="color:#1565C0;"></i>Basic Information
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.first_name.label }}
+          </label>
+          {{ form.first_name }}
+          {% if form.first_name.errors %}
+            <div class="text-danger small mt-1">{{ form.first_name.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.middle_name.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.middle_name }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.last_name.label }}
+          </label>
+          {{ form.last_name }}
+          {% if form.last_name.errors %}
+            <div class="text-danger small mt-1">{{ form.last_name.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}
+            <div class="text-danger small mt-1">{{ form.email.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">
+            {{ form.phone.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.phone }}
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">
+            {{ form.address.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.address }}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">
+            {{ form.photo.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.photo }}
+          {% if employee.photo %}
+            <div class="mt-2 d-flex align-items-center gap-2">
+              <img src="{{ employee.photo.url }}" class="rounded" style="height:52px;" alt="">
+              <small class="text-muted">Current photo</small>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Employment Details -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-briefcase me-1" style="color:#059669;"></i>Employment Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}
+            <div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.employee_id.label }}</label>
+          {{ form.employee_id }}
+          {% if form.employee_id.errors %}
+            <div class="text-danger small mt-1">{{ form.employee_id.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.department.label }}</label>
+          {{ form.department }}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.position.label }}</label>
+          {{ form.position }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.date_hired.label }}</label>
+          {{ form.date_hired }}
+          {% if form.date_hired.errors %}
+            <div class="text-danger small mt-1">{{ form.date_hired.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.employment_type.label }}</label>
+          {{ form.employment_type }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.status.label }}</label>
+          {{ form.status }}
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label fw-semibold small">
+            {{ form.basic_salary.label }} <span class="fw-normal text-muted">(&#8369;)</span>
+          </label>
+          {{ form.basic_salary }}
+          {% if form.basic_salary.errors %}
+            <div class="text-danger small mt-1">{{ form.basic_salary.errors.as_text }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Government IDs -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-card-list me-1" style="color:#D97706;"></i>
+      Government IDs
+      <span class="fw-normal text-muted ms-1" style="font-size:.8rem;">(optional)</span>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.sss_number.label }}</label>
+          {{ form.sss_number }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.philhealth_number.label }}</label>
+          {{ form.philhealth_number }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.pagibig_number.label }}</label>
+          {{ form.pagibig_number }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.tin_number.label }}</label>
+          {{ form.tin_number }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Emergency Contact -->
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-telephone me-1" style="color:#7C3AED;"></i>
+      Emergency Contact
+      <span class="fw-normal text-muted ms-1" style="font-size:.8rem;">(optional)</span>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.emergency_contact_name.label }}</label>
+          {{ form.emergency_contact_name }}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.emergency_contact_phone.label }}</label>
+          {{ form.emergency_contact_phone }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Employee{% else %}Save Changes{% endif %}
+    </button>
+    {% if employee %}
+      <a href="{% url 'employees:employee_detail' employee.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    {% else %}
+      <a href="{% url 'employees:employee_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    {% endif %}
+  </div>
+
+</form>
+{% endblock %}

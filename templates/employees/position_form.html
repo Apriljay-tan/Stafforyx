@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}Edit Position{% endblock %}
+{% block page_title %}Edit Position{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'employees:employee_list' %}" class="text-decoration-none">Employees</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'employees:position_list' %}" class="text-decoration-none">Positions</a>
+    </li>
+    <li class="breadcrumb-item active">Edit: {{ pos.title }}</li>
+  </ol>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-pencil me-1" style="color:#7C3AED;"></i>Edit Position
+      </div>
+      <div class="card-body p-4">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">{{ field.label }}</label>
+              {{ field }}
+              {% if field.errors %}
+                <div class="text-danger small mt-1">{{ field.errors.as_text }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+          <div class="d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Save Changes
+            </button>
+            <a href="{% url 'employees:position_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
