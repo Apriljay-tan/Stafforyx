@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}{{ announcement.title }}{% endblock %}
+{% block page_title %}Announcement{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'announcements:announcement_list' %}" class="text-decoration-none">Announcements</a>
+    </li>
+    <li class="breadcrumb-item active">{{ announcement.title|truncatechars:36 }}</li>
+  </ol>
+</nav>
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>{{ announcement.title }}</h1>
+    <p>
+      {{ announcement.company.name }} &bull;
+      {% if announcement.target_department %}
+        {{ announcement.target_department.name }}
+      {% else %}
+        All Departments
+      {% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'announcements:announcement_edit' announcement.pk %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <a href="{% url 'announcements:announcement_delete' announcement.pk %}" class="btn btn-outline-danger btn-sm">
+      <i class="bi bi-trash me-1"></i>Delete
+    </a>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-megaphone me-1" style="color:#1565C0;"></i>Announcement Details</span>
+    {% if announcement.is_active %}
+      <span class="badge text-bg-success">Active</span>
+    {% else %}
+      <span class="badge text-bg-secondary">Inactive</span>
+    {% endif %}
+  </div>
+  <div class="card-body p-4">
+    <div class="row g-3 mb-3" style="font-size:.875rem;">
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Company</div>
+        <div class="fw-semibold">{{ announcement.company.name }}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Target Department</div>
+        <div class="fw-semibold">
+          {% if announcement.target_department %}
+            {{ announcement.target_department.name }}
+          {% else %}
+            All Departments
+          {% endif %}
+        </div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Posted</div>
+        <div class="fw-semibold">{{ announcement.created_at|date:"M d, Y g:i A" }}</div>
+      </div>
+    </div>
+
+    <hr class="my-3">
+
+    <div style="white-space:pre-line;font-size:.95rem;line-height:1.7;">{{ announcement.content }}</div>
+  </div>
+</div>
+
+{% endblock %}

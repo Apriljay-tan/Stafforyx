@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Announcement{% endblock %}
+{% block page_title %}{{ action }} Announcement{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'announcements:announcement_list' %}" class="text-decoration-none">Announcements</a>
+    </li>
+    {% if announcement %}
+      <li class="breadcrumb-item">
+        <a href="{% url 'announcements:announcement_detail' announcement.pk %}" class="text-decoration-none">
+          {{ announcement.title|truncatechars:32 }}
+        </a>
+      </li>
+    {% endif %}
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Announcement</h1>
+  <p>
+    {% if action == 'Add' %}Create a new company announcement or memo.
+    {% else %}Update this announcement or memo.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-megaphone me-1" style="color:#1565C0;"></i>Announcement Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">
+            {{ form.target_department.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.target_department }}
+          {% if form.target_department.errors %}<div class="text-danger small mt-1">{{ form.target_department.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">{{ form.title.label }}</label>
+          {{ form.title }}
+          {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">{{ form.content.label }}</label>
+          {{ form.content }}
+          {% if form.content.errors %}<div class="text-danger small mt-1">{{ form.content.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.is_active }}
+            <label class="form-check-label fw-semibold small" for="{{ form.is_active.id_for_label }}">
+              {{ form.is_active.label }}
+            </label>
+            {% if form.is_active.errors %}<div class="text-danger small mt-1">{{ form.is_active.errors.as_text }}</div>{% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Announcement{% else %}Save Changes{% endif %}
+    </button>
+    {% if announcement %}
+      <a href="{% url 'announcements:announcement_detail' announcement.pk %}" class="btn btn-outline-secondary">Cancel</a>
+    {% else %}
+      <a href="{% url 'announcements:announcement_list' %}" class="btn btn-outline-secondary">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+
+{% endblock %}
