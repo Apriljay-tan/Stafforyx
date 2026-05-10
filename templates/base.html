@@ -336,7 +336,10 @@
     <div class="sidebar-section-label">Workforce</div>
     <ul class="nav flex-column sidebar-nav">
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-clock-history"></i> Attendance</a>
+        <a href="{% url 'attendance:attendance_list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'attendance' %}active{% endif %}">
+          <i class="bi bi-clock-history"></i> Attendance
+        </a>
       </li>
       <li class="nav-item">
         <a href="#" class="nav-link"><i class="bi bi-calendar2-check"></i> Leave Management</a>

@@ -1,0 +1,151 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Attendance{% endblock %}
+{% block page_title %}{{ action }} Attendance{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'attendance:attendance_list' %}" class="text-decoration-none">Attendance</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Attendance Record</h1>
+  <p>
+    {% if action == 'Add' %}Create a daily attendance record.
+    {% else %}Update this attendance record.{% endif %}
+  </p>
+</div>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-person-check me-1" style="color:#1565C0;"></i>Attendance Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}
+            <div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.employee.label }}</label>
+          {{ form.employee }}
+          {% if form.employee.errors %}
+            <div class="text-danger small mt-1">{{ form.employee.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.date.label }}</label>
+          {{ form.date }}
+          {% if form.date.errors %}
+            <div class="text-danger small mt-1">{{ form.date.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.status.label }}</label>
+          {{ form.status }}
+          {% if form.status.errors %}
+            <div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.break_minutes.label }}</label>
+          {{ form.break_minutes }}
+          {% if form.break_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.break_minutes.errors.as_text }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-clock me-1" style="color:#059669;"></i>Time and Hours
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">
+            {{ form.time_in.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.time_in }}
+          {% if form.time_in.errors %}
+            <div class="text-danger small mt-1">{{ form.time_in.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">
+            {{ form.time_out.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.time_out }}
+          {% if form.time_out.errors %}
+            <div class="text-danger small mt-1">{{ form.time_out.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.total_hours.label }}</label>
+          {{ form.total_hours }}
+          {% if form.total_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.total_hours.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.overtime_hours.label }}</label>
+          {{ form.overtime_hours }}
+          {% if form.overtime_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.overtime_hours.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.late_minutes.label }}</label>
+          {{ form.late_minutes }}
+          {% if form.late_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.late_minutes.errors.as_text }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-card-text me-1" style="color:#D97706;"></i>
+      Remarks
+      <span class="fw-normal text-muted ms-1" style="font-size:.8rem;">(optional)</span>
+    </div>
+    <div class="card-body p-4">
+      <label class="form-label fw-semibold small">{{ form.remarks.label }}</label>
+      {{ form.remarks }}
+      {% if form.remarks.errors %}
+        <div class="text-danger small mt-1">{{ form.remarks.errors.as_text }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Attendance{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
