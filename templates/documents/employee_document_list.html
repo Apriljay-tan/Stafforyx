@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% block title %}Documents{% endblock %}
+{% block page_title %}Documents{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Employee Documents</h1>
+    <p>Manage employee files, certificates, contracts, and other HR documents.</p>
+  </div>
+  <a href="{% url 'documents:employee_document_add' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-circle me-1"></i>Add Document
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body p-3">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-12 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All Employees</option>
+          {% for employee in employees %}
+            <option value="{{ employee.pk }}"
+              {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>
+              {{ employee.last_name }}, {{ employee.first_name }} - {{ employee.employee_id }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Document Type</label>
+        <select name="document_type" class="form-select form-select-sm">
+          <option value="">All Types</option>
+          {% for value, label in document_type_choices %}
+            <option value="{{ value }}" {% if document_type_filter == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label small fw-semibold mb-1">Company</label>
+        <select name="company" class="form-select form-select-sm">
+          <option value="">All Companies</option>
+          {% for company in companies %}
+            <option value="{{ company.pk }}"
+              {% if company_filter == company.pk|stringformat:"s" %}selected{% endif %}>
+              {{ company.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-8 col-md-2">
+        <label class="form-label small fw-semibold mb-1">Expiration Date</label>
+        <input type="date" name="expiration_date" class="form-control form-control-sm" value="{{ expiration_date_filter }}">
+      </div>
+      <div class="col-4 col-md-2 d-flex gap-1">
+        <button type="submit" class="btn btn-primary btn-sm flex-fill">
+          <i class="bi bi-funnel me-1"></i>Filter
+        </button>
+        {% if employee_filter or document_type_filter or company_filter or expiration_date_filter %}
+          <a href="{% url 'documents:employee_document_list' %}" class="btn btn-outline-secondary btn-sm" title="Clear">
+            <i class="bi bi-x-lg"></i>
+          </a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-file-earmark-text me-1" style="color:#1565C0;"></i>Employee Documents</span>
+    <span class="badge bg-primary rounded-pill">{{ documents.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Title</th>
+          <th>Employee</th>
+          <th>Type</th>
+          <th>Company</th>
+          <th>Expiration</th>
+          <th>File</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for document in documents %}
+          <tr>
+            <td class="ps-3">
+              <span class="fw-semibold" style="color:#0D1B2A;">{{ document.title }}</span>
+              {% if document.notes %}
+                <div class="text-muted" style="font-size:.73rem;">{{ document.notes|truncatechars:64 }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <span class="fw-semibold" style="color:#0D1B2A;">{{ document.employee.full_name }}</span>
+              <div class="text-muted" style="font-size:.73rem;">
+                {{ document.employee.employee_id }}{% if document.employee.department %} &bull; {{ document.employee.department.name }}{% endif %}
+              </div>
+            </td>
+            <td>
+              {% if document.document_type == 'contract' %}
+                <span class="badge text-bg-primary">Contract</span>
+              {% elif document.document_type == 'government_id' %}
+                <span class="badge text-bg-info">Government ID</span>
+              {% elif document.document_type == 'certificate' %}
+                <span class="badge text-bg-success">Certificate</span>
+              {% elif document.document_type == 'memo' %}
+                <span class="badge text-bg-warning">Memo</span>
+              {% elif document.document_type == 'clearance' %}
+                <span class="badge text-bg-secondary">Clearance</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ document.get_document_type_display }}</span>
+              {% endif %}
+            </td>
+            <td class="text-muted">{{ document.company.name }}</td>
+            <td>
+              {% if document.expiration_date %}
+                {{ document.expiration_date|date:"M d, Y" }}
+              {% else %}
+                <span class="text-muted">-</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if document.file %}
+                <a href="{{ document.file.url }}" class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener">
+                  <i class="bi bi-box-arrow-up-right me-1"></i>View
+                </a>
+              {% else %}
+                <span class="text-muted">No file</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{% url 'documents:employee_document_edit' document.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'documents:employee_document_delete' document.pk %}"
+                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                <i class="bi bi-trash"></i>
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="7" class="text-center py-5">
+              <i class="bi bi-file-earmark-text fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+              <span class="text-muted">No employee documents found.</span>
+              {% if not employee_filter and not document_type_filter and not company_filter and not expiration_date_filter %}
+                <div class="mt-2">
+                  <a href="{% url 'documents:employee_document_add' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>Add First Document
+                  </a>
+                </div>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

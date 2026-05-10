@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Document{% endblock %}
+{% block page_title %}{{ action }} Document{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'documents:employee_document_list' %}" class="text-decoration-none">Documents</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<div class="page-header mb-3">
+  <h1>{{ action }} Employee Document</h1>
+  <p>
+    {% if action == 'Add' %}Upload a new employee document.
+    {% else %}Update this employee document.{% endif %}
+  </p>
+</div>
+
+<form method="post" enctype="multipart/form-data" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-file-earmark-text me-1" style="color:#1565C0;"></i>Document Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.company.label }}</label>
+          {{ form.company }}
+          {% if form.company.errors %}<div class="text-danger small mt-1">{{ form.company.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.employee.label }}</label>
+          {{ form.employee }}
+          {% if form.employee.errors %}<div class="text-danger small mt-1">{{ form.employee.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.title.label }}</label>
+          {{ form.title }}
+          {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.document_type.label }}</label>
+          {{ form.document_type }}
+          {% if form.document_type.errors %}<div class="text-danger small mt-1">{{ form.document_type.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">
+            {{ form.expiration_date.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.expiration_date }}
+          {% if form.expiration_date.errors %}<div class="text-danger small mt-1">{{ form.expiration_date.errors.as_text }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-upload me-1" style="color:#059669;"></i>File Upload
+    </div>
+    <div class="card-body p-4">
+      <label class="form-label fw-semibold small">{{ form.file.label }}</label>
+      {{ form.file }}
+      {% if form.file.errors %}<div class="text-danger small mt-1">{{ form.file.errors.as_text }}</div>{% endif %}
+      {% if document.file %}
+        <div class="mt-2">
+          <a href="{{ document.file.url }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-box-arrow-up-right me-1"></i>View Current File
+          </a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header">
+      <i class="bi bi-card-text me-1" style="color:#D97706;"></i>
+      Notes
+      <span class="fw-normal text-muted ms-1" style="font-size:.8rem;">(optional)</span>
+    </div>
+    <div class="card-body p-4">
+      <label class="form-label fw-semibold small">{{ form.notes.label }}</label>
+      {{ form.notes }}
+      {% if form.notes.errors %}<div class="text-danger small mt-1">{{ form.notes.errors.as_text }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>
+      {% if action == 'Add' %}Add Document{% else %}Save Changes{% endif %}
+    </button>
+    <a href="{% url 'documents:employee_document_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}
