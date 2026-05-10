@@ -6,6 +6,7 @@ app_name = 'reports'
 
 urlpatterns = [
     path('', views.reports_dashboard, name='reports_dashboard'),
+    path('export-all/', views.export_all_data, name='export_all_data'),
     path('employees/', views.employee_report, name='employee_report'),
     path('employees/export/', views.employee_report_export, name='employee_report_export'),
     path('attendance/', views.attendance_report, name='attendance_report'),
