@@ -110,11 +110,14 @@ def is_license_active():
 
 def license_banner(request):
     """
-    Inject `license_banner` and `license_read_only` into every template rendered
-    by base.html.  All validity decisions go through get_license_state() —
-    the DB status/date fields are never trusted on their own.
+    Inject `license_banner`, `license_read_only`, and `clock_rollback` into every
+    template rendered by base.html.  All validity decisions go through
+    get_license_state() — the DB status/date fields are never trusted on their own.
     """
-    _clear = {'license_banner': None, 'license_read_only': False}
+    _clear = {'license_banner': None, 'license_read_only': False, 'clock_rollback': False}
+
+    # clock_rollback is set on request by LicenseReadOnlyMiddleware; fall back to False.
+    clock_rollback = getattr(request, '_clock_rollback', False)
 
     if request.path.startswith('/admin/'):
         return _clear
@@ -122,7 +125,7 @@ def license_banner(request):
         return _clear
     try:
         if request.resolver_match and request.resolver_match.app_name == 'licenses':
-            return _clear
+            return {**_clear, 'clock_rollback': clock_rollback}
     except Exception:
         pass
 
@@ -132,7 +135,7 @@ def license_banner(request):
 
     if reason == 'ok':
         if s['is_lifetime'] or days is None or days > _WARN_DAYS:
-            return _clear
+            return {**_clear, 'clock_rollback': clock_rollback}
         # Expiring soon — warn but keep editing enabled
         day_text = ('today' if days == 0 else
                     'in 1 day' if days == 1 else
@@ -141,6 +144,7 @@ def license_banner(request):
             'license_banner': _banner('warning',
                 f'Your license expires {day_text}. Please renew soon.'),
             'license_read_only': False,
+            'clock_rollback': clock_rollback,
         }
 
     # All other reasons → danger banner + read-only
@@ -148,7 +152,11 @@ def license_banner(request):
         reason,
         'License is inactive. Please activate your Stafforyx HR license.',
     )
-    return {'license_banner': _banner('danger', msg), 'license_read_only': True}
+    return {
+        'license_banner': _banner('danger', msg),
+        'license_read_only': True,
+        'clock_rollback': clock_rollback,
+    }
 
 
 def _banner(level, message):

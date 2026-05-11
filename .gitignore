@@ -1,0 +1,14 @@
+# Django
+*.pyc
+__pycache__/
+*.sqlite3
+staticfiles/
+media/
+.env
+
+# Stafforyx runtime files — machine-specific, never commit
+.stafforyx_machine_id
+.stafforyx_last_run
+
+# Virtualenv
+venv/

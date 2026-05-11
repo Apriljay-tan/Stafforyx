@@ -30,12 +30,16 @@ class SuperuserAdminMiddleware:
 
 # ── License read-only guard ───────────────────────────────────────────────────
 
-# POST requests to these path prefixes are always allowed regardless of license state.
+# POST requests to these path prefixes are always allowed regardless of license/clock state.
 # /admin/    — Django admin (superuser-only, handled above)
 # /accounts/ — login, logout, user management
 # /licenses/ — license status and activation
 _EXEMPT_PREFIXES = ('/admin/', '/accounts/', '/licenses/')
 
+_ROLLBACK_MSG = (
+    'System date rollback detected. '
+    'Please correct your computer date and time.'
+)
 _BLOCKED_MSG = (
     'Your Stafforyx HR license is expired or inactive. '
     'Please renew your license to make changes.'
@@ -47,16 +51,19 @@ class LicenseReadOnlyMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if self._should_block(request):
-            messages.error(request, _BLOCKED_MSG)
-            return redirect('licenses:license_status')
-        return self.get_response(request)
+        from .clock_guard import check_clock_rollback
 
-    def _should_block(self, request):
-        if request.method != 'POST':
-            return False
-        if not request.user.is_authenticated:
-            return False
-        if any(request.path.startswith(p) for p in _EXEMPT_PREFIXES):
-            return False
-        return not is_license_active()
+        # Run clock check once per request; result shared with context processor via request attr.
+        rollback = check_clock_rollback()
+        request._clock_rollback = rollback
+
+        if request.method == 'POST' and request.user.is_authenticated:
+            if not any(request.path.startswith(p) for p in _EXEMPT_PREFIXES):
+                if rollback:
+                    messages.error(request, _ROLLBACK_MSG)
+                    return redirect('licenses:license_status')
+                if not is_license_active():
+                    messages.error(request, _BLOCKED_MSG)
+                    return redirect('licenses:license_status')
+
+        return self.get_response(request)
