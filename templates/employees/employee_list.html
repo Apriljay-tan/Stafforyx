@@ -9,16 +9,20 @@
     <h1>Employees</h1>
     <p>Manage all employee records across your organization.</p>
   </div>
-  <div class="d-flex gap-2 flex-wrap">
+  <div class="d-flex gap-2 flex-wrap align-items-center">
     <a href="{% url 'employees:department_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-diagram-3 me-1"></i>Departments
     </a>
     <a href="{% url 'employees:position_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-briefcase me-1"></i>Positions
     </a>
-    <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
-      <i class="bi bi-person-plus me-1"></i>Add Employee
-    </a>
+    {% if not license_read_only %}
+      <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-person-plus me-1"></i>Add Employee
+      </a>
+    {% else %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+    {% endif %}
   </div>
 </div>
 
@@ -146,14 +150,16 @@
                class="btn btn-sm btn-outline-secondary" title="View">
               <i class="bi bi-eye"></i>
             </a>
-            <a href="{% url 'employees:employee_edit' emp.pk %}"
-               class="btn btn-sm btn-outline-primary ms-1" title="Edit">
-              <i class="bi bi-pencil"></i>
-            </a>
-            <a href="{% url 'employees:employee_delete' emp.pk %}"
-               class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-              <i class="bi bi-trash"></i>
-            </a>
+            {% if not license_read_only %}
+              <a href="{% url 'employees:employee_edit' emp.pk %}"
+                 class="btn btn-sm btn-outline-primary ms-1" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'employees:employee_delete' emp.pk %}"
+                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                <i class="bi bi-trash"></i>
+              </a>
+            {% endif %}
           </td>
         </tr>
         {% empty %}
@@ -161,7 +167,7 @@
           <td colspan="8" class="text-center py-5">
             <i class="bi bi-people fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
             <span class="text-muted">No employees found.</span>
-            {% if not q and not status_filter and not dept_filter %}
+            {% if not q and not status_filter and not dept_filter and not license_read_only %}
               <div class="mt-2">
                 <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
                   <i class="bi bi-person-plus me-1"></i>Add First Employee

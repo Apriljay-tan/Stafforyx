@@ -51,14 +51,16 @@
                 {{ dept.description|truncatechars:45|default:"—" }}
               </td>
               <td class="text-end pe-3">
-                <a href="{% url 'employees:department_edit' dept.pk %}"
-                   class="btn btn-sm btn-outline-primary me-1" title="Edit">
-                  <i class="bi bi-pencil"></i>
-                </a>
-                <a href="{% url 'employees:department_delete' dept.pk %}"
-                   class="btn btn-sm btn-outline-danger" title="Delete">
-                  <i class="bi bi-trash"></i>
-                </a>
+                {% if not license_read_only %}
+                  <a href="{% url 'employees:department_edit' dept.pk %}"
+                     class="btn btn-sm btn-outline-primary me-1" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <a href="{% url 'employees:department_delete' dept.pk %}"
+                     class="btn btn-sm btn-outline-danger" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </a>
+                {% endif %}
               </td>
             </tr>
             {% empty %}
@@ -77,28 +79,38 @@
 
   <!-- Add Department Form -->
   <div class="col-12 col-lg-4">
-    <div class="card">
-      <div class="card-header">
-        <i class="bi bi-plus-circle me-1" style="color:#059669;"></i>Add Department
+    {% if license_read_only %}
+      <div class="card">
+        <div class="card-body p-4 text-center text-muted" style="font-size:.875rem;">
+          <i class="bi bi-lock fs-2 d-block mb-2" style="opacity:.3;"></i>
+          <strong>Read-only mode</strong><br>
+          <small>Renew your license to add or edit records.</small>
+        </div>
       </div>
-      <div class="card-body p-3">
-        <form method="post" novalidate>
-          {% csrf_token %}
-          {% for field in form %}
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">{{ field.label }}</label>
-              {{ field }}
-              {% if field.errors %}
-                <div class="text-danger small mt-1">{{ field.errors.as_text }}</div>
-              {% endif %}
-            </div>
-          {% endfor %}
-          <button type="submit" class="btn btn-success btn-sm w-100">
-            <i class="bi bi-check-lg me-1"></i>Create Department
-          </button>
-        </form>
+    {% else %}
+      <div class="card">
+        <div class="card-header">
+          <i class="bi bi-plus-circle me-1" style="color:#059669;"></i>Add Department
+        </div>
+        <div class="card-body p-3">
+          <form method="post" novalidate>
+            {% csrf_token %}
+            {% for field in form %}
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}
+                  <div class="text-danger small mt-1">{{ field.errors.as_text }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-success btn-sm w-100">
+              <i class="bi bi-check-lg me-1"></i>Create Department
+            </button>
+          </form>
+        </div>
       </div>
-    </div>
+    {% endif %}
   </div>
 
 </div>

@@ -9,9 +9,13 @@
     <h1>Attendance</h1>
     <p>Manage daily attendance records for employees.</p>
   </div>
-  <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i>Add Attendance
-  </a>
+  {% if not license_read_only %}
+    <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Attendance
+    </a>
+  {% else %}
+    <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+  {% endif %}
 </div>
 
 <div class="card mb-3">
@@ -109,14 +113,16 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
-              <a href="{% url 'attendance:attendance_edit' record.pk %}"
-                 class="btn btn-sm btn-outline-primary" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'attendance:attendance_delete' record.pk %}"
-                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                <i class="bi bi-trash"></i>
-              </a>
+              {% if not license_read_only %}
+                <a href="{% url 'attendance:attendance_edit' record.pk %}"
+                   class="btn btn-sm btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'attendance:attendance_delete' record.pk %}"
+                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
@@ -124,7 +130,7 @@
             <td colspan="9" class="text-center py-5">
               <i class="bi bi-clock-history fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No attendance records found.</span>
-              {% if not employee_filter and not date_filter and not status_filter %}
+              {% if not employee_filter and not date_filter and not status_filter and not license_read_only %}
                 <div class="mt-2">
                   <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Add First Attendance Record

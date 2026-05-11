@@ -17,40 +17,48 @@ def is_license_active():
 
 def license_banner(request):
     """
-    Inject `license_banner` into every template context rendered by base.html.
-    Returns None (no banner) for admin paths, unauthenticated users,
-    lifetime licenses in good standing, and the licenses app itself.
+    Inject `license_banner` and `license_read_only` into every template context.
+    license_read_only=True when the license is absent, expired, or suspended.
     """
-    # Skip admin and unauthenticated requests
-    if request.path.startswith('/admin/'):
-        return {'license_banner': None}
-    if not request.user.is_authenticated:
-        return {'license_banner': None}
+    _inactive = {'license_banner': None, 'license_read_only': False}
 
-    # Skip the licenses app pages (status + activate) — they surface info directly
+    if request.path.startswith('/admin/'):
+        return _inactive
+    if not request.user.is_authenticated:
+        return _inactive
+
     try:
         if request.resolver_match and request.resolver_match.app_name == 'licenses':
-            return {'license_banner': None}
+            return _inactive
     except Exception:
         pass
 
     lic = License.objects.order_by('-created_at').first()
 
     if lic is None:
-        return {'license_banner': _banner('danger',
-            'No active license found. Please activate your Stafforyx HR license.')}
+        return {
+            'license_banner': _banner('danger',
+                'No active license found. Please activate your Stafforyx HR license.'),
+            'license_read_only': True,
+        }
 
     if lic.is_expired or lic.status == 'expired':
-        return {'license_banner': _banner('danger',
-            'Your license has expired. Please renew your license.')}
+        return {
+            'license_banner': _banner('danger',
+                'Your license has expired. Please renew your license.'),
+            'license_read_only': True,
+        }
 
     if lic.status == 'suspended':
-        return {'license_banner': _banner('danger',
-            'Your license has been suspended. Please contact SYNTRIX PH.')}
+        return {
+            'license_banner': _banner('danger',
+                'Your license has been suspended. Please contact SYNTRIX PH.'),
+            'license_read_only': True,
+        }
 
-    # Lifetime or no expiry — nothing to warn about
+    # Lifetime or no expiry — fully active
     if lic.is_lifetime or lic.valid_until is None:
-        return {'license_banner': None}
+        return {'license_banner': None, 'license_read_only': False}
 
     days = lic.days_remaining
     if days is not None and 0 <= days <= _WARN_DAYS:
@@ -60,10 +68,13 @@ def license_banner(request):
             day_text = 'in 1 day'
         else:
             day_text = f'in {days} days'
-        return {'license_banner': _banner('warning',
-            f'Your license expires {day_text}. Please renew soon.')}
+        return {
+            'license_banner': _banner('warning',
+                f'Your license expires {day_text}. Please renew soon.'),
+            'license_read_only': False,
+        }
 
-    return {'license_banner': None}
+    return {'license_banner': None, 'license_read_only': False}
 
 
 def _banner(level, message):

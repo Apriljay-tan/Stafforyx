@@ -13,9 +13,13 @@
     <a href="{% url 'leaves:leave_request_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Leave Requests
     </a>
-    <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Leave Type
-    </a>
+    {% if not license_read_only %}
+      <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Leave Type
+      </a>
+    {% else %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+    {% endif %}
   </div>
 </div>
 
@@ -49,14 +53,16 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
-              <a href="{% url 'leaves:leave_type_edit' leave_type.pk %}"
-                 class="btn btn-sm btn-outline-primary" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'leaves:leave_type_delete' leave_type.pk %}"
-                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                <i class="bi bi-trash"></i>
-              </a>
+              {% if not license_read_only %}
+                <a href="{% url 'leaves:leave_type_edit' leave_type.pk %}"
+                   class="btn btn-sm btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'leaves:leave_type_delete' leave_type.pk %}"
+                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
@@ -64,11 +70,13 @@
             <td colspan="5" class="text-center py-5">
               <i class="bi bi-tags fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No leave types found.</span>
-              <div class="mt-2">
-                <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
-                  <i class="bi bi-plus-circle me-1"></i>Add First Leave Type
-                </a>
-              </div>
+              {% if not license_read_only %}
+                <div class="mt-2">
+                  <a href="{% url 'leaves:leave_type_add' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>Add First Leave Type
+                  </a>
+                </div>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

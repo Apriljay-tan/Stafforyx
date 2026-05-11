@@ -9,9 +9,13 @@
     <h1>Employee Documents</h1>
     <p>Manage employee files, certificates, contracts, and other HR documents.</p>
   </div>
-  <a href="{% url 'documents:employee_document_add' %}" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i>Add Document
-  </a>
+  {% if not license_read_only %}
+    <a href="{% url 'documents:employee_document_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Document
+    </a>
+  {% else %}
+    <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+  {% endif %}
 </div>
 
 <div class="card mb-3">
@@ -134,14 +138,16 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
-              <a href="{% url 'documents:employee_document_edit' document.pk %}"
-                 class="btn btn-sm btn-outline-primary" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'documents:employee_document_delete' document.pk %}"
-                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                <i class="bi bi-trash"></i>
-              </a>
+              {% if not license_read_only %}
+                <a href="{% url 'documents:employee_document_edit' document.pk %}"
+                   class="btn btn-sm btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'documents:employee_document_delete' document.pk %}"
+                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
@@ -149,7 +155,7 @@
             <td colspan="7" class="text-center py-5">
               <i class="bi bi-file-earmark-text fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No employee documents found.</span>
-              {% if not employee_filter and not document_type_filter and not company_filter and not expiration_date_filter %}
+              {% if not employee_filter and not document_type_filter and not company_filter and not expiration_date_filter and not license_read_only %}
                 <div class="mt-2">
                   <a href="{% url 'documents:employee_document_add' %}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Add First Document

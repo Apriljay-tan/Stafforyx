@@ -13,9 +13,13 @@
     <a href="{% url 'leaves:leave_type_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-tags me-1"></i>Leave Types
     </a>
-    <a href="{% url 'leaves:leave_request_add' %}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Leave Request
-    </a>
+    {% if not license_read_only %}
+      <a href="{% url 'leaves:leave_request_add' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Leave Request
+      </a>
+    {% else %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+    {% endif %}
   </div>
 </div>
 
@@ -130,28 +134,30 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
-              {% if leave_request.status == 'pending' %}
-                <form method="post" action="{% url 'leaves:leave_request_approve' leave_request.pk %}" class="d-inline">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-success" title="Approve">
-                    <i class="bi bi-check-lg"></i>
-                  </button>
-                </form>
-                <form method="post" action="{% url 'leaves:leave_request_reject' leave_request.pk %}" class="d-inline">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-outline-danger ms-1" title="Reject">
-                    <i class="bi bi-x-lg"></i>
-                  </button>
-                </form>
+              {% if not license_read_only %}
+                {% if leave_request.status == 'pending' %}
+                  <form method="post" action="{% url 'leaves:leave_request_approve' leave_request.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-success" title="Approve">
+                      <i class="bi bi-check-lg"></i>
+                    </button>
+                  </form>
+                  <form method="post" action="{% url 'leaves:leave_request_reject' leave_request.pk %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger ms-1" title="Reject">
+                      <i class="bi bi-x-lg"></i>
+                    </button>
+                  </form>
+                {% endif %}
+                <a href="{% url 'leaves:leave_request_edit' leave_request.pk %}"
+                   class="btn btn-sm btn-outline-primary ms-1" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'leaves:leave_request_delete' leave_request.pk %}"
+                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
               {% endif %}
-              <a href="{% url 'leaves:leave_request_edit' leave_request.pk %}"
-                 class="btn btn-sm btn-outline-primary ms-1" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'leaves:leave_request_delete' leave_request.pk %}"
-                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                <i class="bi bi-trash"></i>
-              </a>
             </td>
           </tr>
         {% empty %}
@@ -159,7 +165,7 @@
             <td colspan="8" class="text-center py-5">
               <i class="bi bi-calendar2-check fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No leave requests found.</span>
-              {% if not employee_filter and not leave_type_filter and not status_filter and not start_date_filter and not end_date_filter %}
+              {% if not employee_filter and not leave_type_filter and not status_filter and not start_date_filter and not end_date_filter and not license_read_only %}
                 <div class="mt-2">
                   <a href="{% url 'leaves:leave_request_add' %}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Add First Leave Request

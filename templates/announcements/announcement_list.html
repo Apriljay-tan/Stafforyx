@@ -9,9 +9,13 @@
     <h1>Announcements</h1>
     <p>Manage company announcements, memos, and department notices.</p>
   </div>
-  <a href="{% url 'announcements:announcement_add' %}" class="btn btn-primary btn-sm">
-    <i class="bi bi-plus-circle me-1"></i>Add Announcement
-  </a>
+  {% if not license_read_only %}
+    <a href="{% url 'announcements:announcement_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-circle me-1"></i>Add Announcement
+    </a>
+  {% else %}
+    <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+  {% endif %}
 </div>
 
 <div class="card mb-3">
@@ -115,14 +119,16 @@
                  class="btn btn-sm btn-outline-secondary" title="View">
                 <i class="bi bi-eye"></i>
               </a>
-              <a href="{% url 'announcements:announcement_edit' announcement.pk %}"
-                 class="btn btn-sm btn-outline-primary ms-1" title="Edit">
-                <i class="bi bi-pencil"></i>
-              </a>
-              <a href="{% url 'announcements:announcement_delete' announcement.pk %}"
-                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                <i class="bi bi-trash"></i>
-              </a>
+              {% if not license_read_only %}
+                <a href="{% url 'announcements:announcement_edit' announcement.pk %}"
+                   class="btn btn-sm btn-outline-primary ms-1" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <a href="{% url 'announcements:announcement_delete' announcement.pk %}"
+                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                  <i class="bi bi-trash"></i>
+                </a>
+              {% endif %}
             </td>
           </tr>
         {% empty %}
@@ -130,7 +136,7 @@
             <td colspan="6" class="text-center py-5">
               <i class="bi bi-megaphone fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No announcements found.</span>
-              {% if not company_filter and not department_filter and not active_filter and not date_filter %}
+              {% if not company_filter and not department_filter and not active_filter and not date_filter and not license_read_only %}
                 <div class="mt-2">
                   <a href="{% url 'announcements:announcement_add' %}" class="btn btn-primary btn-sm">
                     <i class="bi bi-plus-circle me-1"></i>Add First Announcement
