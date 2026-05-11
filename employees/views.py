@@ -4,6 +4,12 @@ from django.db.models import Q, Count
 
 from .models import Employee, Department, Position
 from .forms import EmployeeForm, DepartmentForm, PositionForm
+from licenses.context_processors import get_license_state
+
+_LIMIT_MSG = (
+    'Employee limit reached for your current license. '
+    'Please upgrade your license to add more employees.'
+)
 
 
 # ── Employees ─────────────────────────────────────────────────────────────────
@@ -26,13 +32,21 @@ def employee_list(request):
     if dept_id:
         qs = qs.filter(department_id=dept_id)
 
+    state = get_license_state()
+    total_employees = Employee.objects.count()
+    max_employees   = state['max_employees']      # 0 = no valid limit from payload
+    at_limit        = state['valid'] and max_employees > 0 and total_employees >= max_employees
+
     context = {
-        'employees': qs,
-        'departments': Department.objects.all(),
-        'q': q,
-        'status_filter': status,
-        'dept_filter': dept_id,
-        'status_choices': Employee.STATUS_CHOICES,
+        'employees':       qs,
+        'departments':     Department.objects.all(),
+        'q':               q,
+        'status_filter':   status,
+        'dept_filter':     dept_id,
+        'status_choices':  Employee.STATUS_CHOICES,
+        'total_employees': total_employees,
+        'max_employees':   max_employees,
+        'at_limit':        at_limit,
     }
     return render(request, 'employees/employee_list.html', context)
 
@@ -46,8 +60,20 @@ def employee_detail(request, pk):
 
 
 def employee_add(request):
+    # Employee-limit check — uses only the verified signed payload
+    state         = get_license_state()
+    max_employees = state['max_employees']
+    if state['valid'] and max_employees > 0:
+        if Employee.objects.count() >= max_employees:
+            messages.error(request, _LIMIT_MSG)
+            return redirect('employees:employee_list')
+
     form = EmployeeForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and form.is_valid():
+        # Re-check on POST in case count changed between GET and form submission
+        if state['valid'] and max_employees > 0 and Employee.objects.count() >= max_employees:
+            messages.error(request, _LIMIT_MSG)
+            return redirect('employees:employee_list')
         emp = form.save()
         messages.success(request, f'Employee {emp.full_name} added successfully.')
         return redirect('employees:employee_detail', pk=emp.pk)

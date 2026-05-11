@@ -16,12 +16,14 @@
     <a href="{% url 'employees:position_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-briefcase me-1"></i>Positions
     </a>
-    {% if not license_read_only %}
+    {% if license_read_only %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+    {% elif at_limit %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-person-x me-1"></i>Employee limit reached — upgrade your license to add more.</span>
+    {% else %}
       <a href="{% url 'employees:employee_add' %}" class="btn btn-primary btn-sm">
         <i class="bi bi-person-plus me-1"></i>Add Employee
       </a>
-    {% else %}
-      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
     {% endif %}
   </div>
 </div>
@@ -79,7 +81,15 @@
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-people me-1" style="color:#1565C0;"></i>Employee Records</span>
-    <span class="badge bg-primary rounded-pill">{{ employees.count }}</span>
+    <span>
+      {% if max_employees > 0 %}
+        <span class="badge rounded-pill {% if at_limit %}bg-danger{% else %}bg-primary{% endif %}">
+          {{ total_employees }} / {{ max_employees }}
+        </span>
+      {% else %}
+        <span class="badge bg-primary rounded-pill">{{ total_employees }}</span>
+      {% endif %}
+    </span>
   </div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">

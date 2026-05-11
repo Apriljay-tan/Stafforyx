@@ -114,6 +114,33 @@
                 </td>
               </tr>
               <tr>
+                <td class="text-muted ps-4 py-3">Verification</td>
+                <td class="py-3">
+                  {% if license_state.reason == 'ok' or license_state.reason == 'expired' %}
+                    <span class="badge text-bg-success">
+                      <i class="bi bi-shield-check me-1"></i>Signature Valid
+                    </span>
+                    {% if license_state.expired %}
+                      <span class="ms-2 text-danger small">— license dates are expired</span>
+                    {% endif %}
+                  {% elif license_state.reason == 'bad_sig' %}
+                    <span class="badge text-bg-danger">
+                      <i class="bi bi-shield-x me-1"></i>Invalid Signature
+                    </span>
+                    <span class="ms-2 text-muted small">— this key was not issued by SYNTRIX PH</span>
+                  {% elif license_state.reason == 'machine_mismatch' %}
+                    <span class="badge text-bg-warning">
+                      <i class="bi bi-cpu me-1"></i>Machine Mismatch
+                    </span>
+                    <span class="ms-2 text-muted small">— license is bound to a different machine</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">
+                      <i class="bi bi-shield-x me-1"></i>Unverified
+                    </span>
+                  {% endif %}
+                </td>
+              </tr>
+              <tr>
                 <td class="text-muted ps-4 py-3">Plan</td>
                 <td class="py-3">
                   {% if license.plan == 'lifetime' %}

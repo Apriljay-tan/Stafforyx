@@ -6,6 +6,7 @@ from django.contrib import messages
 from .models import License
 from .license_verifier import verify_signed_license
 from .machine import get_machine_id
+from .context_processors import get_license_state
 
 
 def license_status(request):
@@ -13,6 +14,7 @@ def license_status(request):
     return render(request, 'licenses/license_status.html', {
         'license': license,
         'machine_id': get_machine_id(),
+        'license_state': get_license_state(),
     })
 
 
