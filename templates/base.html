@@ -441,6 +441,24 @@
   <main id="main-content">
     <div class="page-body">
 
+      {% if license_banner %}
+        <div class="alert alert-{{ license_banner.level }} alert-dismissible fade show mb-3"
+             role="alert"
+             style="border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
+          <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-{% if license_banner.level == 'danger' %}x-circle-fill{% else %}exclamation-triangle-fill{% endif %} flex-shrink-0"></i>
+            <span>{{ license_banner.message }}</span>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-shrink-0">
+            <a href="{% url 'licenses:license_status' %}"
+               class="btn btn-sm btn-outline-{% if license_banner.level == 'danger' %}danger{% else %}warning{% endif %}">
+              <i class="bi bi-key me-1"></i>Go to License Status
+            </a>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        </div>
+      {% endif %}
+
       {% if messages %}
         <div class="mb-3">
           {% for message in messages %}
