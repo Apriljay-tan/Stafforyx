@@ -178,6 +178,20 @@
               <td class="fw-semibold py-2">&#8369;{{ employee.basic_salary|floatformat:2 }}</td>
             </tr>
             <tr>
+              <td class="text-muted ps-3 py-2">Work Schedule</td>
+              <td class="py-2">
+                {% if employee.work_schedule %}
+                  {{ employee.work_schedule.name }}
+                  <div class="text-muted" style="font-size:.78rem;">
+                    {{ employee.work_schedule.start_time|time:"g:i A" }} – {{ employee.work_schedule.end_time|time:"g:i A" }}
+                    &bull; Grace {{ employee.work_schedule.grace_minutes }} min
+                  </div>
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
               <td class="text-muted ps-3 py-2">Biometric User ID</td>
               <td class="py-2" style="font-family:monospace;">{{ employee.biometric_user_id|default:"-" }}</td>
             </tr>

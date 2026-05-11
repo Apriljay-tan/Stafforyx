@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Work Schedule{% endblock %}
+{% block page_title %}{{ action }} Work Schedule{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'attendance:attendance_list' %}" class="text-decoration-none">Attendance</a>
+    </li>
+    <li class="breadcrumb-item">
+      <a href="{% url 'attendance:schedule_list' %}" class="text-decoration-none">Work Schedules</a>
+    </li>
+    <li class="breadcrumb-item active">{{ action }}</li>
+  </ol>
+</nav>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+
+  {% if form.non_field_errors %}
+    <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
+  {% endif %}
+
+  <!-- Basic Info -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-calendar-week me-1" style="color:#1565C0;"></i>Schedule Details
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">{{ form.name.label }}</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label fw-semibold small">
+            {{ form.company.label }} <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.company }}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.start_time.label }}</label>
+          {{ form.start_time }}
+          {% if form.start_time.errors %}<div class="text-danger small mt-1">{{ form.start_time.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.end_time.label }}</label>
+          {{ form.end_time }}
+          {% if form.end_time.errors %}<div class="text-danger small mt-1">{{ form.end_time.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">
+            {{ form.overtime_after.label }} <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.overtime_after }}
+          <div class="form-text">{{ form.overtime_after.help_text }}</div>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.required_hours.label }}</label>
+          {{ form.required_hours }}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">Grace Period (min)</label>
+          {{ form.grace_minutes }}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">Break (min)</label>
+          {{ form.break_minutes }}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workdays -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-calendar3-week me-1" style="color:#059669;"></i>Workdays
+    </div>
+    <div class="card-body p-4">
+      <div class="d-flex flex-wrap gap-4">
+        <div class="form-check">
+          {{ form.work_monday }}
+          <label class="form-check-label" for="{{ form.work_monday.id_for_label }}">Monday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_tuesday }}
+          <label class="form-check-label" for="{{ form.work_tuesday.id_for_label }}">Tuesday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_wednesday }}
+          <label class="form-check-label" for="{{ form.work_wednesday.id_for_label }}">Wednesday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_thursday }}
+          <label class="form-check-label" for="{{ form.work_thursday.id_for_label }}">Thursday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_friday }}
+          <label class="form-check-label" for="{{ form.work_friday.id_for_label }}">Friday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_saturday }}
+          <label class="form-check-label" for="{{ form.work_saturday.id_for_label }}">Saturday</label>
+        </div>
+        <div class="form-check">
+          {{ form.work_sunday }}
+          <label class="form-check-label" for="{{ form.work_sunday.id_for_label }}">Sunday</label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card mb-4">
+    <div class="card-body p-4">
+      <div class="form-check">
+        {{ form.is_active }}
+        <label class="form-check-label fw-semibold" for="{{ form.is_active.id_for_label }}">
+          Active — this schedule is available for assignment
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-check-lg me-1"></i>{{ action }} Schedule
+    </button>
+    <a href="{% url 'attendance:schedule_list' %}" class="btn btn-outline-secondary">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

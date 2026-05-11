@@ -305,7 +305,13 @@ def export_all_data(request):
     _add_sheet(
         wb,
         'Attendance',
-        ['Date', 'Employee ID', 'Employee', 'Company', 'Time In', 'Time Out', 'Break Minutes', 'Total Hours', 'Late Minutes', 'Overtime Hours', 'Status'],
+        [
+            'Date', 'Employee ID', 'Employee', 'Company',
+            'Time In', 'Time Out', 'Break Min',
+            'Total Hours', 'Total Work Min',
+            'Late Min', 'Undertime Min', 'Overtime Min',
+            'Status', 'Computed Status',
+        ],
         [
             [
                 record.date,
@@ -316,9 +322,12 @@ def export_all_data(request):
                 record.time_out,
                 record.break_minutes,
                 record.total_hours,
+                record.total_work_minutes,
                 record.late_minutes,
-                record.overtime_hours,
+                record.undertime_minutes,
+                record.overtime_minutes,
                 record.get_status_display(),
+                record.computed_status,
             ]
             for record in AttendanceRecord.objects.select_related('company', 'employee')
         ],

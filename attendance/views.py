@@ -1,15 +1,51 @@
 from datetime import date as _date, datetime as _datetime
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from employees.models import Employee
 
-from .forms import AttendanceRecordForm
-from .models import AttendanceRecord
+from .forms import AttendanceRecordForm, WorkScheduleForm
+from .models import AttendanceRecord, WorkSchedule
+from .services import compute_attendance
 
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+_DAY_FIELDS = [
+    'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
+    'work_friday', 'work_saturday', 'work_sunday',
+]
+
+
+def _potential_absences_today():
+    """
+    Active employees with an active schedule, today is a scheduled workday,
+    and no attendance record exists yet for today.
+    TODO: exclude employees on approved leave once leave integration is added.
+    """
+    today = _date.today()
+    day_field = _DAY_FIELDS[today.weekday()]
+    schedule_filter = {
+        'work_schedule__isnull': False,
+        'work_schedule__is_active': True,
+        f'work_schedule__{day_field}': True,
+        'status': 'active',
+    }
+    already_present = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
+    return (
+        Employee.objects
+        .filter(**schedule_filter)
+        .exclude(id__in=already_present)
+        .select_related('work_schedule', 'department')
+        .order_by('last_name', 'first_name')
+    )
+
+
+# ── Attendance CRUD ────────────────────────────────────────────────────────────
 
 def attendance_list(request):
     records = AttendanceRecord.objects.select_related(
@@ -35,6 +71,7 @@ def attendance_list(request):
         'date_filter': date,
         'status_filter': status,
         'status_choices': AttendanceRecord.STATUS_CHOICES,
+        'potential_absences': _potential_absences_today(),
     }
     return render(request, 'attendance/attendance_list.html', context)
 
@@ -43,6 +80,7 @@ def attendance_add(request):
     form = AttendanceRecordForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         record = form.save()
+        compute_attendance(record)
         messages.success(request, 'Attendance record added successfully.')
         return redirect('attendance:attendance_list')
     return render(request, 'attendance/attendance_form.html', {
@@ -58,7 +96,8 @@ def attendance_edit(request, pk):
     )
     form = AttendanceRecordForm(request.POST or None, instance=record)
     if request.method == 'POST' and form.is_valid():
-        form.save()
+        record = form.save()
+        compute_attendance(record)
         messages.success(request, 'Attendance record updated successfully.')
         return redirect('attendance:attendance_list')
     return render(request, 'attendance/attendance_form.html', {
@@ -103,8 +142,8 @@ def attendance_recent_json(request):
             'department':    r.employee.department.name if r.employee.department else '',
             'time_in':       r.time_in.strftime('%I:%M %p') if r.time_in else None,
             'time_out':      r.time_out.strftime('%I:%M %p') if r.time_out else None,
-            'status':        r.get_status_display(),
-            'status_key':    r.status,
+            'status':        r.computed_status or r.get_status_display(),
+            'status_key':    r.computed_status or r.status,
             'total_hours':   str(r.total_hours),
         })
     return JsonResponse({'records': data, 'count': len(data)})
@@ -115,7 +154,7 @@ def attendance_recent_json(request):
 def attendance_clock(request):
     today = _date.today()
     employees = Employee.objects.filter(status='active').select_related(
-        'company', 'department'
+        'company', 'department', 'work_schedule',
     ).order_by('last_name', 'first_name')
 
     emp_pk = request.POST.get('employee') or request.GET.get('employee', '')
@@ -144,7 +183,7 @@ def attendance_clock(request):
             if today_record:
                 messages.warning(request, f'{selected_emp.full_name} has already timed in today.')
             else:
-                AttendanceRecord.objects.create(
+                record = AttendanceRecord.objects.create(
                     company=selected_emp.company,
                     employee=selected_emp,
                     date=today,
@@ -152,6 +191,7 @@ def attendance_clock(request):
                     status='present',
                     remarks='Temporary phone/manual clock entry',
                 )
+                compute_attendance(record)
                 messages.success(request, f'Time in recorded for {selected_emp.full_name}.')
 
         elif action == 'time_out':
@@ -162,6 +202,7 @@ def attendance_clock(request):
             else:
                 today_record.time_out = now_time
                 today_record.save(update_fields=['time_out'])
+                compute_attendance(today_record)
                 messages.success(request, f'Time out recorded for {selected_emp.full_name}.')
 
         return redirect(
@@ -174,3 +215,41 @@ def attendance_clock(request):
         'today_record': today_record,
         'today': today,
     })
+
+
+# ── Work Schedule CRUD ─────────────────────────────────────────────────────────
+
+def schedule_list(request):
+    schedules = WorkSchedule.objects.select_related('company').prefetch_related('employees')
+    return render(request, 'attendance/schedule_list.html', {'schedules': schedules})
+
+
+def schedule_add(request):
+    form = WorkScheduleForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        sched = form.save()
+        messages.success(request, f'Work schedule "{sched.name}" created.')
+        return redirect('attendance:schedule_list')
+    return render(request, 'attendance/schedule_form.html', {'form': form, 'action': 'Add'})
+
+
+def schedule_edit(request, pk):
+    sched = get_object_or_404(WorkSchedule, pk=pk)
+    form = WorkScheduleForm(request.POST or None, instance=sched)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f'Work schedule "{sched.name}" updated.')
+        return redirect('attendance:schedule_list')
+    return render(request, 'attendance/schedule_form.html', {
+        'form': form, 'sched': sched, 'action': 'Edit',
+    })
+
+
+def schedule_delete(request, pk):
+    sched = get_object_or_404(WorkSchedule, pk=pk)
+    if request.method == 'POST':
+        name = sched.name
+        sched.delete()
+        messages.success(request, f'Work schedule "{name}" deleted.')
+        return redirect('attendance:schedule_list')
+    return render(request, 'attendance/schedule_confirm_delete.html', {'sched': sched})

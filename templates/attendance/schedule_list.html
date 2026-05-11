@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Work Schedules{% endblock %}
+{% block page_title %}Work Schedules{% endblock %}
+
+{% block content %}
+
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Work Schedules</h1>
+    <p>Define work schedules used for attendance calculation.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Attendance
+    </a>
+    {% if not license_read_only %}
+      <a href="{% url 'attendance:schedule_add' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Schedule
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-calendar-week me-1" style="color:#1565C0;"></i>Schedules</span>
+    <span class="badge bg-primary rounded-pill">{{ schedules.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Name</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Grace (min)</th>
+          <th>Break (min)</th>
+          <th>Req. Hours</th>
+          <th>Workdays</th>
+          <th>Employees</th>
+          <th>Status</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sched in schedules %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ sched.name }}</td>
+          <td class="text-muted">{{ sched.start_time|time:"g:i A" }}</td>
+          <td class="text-muted">{{ sched.end_time|time:"g:i A" }}</td>
+          <td class="text-muted">{{ sched.grace_minutes }}</td>
+          <td class="text-muted">{{ sched.break_minutes }}</td>
+          <td class="text-muted">{{ sched.required_hours }}</td>
+          <td>
+            <div class="d-flex gap-1 flex-wrap">
+              {% if sched.work_monday %}<span class="badge text-bg-secondary" style="font-size:.7rem;">Mon</span>{% endif %}
+              {% if sched.work_tuesday %}<span class="badge text-bg-secondary" style="font-size:.7rem;">Tue</span>{% endif %}
+              {% if sched.work_wednesday %}<span class="badge text-bg-secondary" style="font-size:.7rem;">Wed</span>{% endif %}
+              {% if sched.work_thursday %}<span class="badge text-bg-secondary" style="font-size:.7rem;">Thu</span>{% endif %}
+              {% if sched.work_friday %}<span class="badge text-bg-secondary" style="font-size:.7rem;">Fri</span>{% endif %}
+              {% if sched.work_saturday %}<span class="badge text-bg-warning" style="font-size:.7rem;">Sat</span>{% endif %}
+              {% if sched.work_sunday %}<span class="badge text-bg-danger" style="font-size:.7rem;">Sun</span>{% endif %}
+            </div>
+          </td>
+          <td class="text-muted">{{ sched.employees.count }}</td>
+          <td>
+            {% if sched.is_active %}
+              <span class="badge text-bg-success">Active</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Inactive</span>
+            {% endif %}
+          </td>
+          <td class="text-end pe-3">
+            {% if not license_read_only %}
+              <a href="{% url 'attendance:schedule_edit' sched.pk %}"
+                 class="btn btn-sm btn-outline-primary" title="Edit">
+                <i class="bi bi-pencil"></i>
+              </a>
+              <a href="{% url 'attendance:schedule_delete' sched.pk %}"
+                 class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                <i class="bi bi-trash"></i>
+              </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="10" class="text-center py-5">
+            <i class="bi bi-calendar-week fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+            <span class="text-muted">No work schedules yet.</span>
+            {% if not license_read_only %}
+              <div class="mt-2">
+                <a href="{% url 'attendance:schedule_add' %}" class="btn btn-primary btn-sm">
+                  <i class="bi bi-plus-circle me-1"></i>Add First Schedule
+                </a>
+              </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

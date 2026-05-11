@@ -10,6 +10,9 @@
     <p>Manage daily attendance records for employees.</p>
   </div>
   <div class="d-flex gap-2 flex-wrap align-items-center">
+    <a href="{% url 'attendance:schedule_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-calendar-week me-1"></i>Work Schedules
+    </a>
     <a href="{% url 'attendance:attendance_clock' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-clock me-1"></i>Time In / Time Out
     </a>
@@ -23,6 +26,7 @@
   </div>
 </div>
 
+<!-- Filter -->
 <div class="card mb-3">
   <div class="card-body p-3">
     <form method="get" class="row g-2 align-items-end">
@@ -95,6 +99,34 @@
   </div>
 </div>
 
+<!-- Potential Absences Today -->
+{% if potential_absences %}
+<div class="card mb-3 border-danger" style="border-width:1px;">
+  <div class="card-header d-flex align-items-center justify-content-between" style="background:#fff5f5;">
+    <span style="color:#dc3545;">
+      <i class="bi bi-person-x me-1"></i>Potential Absences Today
+      <span class="badge bg-danger rounded-pill ms-1">{{ potential_absences.count }}</span>
+    </span>
+    <span class="text-muted" style="font-size:.75rem;">Employees with a schedule but no record yet today</span>
+  </div>
+  <div class="card-body p-3">
+    <div class="d-flex flex-wrap gap-2">
+      {% for emp in potential_absences %}
+        <span class="badge text-bg-light border" style="font-size:.8rem;font-weight:500;padding:.4em .75em;">
+          {{ emp.full_name }}
+          {% if emp.department %}<span class="text-muted ms-1">· {{ emp.department.name }}</span>{% endif %}
+        </span>
+      {% endfor %}
+    </div>
+    <p class="text-muted mb-0 mt-2" style="font-size:.75rem;">
+      <!-- TODO: exclude employees on approved leave once leave integration is added -->
+      No records have been created yet — not marked absent automatically.
+    </p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Attendance Records table -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-clock-history me-1" style="color:#1565C0;"></i>Attendance Records</span>
@@ -108,8 +140,9 @@
           <th>Employee</th>
           <th>Time In</th>
           <th>Time Out</th>
-          <th>Total Hours</th>
+          <th>Work Min</th>
           <th>Late</th>
+          <th>Undertime</th>
           <th>Overtime</th>
           <th>Status</th>
           <th class="text-end pe-3">Actions</th>
@@ -127,11 +160,54 @@
             </td>
             <td class="text-muted">{{ record.time_in|time:"g:i A"|default:"-" }}</td>
             <td class="text-muted">{{ record.time_out|time:"g:i A"|default:"-" }}</td>
-            <td>{{ record.total_hours }}</td>
-            <td>{{ record.late_minutes }} min</td>
-            <td>{{ record.overtime_hours }}</td>
+            <td class="text-muted">
+              {% if record.total_work_minutes %}
+                {{ record.total_work_minutes }} min
+              {% else %}
+                {{ record.total_hours }} h
+              {% endif %}
+            </td>
             <td>
-              {% if record.status == 'present' %}
+              {% if record.late_minutes %}
+                <span class="badge text-bg-warning">{{ record.late_minutes }} min</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.undertime_minutes %}
+                <span class="badge" style="background:#f97316;color:#fff;">{{ record.undertime_minutes }} min</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.overtime_minutes %}
+                <span class="badge text-bg-primary">{{ record.overtime_minutes }} min</span>
+              {% elif record.overtime_hours %}
+                <span class="badge text-bg-primary">{{ record.overtime_hours }} h</span>
+              {% else %}
+                <span class="text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if record.computed_status == 'present' %}
+                <span class="badge text-bg-success">Present</span>
+              {% elif record.computed_status == 'late' %}
+                <span class="badge text-bg-warning">Late</span>
+              {% elif record.computed_status == 'undertime' %}
+                <span class="badge" style="background:#f97316;color:#fff;">Undertime</span>
+              {% elif record.computed_status == 'overtime' %}
+                <span class="badge text-bg-primary">Overtime</span>
+              {% elif record.computed_status == 'absent' %}
+                <span class="badge text-bg-danger">Absent</span>
+              {% elif record.computed_status == 'incomplete' %}
+                <span class="badge text-bg-secondary">Incomplete</span>
+              {% elif record.computed_status == 'rest_day' %}
+                <span class="badge text-bg-secondary">Rest Day</span>
+              {% elif record.computed_status == 'no_schedule' %}
+                <span class="badge text-bg-light border">No Schedule</span>
+              {% elif record.status == 'present' %}
                 <span class="badge text-bg-success">Present</span>
               {% elif record.status == 'absent' %}
                 <span class="badge text-bg-danger">Absent</span>
@@ -160,7 +236,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="9" class="text-center py-5">
+            <td colspan="10" class="text-center py-5">
               <i class="bi bi-clock-history fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No attendance records found.</span>
               {% if not employee_filter and not date_filter and not status_filter and not license_read_only %}
@@ -190,6 +266,11 @@
     'late':     'text-bg-warning',
     'half_day': 'text-bg-info',
     'on_leave': 'text-bg-secondary',
+    'incomplete':'text-bg-secondary',
+    'undertime':'',
+    'overtime': 'text-bg-primary',
+    'rest_day': 'text-bg-secondary',
+    'no_schedule':'',
   };
 
   function esc(s) {
@@ -214,7 +295,10 @@
             'No attendance records for today.</td></tr>';
         } else {
           tbody.innerHTML = data.records.map(function (r) {
-            var cls  = STATUS_CLASSES[r.status_key] || 'text-bg-secondary';
+            var cls = STATUS_CLASSES[r.status_key] || 'text-bg-secondary';
+            var badgeStyle = (r.status_key === 'undertime')
+              ? ' style="background:#f97316;color:#fff;"'
+              : (r.status_key === 'no_schedule' ? ' style="border:1px solid #dee2e6;"' : '');
             var dept = r.department ? ' &bull; ' + esc(r.department) : '';
             return '<tr>' +
               '<td class="ps-3">' +
@@ -223,7 +307,7 @@
               '</td>' +
               '<td class="text-muted">' + esc(r.time_in  || '—') + '</td>' +
               '<td class="text-muted">' + esc(r.time_out || '—') + '</td>' +
-              '<td><span class="badge ' + cls + '">' + esc(r.status) + '</span></td>' +
+              '<td><span class="badge ' + cls + '"' + badgeStyle + '>' + esc(r.status) + '</span></td>' +
               '<td class="text-muted">' + esc(r.total_hours) + '</td>' +
               '</tr>';
           }).join('');
@@ -232,7 +316,7 @@
         if (countEl) countEl.textContent = data.count;
         if (updEl) updEl.textContent = new Date().toLocaleTimeString();
       })
-      .catch(function () { /* ignore transient network errors */ });
+      .catch(function () {});
   }
 
   poll();

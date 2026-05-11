@@ -44,6 +44,7 @@ class EmployeeForm(forms.ModelForm):
             'email', 'phone', 'address',
             'date_hired', 'department', 'position',
             'employment_type', 'status', 'basic_salary',
+            'work_schedule',
             'biometric_user_id',
             'sss_number', 'philhealth_number', 'pagibig_number', 'tin_number',
             'emergency_contact_name', 'emergency_contact_phone',
@@ -55,4 +56,8 @@ class EmployeeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Lazy import avoids circular dependency (attendance.models → employees.models)
+        from attendance.models import WorkSchedule
+        self.fields['work_schedule'].queryset = WorkSchedule.objects.filter(is_active=True)
+        self.fields['work_schedule'].required = False
         _bootstrap(self)

@@ -85,6 +85,13 @@ class Employee(models.Model):
     emergency_contact_name = models.CharField(max_length=150, blank=True)
     emergency_contact_phone = models.CharField(max_length=30, blank=True)
     photo = models.ImageField(upload_to='employees/photos/', blank=True, null=True)
+    # String reference avoids circular import (attendance.models imports Employee)
+    work_schedule = models.ForeignKey(
+        'attendance.WorkSchedule',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='employees',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

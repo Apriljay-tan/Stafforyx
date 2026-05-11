@@ -74,9 +74,7 @@
         <div class="row g-2 text-center">
           <div class="col-6">
             <div class="rounded p-2" style="background:#f4f6fa;">
-              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">
-                Time In
-              </div>
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">Time In</div>
               <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
                 {% if today_record and today_record.time_in %}
                   {{ today_record.time_in|time:"g:i A" }}
@@ -88,9 +86,7 @@
           </div>
           <div class="col-6">
             <div class="rounded p-2" style="background:#f4f6fa;">
-              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">
-                Time Out
-              </div>
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">Time Out</div>
               <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
                 {% if today_record and today_record.time_out %}
                   {{ today_record.time_out|time:"g:i A" }}
@@ -101,6 +97,25 @@
             </div>
           </div>
         </div>
+        {% if today_record and today_record.computed_status %}
+          <div class="text-center mt-2">
+            {% if today_record.computed_status == 'present' %}
+              <span class="badge text-bg-success">Present</span>
+            {% elif today_record.computed_status == 'late' %}
+              <span class="badge text-bg-warning">Late {% if today_record.late_minutes %}({{ today_record.late_minutes }} min){% endif %}</span>
+            {% elif today_record.computed_status == 'undertime' %}
+              <span class="badge" style="background:#f97316;color:#fff;">Undertime ({{ today_record.undertime_minutes }} min)</span>
+            {% elif today_record.computed_status == 'overtime' %}
+              <span class="badge text-bg-primary">Overtime ({{ today_record.overtime_minutes }} min)</span>
+            {% elif today_record.computed_status == 'incomplete' %}
+              <span class="badge text-bg-secondary">Incomplete — time out pending</span>
+            {% elif today_record.computed_status == 'rest_day' %}
+              <span class="badge text-bg-secondary">Rest Day</span>
+            {% elif today_record.computed_status == 'no_schedule' %}
+              <span class="badge text-bg-light border">No Schedule Assigned</span>
+            {% endif %}
+          </div>
+        {% endif %}
       </div>
     </div>
 

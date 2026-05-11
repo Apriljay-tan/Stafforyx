@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}Delete Work Schedule{% endblock %}
+{% block page_title %}Delete Work Schedule{% endblock %}
+
+{% block content %}
+
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6">
+    <div class="card border-danger">
+      <div class="card-header text-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i>Confirm Delete
+      </div>
+      <div class="card-body p-4">
+        <p>Are you sure you want to delete the work schedule:</p>
+        <p class="fw-semibold fs-5">{{ sched.name }}</p>
+        <p class="text-muted" style="font-size:.875rem;">
+          {{ sched.start_time|time:"g:i A" }} – {{ sched.end_time|time:"g:i A" }}
+          &bull; {{ sched.employees.count }} employee(s) assigned
+        </p>
+        <p class="text-danger" style="font-size:.875rem;">
+          Employees assigned to this schedule will lose their schedule assignment.
+          Attendance records are not deleted.
+        </p>
+        <form method="post" class="d-flex gap-2 mt-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Yes, Delete
+          </button>
+          <a href="{% url 'attendance:schedule_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

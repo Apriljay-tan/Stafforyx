@@ -53,7 +53,7 @@ def employee_list(request):
 
 def employee_detail(request, pk):
     employee = get_object_or_404(
-        Employee.objects.select_related('company', 'department', 'position'),
+        Employee.objects.select_related('company', 'department', 'position', 'work_schedule'),
         pk=pk,
     )
     return render(request, 'employees/employee_detail.html', {'employee': employee})
