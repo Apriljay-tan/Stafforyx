@@ -385,9 +385,11 @@
           <i class="bi bi-key"></i> License Status
         </a>
       </li>
+      {% if request.user.is_superuser %}
       <li class="nav-item">
         <a href="/admin/" class="nav-link"><i class="bi bi-shield-lock"></i> Admin Panel</a>
       </li>
+      {% endif %}
     </ul>
 
     <div class="sidebar-section-label">Account</div>
