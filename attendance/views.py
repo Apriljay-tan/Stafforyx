@@ -1,5 +1,9 @@
+from datetime import date as _date, datetime as _datetime
+
 from django.contrib import messages
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from employees.models import Employee
 
@@ -79,3 +83,94 @@ def attendance_delete(request, pk):
         )
         return redirect('attendance:attendance_list')
     return render(request, 'attendance/attendance_confirm_delete.html', {'record': record})
+
+
+# ── Today's live attendance JSON (for polling) ────────────────────────────────
+
+def attendance_recent_json(request):
+    today = _date.today()
+    records = (
+        AttendanceRecord.objects
+        .filter(date=today)
+        .select_related('employee', 'employee__department')
+        .order_by('-created_at')
+    )
+    data = []
+    for r in records:
+        data.append({
+            'employee_id':   r.employee.employee_id,
+            'employee_name': r.employee.full_name,
+            'department':    r.employee.department.name if r.employee.department else '',
+            'time_in':       r.time_in.strftime('%I:%M %p') if r.time_in else None,
+            'time_out':      r.time_out.strftime('%I:%M %p') if r.time_out else None,
+            'status':        r.get_status_display(),
+            'status_key':    r.status,
+            'total_hours':   str(r.total_hours),
+        })
+    return JsonResponse({'records': data, 'count': len(data)})
+
+
+# ── Temporary phone/manual clock-in (dev/testing only) ────────────────────────
+
+def attendance_clock(request):
+    today = _date.today()
+    employees = Employee.objects.filter(status='active').select_related(
+        'company', 'department'
+    ).order_by('last_name', 'first_name')
+
+    emp_pk = request.POST.get('employee') or request.GET.get('employee', '')
+    selected_emp = None
+    today_record = None
+
+    if emp_pk:
+        try:
+            selected_emp = employees.get(pk=emp_pk)
+            today_record = AttendanceRecord.objects.filter(
+                employee=selected_emp, date=today
+            ).first()
+        except Employee.DoesNotExist:
+            pass
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if not selected_emp:
+            messages.error(request, 'Please select an employee.')
+            return redirect('attendance:attendance_clock')
+
+        now_time = _datetime.now().time()
+
+        if action == 'time_in':
+            if today_record:
+                messages.warning(request, f'{selected_emp.full_name} has already timed in today.')
+            else:
+                AttendanceRecord.objects.create(
+                    company=selected_emp.company,
+                    employee=selected_emp,
+                    date=today,
+                    time_in=now_time,
+                    status='present',
+                    remarks='Temporary phone/manual clock entry',
+                )
+                messages.success(request, f'Time in recorded for {selected_emp.full_name}.')
+
+        elif action == 'time_out':
+            if not today_record or not today_record.time_in:
+                messages.warning(request, 'Please time in first.')
+            elif today_record.time_out:
+                messages.warning(request, f'{selected_emp.full_name} has already timed out today.')
+            else:
+                today_record.time_out = now_time
+                today_record.save(update_fields=['time_out'])
+                messages.success(request, f'Time out recorded for {selected_emp.full_name}.')
+
+        return redirect(
+            f"{reverse('attendance:attendance_clock')}?employee={selected_emp.pk}"
+        )
+
+    return render(request, 'attendance/attendance_clock.html', {
+        'employees': employees,
+        'selected_emp': selected_emp,
+        'today_record': today_record,
+        'today': today,
+    })

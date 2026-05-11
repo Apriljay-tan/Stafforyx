@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}Time In / Time Out{% endblock %}
+{% block page_title %}Time In / Time Out{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-10 col-md-7 col-lg-5">
+
+    <!-- Dev/testing notice -->
+    <div class="alert alert-warning d-flex align-items-start gap-2 mb-4" style="font-size:.85rem;">
+      <i class="bi bi-cone-striped flex-shrink-0 mt-1"></i>
+      <div>
+        <strong>Temporary dev/testing clock-in only.</strong><br>
+        Production attendance will use biometric device integration.
+      </div>
+    </div>
+
+    <!-- Date -->
+    <div class="card mb-3">
+      <div class="card-body text-center py-3">
+        <div class="fw-semibold" style="font-size:1.1rem;color:#0D1B2A;">
+          {{ today|date:"l, F j, Y" }}
+        </div>
+        <div class="text-muted" style="font-size:.8rem;">Today's Date</div>
+      </div>
+    </div>
+
+    <!-- Employee selector -->
+    <div class="card mb-3">
+      <div class="card-body p-3">
+        <form method="get" id="emp-select-form">
+          <label class="form-label fw-semibold mb-2">Select Employee</label>
+          <select name="employee" class="form-select form-select-lg"
+                  onchange="document.getElementById('emp-select-form').submit()">
+            <option value="">— Choose an employee —</option>
+            {% for emp in employees %}
+              <option value="{{ emp.pk }}"
+                {% if selected_emp.pk == emp.pk %}selected{% endif %}>
+                {{ emp.employee_id }} — {{ emp.last_name }}, {{ emp.first_name }}
+              </option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+    </div>
+
+    {% if selected_emp %}
+
+    <!-- Selected employee card -->
+    <div class="card mb-3">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          {% if selected_emp.photo %}
+            <img src="{{ selected_emp.photo.url }}" class="rounded-circle flex-shrink-0"
+                 style="width:52px;height:52px;object-fit:cover;" alt="">
+          {% else %}
+            <div class="rounded-circle d-flex align-items-center justify-content-center fw-semibold flex-shrink-0"
+                 style="width:52px;height:52px;background:#1565C0;color:#fff;font-size:1rem;">
+              {{ selected_emp.first_name.0 }}{{ selected_emp.last_name.0 }}
+            </div>
+          {% endif %}
+          <div>
+            <div class="fw-semibold" style="font-size:1.05rem;color:#0D1B2A;">
+              {{ selected_emp.full_name }}
+            </div>
+            <div class="text-muted" style="font-size:.8rem;">
+              {{ selected_emp.employee_id }}
+              {% if selected_emp.department %}&bull; {{ selected_emp.department.name }}{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's record summary -->
+        <div class="row g-2 text-center">
+          <div class="col-6">
+            <div class="rounded p-2" style="background:#f4f6fa;">
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">
+                Time In
+              </div>
+              <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
+                {% if today_record and today_record.time_in %}
+                  {{ today_record.time_in|time:"g:i A" }}
+                {% else %}
+                  <span class="text-muted" style="font-size:1rem;">—</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="rounded p-2" style="background:#f4f6fa;">
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">
+                Time Out
+              </div>
+              <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
+                {% if today_record and today_record.time_out %}
+                  {{ today_record.time_out|time:"g:i A" }}
+                {% else %}
+                  <span class="text-muted" style="font-size:1rem;">—</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    {% if license_read_only or clock_rollback %}
+      <div class="alert alert-secondary text-center" style="font-size:.9rem;">
+        <i class="bi bi-lock me-1"></i>
+        {% if clock_rollback %}
+          System date rollback detected — clock-in disabled.
+        {% else %}
+          Read-only mode — renew your license to make changes.
+        {% endif %}
+      </div>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="employee" value="{{ selected_emp.pk }}">
+        <div class="d-grid gap-3">
+          <button type="submit" name="action" value="time_in"
+                  class="btn btn-success btn-lg py-3"
+                  {% if today_record and today_record.time_in %}disabled{% endif %}>
+            <i class="bi bi-box-arrow-in-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
+            Time In
+          </button>
+          <button type="submit" name="action" value="time_out"
+                  class="btn btn-danger btn-lg py-3"
+                  {% if not today_record or not today_record.time_in or today_record.time_out %}disabled{% endif %}>
+            <i class="bi bi-box-arrow-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
+            Time Out
+          </button>
+        </div>
+      </form>
+    {% endif %}
+
+    {% endif %}{# end if selected_emp #}
+
+    <div class="mt-4 text-center">
+      <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Attendance Records
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -9,13 +9,18 @@
     <h1>Attendance</h1>
     <p>Manage daily attendance records for employees.</p>
   </div>
-  {% if not license_read_only %}
-    <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
-      <i class="bi bi-plus-circle me-1"></i>Add Attendance
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <a href="{% url 'attendance:attendance_clock' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-clock me-1"></i>Time In / Time Out
     </a>
-  {% else %}
-    <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
-  {% endif %}
+    {% if not license_read_only %}
+      <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Add Attendance
+      </a>
+    {% else %}
+      <span class="text-muted" style="font-size:.8rem;"><i class="bi bi-lock me-1"></i>Read-only mode — renew your license to make changes.</span>
+    {% endif %}
+  </div>
 </div>
 
 <div class="card mb-3">
@@ -59,6 +64,34 @@
         {% endif %}
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Today's Live Attendance (auto-polls every 5 s) -->
+<div class="card mb-3">
+  <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span><i class="bi bi-broadcast me-1" style="color:#1565C0;"></i>Today's Live Attendance
+      <span class="badge bg-success rounded-pill ms-1" id="live-count">—</span>
+    </span>
+    <span class="text-muted" style="font-size:.75rem;">
+      Auto-refreshing every 5 s &bull; Updated: <span id="live-updated">—</span>
+    </span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Employee</th>
+          <th>Time In</th>
+          <th>Time Out</th>
+          <th>Status</th>
+          <th>Total Hours</th>
+        </tr>
+      </thead>
+      <tbody id="live-tbody">
+        <tr><td colspan="5" class="text-center text-muted py-3" style="font-size:.85rem;">Loading…</td></tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
@@ -145,4 +178,65 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var url = "{% url 'attendance:attendance_recent_json' %}";
+  var STATUS_CLASSES = {
+    'present':  'text-bg-success',
+    'absent':   'text-bg-danger',
+    'late':     'text-bg-warning',
+    'half_day': 'text-bg-info',
+    'on_leave': 'text-bg-secondary',
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function poll() {
+    fetch(url, {credentials: 'same-origin'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        var tbody   = document.getElementById('live-tbody');
+        var countEl = document.getElementById('live-count');
+        var updEl   = document.getElementById('live-updated');
+        if (!tbody) return;
+
+        if (data.records.length === 0) {
+          tbody.innerHTML =
+            '<tr><td colspan="5" class="text-center text-muted py-3" style="font-size:.85rem;">' +
+            'No attendance records for today.</td></tr>';
+        } else {
+          tbody.innerHTML = data.records.map(function (r) {
+            var cls  = STATUS_CLASSES[r.status_key] || 'text-bg-secondary';
+            var dept = r.department ? ' &bull; ' + esc(r.department) : '';
+            return '<tr>' +
+              '<td class="ps-3">' +
+                '<div class="fw-semibold" style="color:#0D1B2A;">' + esc(r.employee_name) + '</div>' +
+                '<div class="text-muted" style="font-size:.73rem;">' + esc(r.employee_id) + dept + '</div>' +
+              '</td>' +
+              '<td class="text-muted">' + esc(r.time_in  || '—') + '</td>' +
+              '<td class="text-muted">' + esc(r.time_out || '—') + '</td>' +
+              '<td><span class="badge ' + cls + '">' + esc(r.status) + '</span></td>' +
+              '<td class="text-muted">' + esc(r.total_hours) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+
+        if (countEl) countEl.textContent = data.count;
+        if (updEl) updEl.textContent = new Date().toLocaleTimeString();
+      })
+      .catch(function () { /* ignore transient network errors */ });
+  }
+
+  poll();
+  setInterval(poll, 5000);
+}());
+</script>
 {% endblock %}
