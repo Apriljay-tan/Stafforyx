@@ -3,6 +3,18 @@ from .models import License
 _WARN_DAYS = 7
 
 
+def is_license_active():
+    """Return True if the most recent license is valid and not expired/suspended."""
+    lic = License.objects.order_by('-created_at').first()
+    if lic is None:
+        return False
+    if lic.status in ('expired', 'suspended'):
+        return False
+    if lic.is_expired:
+        return False
+    return True
+
+
 def license_banner(request):
     """
     Inject `license_banner` into every template context rendered by base.html.
