@@ -26,6 +26,71 @@
   </div>
 </div>
 
+<!-- Company Selector -->
+{% if request.user.is_superuser and accessible_companies.count > 0 %}
+<div class="card mb-3" style="border-color:#1565C0;border-width:1px;">
+  <div class="card-body py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold small" style="color:#1565C0;white-space:nowrap;">
+      <i class="bi bi-building me-1"></i>Monitoring Company:
+    </span>
+    <form method="post" action="{% url 'accounts:select_company' %}" class="d-flex align-items-center gap-2 mb-0">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="company_id" class="form-select form-select-sm" style="max-width:240px;min-width:180px;" onchange="this.form.submit()">
+        <option value="" {% if not selected_company %}selected{% endif %}>All Companies</option>
+        {% for co in accessible_companies %}
+          <option value="{{ co.pk }}" {% if selected_company.pk == co.pk %}selected{% endif %}>
+            {{ co.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </noscript>
+    </form>
+    {% if selected_company %}
+      <form method="post" action="{% url 'accounts:select_company' %}" class="mb-0">
+        {% csrf_token %}
+        <input type="hidden" name="company_id" value="">
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-lg me-1"></i>Clear
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+{% elif accessible_companies.count > 1 %}
+{# Normal user with multiple companies #}
+<div class="card mb-3" style="border-color:#1565C0;border-width:1px;">
+  <div class="card-body py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold small" style="color:#1565C0;white-space:nowrap;">
+      <i class="bi bi-building me-1"></i>Company:
+    </span>
+    <form method="post" action="{% url 'accounts:select_company' %}" class="d-flex align-items-center gap-2 mb-0">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="company_id" class="form-select form-select-sm" style="max-width:240px;min-width:180px;" onchange="this.form.submit()">
+        {% for co in accessible_companies %}
+          <option value="{{ co.pk }}" {% if selected_company.pk == co.pk %}selected{% endif %}>
+            {{ co.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </noscript>
+    </form>
+  </div>
+</div>
+{% elif selected_company %}
+{# Single-company user — read-only label #}
+<div class="d-flex align-items-center gap-2 mb-3 text-muted" style="font-size:.85rem;">
+  <i class="bi bi-building"></i>
+  <span>Company: <strong style="color:#0D1B2A;">{{ selected_company.name }}</strong></span>
+</div>
+{% endif %}
+
 <!-- Filter -->
 <div class="card mb-3">
   <div class="card-body p-3">
@@ -74,7 +139,11 @@
 <!-- Today's Live Attendance (auto-polls every 5 s) -->
 <div class="card mb-3">
   <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <span><i class="bi bi-broadcast me-1" style="color:#1565C0;"></i>Today's Live Attendance
+    <span>
+      <i class="bi bi-broadcast me-1" style="color:#1565C0;"></i>Today's Live Attendance
+      {% if selected_company %}
+        <span class="text-muted ms-1" style="font-size:.78rem;font-weight:400;">— {{ selected_company.name }}</span>
+      {% endif %}
       <span class="badge bg-success rounded-pill ms-1" id="live-count">—</span>
     </span>
     <span class="text-muted" style="font-size:.75rem;">
@@ -86,6 +155,7 @@
       <thead class="table-light">
         <tr>
           <th class="ps-3">Employee</th>
+          {% if show_company_column %}<th>Company</th>{% endif %}
           <th>Time In</th>
           <th>Time Out</th>
           <th>Status</th>
@@ -93,7 +163,7 @@
         </tr>
       </thead>
       <tbody id="live-tbody">
-        <tr><td colspan="5" class="text-center text-muted py-3" style="font-size:.85rem;">Loading…</td></tr>
+        <tr><td colspan="{{ show_company_column|yesno:'6,5' }}" class="text-center text-muted py-3" style="font-size:.85rem;">Loading…</td></tr>
       </tbody>
     </table>
   </div>
@@ -114,12 +184,12 @@
       {% for emp in potential_absences %}
         <span class="badge text-bg-light border" style="font-size:.8rem;font-weight:500;padding:.4em .75em;">
           {{ emp.full_name }}
+          {% if show_company_column and emp.company %}<span class="text-muted ms-1">· {{ emp.company.name }}</span>{% endif %}
           {% if emp.department %}<span class="text-muted ms-1">· {{ emp.department.name }}</span>{% endif %}
         </span>
       {% endfor %}
     </div>
     <p class="text-muted mb-0 mt-2" style="font-size:.75rem;">
-      <!-- TODO: exclude employees on approved leave once leave integration is added -->
       No records have been created yet — not marked absent automatically.
     </p>
   </div>
@@ -129,7 +199,12 @@
 <!-- Attendance Records table -->
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-clock-history me-1" style="color:#1565C0;"></i>Attendance Records</span>
+    <span>
+      <i class="bi bi-clock-history me-1" style="color:#1565C0;"></i>Attendance Records
+      {% if selected_company %}
+        <span class="text-muted ms-1" style="font-size:.78rem;font-weight:400;">— {{ selected_company.name }}</span>
+      {% endif %}
+    </span>
     <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
   </div>
   <div class="table-responsive">
@@ -138,6 +213,7 @@
         <tr>
           <th class="ps-3">Date</th>
           <th>Employee</th>
+          {% if show_company_column %}<th>Company</th>{% endif %}
           <th>Time In</th>
           <th>Time Out</th>
           <th>Work Min</th>
@@ -158,6 +234,9 @@
                 {{ record.employee.employee_id }}{% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
               </div>
             </td>
+            {% if show_company_column %}
+              <td class="text-muted" style="font-size:.8rem;white-space:nowrap;">{{ record.company.name }}</td>
+            {% endif %}
             <td class="text-muted">{{ record.time_in|time:"g:i A"|default:"-" }}</td>
             <td class="text-muted">{{ record.time_out|time:"g:i A"|default:"-" }}</td>
             <td class="text-muted">
@@ -236,7 +315,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="10" class="text-center py-5">
+            <td colspan="{{ show_company_column|yesno:'11,10' }}" class="text-center py-5">
               <i class="bi bi-clock-history fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
               <span class="text-muted">No attendance records found.</span>
               {% if not employee_filter and not date_filter and not status_filter and not license_read_only %}
@@ -289,9 +368,12 @@
         var updEl   = document.getElementById('live-updated');
         if (!tbody) return;
 
+        var showCo = !!data.show_company;
+        var cols   = showCo ? 6 : 5;
+
         if (data.records.length === 0) {
           tbody.innerHTML =
-            '<tr><td colspan="5" class="text-center text-muted py-3" style="font-size:.85rem;">' +
+            '<tr><td colspan="' + cols + '" class="text-center text-muted py-3" style="font-size:.85rem;">' +
             'No attendance records for today.</td></tr>';
         } else {
           tbody.innerHTML = data.records.map(function (r) {
@@ -300,11 +382,15 @@
               ? ' style="background:#f97316;color:#fff;"'
               : (r.status_key === 'no_schedule' ? ' style="border:1px solid #dee2e6;"' : '');
             var dept = r.department ? ' &bull; ' + esc(r.department) : '';
+            var coCell = showCo
+              ? '<td class="text-muted" style="font-size:.8rem;white-space:nowrap;">' + esc(r.company || '') + '</td>'
+              : '';
             return '<tr>' +
               '<td class="ps-3">' +
                 '<div class="fw-semibold" style="color:#0D1B2A;">' + esc(r.employee_name) + '</div>' +
                 '<div class="text-muted" style="font-size:.73rem;">' + esc(r.employee_id) + dept + '</div>' +
               '</td>' +
+              coCell +
               '<td class="text-muted">' + esc(r.time_in  || '—') + '</td>' +
               '<td class="text-muted">' + esc(r.time_out || '—') + '</td>' +
               '<td><span class="badge ' + cls + '"' + badgeStyle + '>' + esc(r.status) + '</span></td>' +

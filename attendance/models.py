@@ -3,6 +3,100 @@ from companies.models import Company
 from employees.models import Employee
 
 
+class BiometricDevice(models.Model):
+    DEVICE_TYPE_CHOICES = [
+        ('zkteco',    'ZKTeco'),
+        ('hikvision', 'Hikvision'),
+        ('dahua',     'Dahua'),
+        ('anviz',     'Anviz'),
+        ('other',     'Other'),
+    ]
+
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='biometric_devices'
+    )
+    name = models.CharField(max_length=100)
+    device_code = models.CharField(
+        max_length=50,
+        help_text='Short unique code used to identify this device (e.g. HQ-DOOR-01).',
+    )
+    serial_number = models.CharField(max_length=100, blank=True)
+    location = models.CharField(max_length=200, blank=True)
+    device_type = models.CharField(
+        max_length=30, choices=DEVICE_TYPE_CHOICES, default='zkteco'
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    port = models.PositiveIntegerField(null=True, blank=True)
+    # api_key is intentionally excluded from list_display in admin.
+    api_key = models.CharField(
+        max_length=128, blank=True,
+        help_text='Secret key for authenticating future sync requests from this device.',
+    )
+    is_active = models.BooleanField(default=True)
+    last_sync_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['company', 'name']
+        unique_together = [('company', 'device_code')]
+
+    def __str__(self):
+        return f'{self.company.name} — {self.name} ({self.device_code})'
+
+
+class BiometricLog(models.Model):
+    PUNCH_TYPE_CHOICES = [
+        ('unknown',    'Unknown'),
+        ('check_in',   'Check In'),
+        ('check_out',  'Check Out'),
+        ('break_in',   'Break In'),
+        ('break_out',  'Break Out'),
+    ]
+
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='biometric_logs'
+    )
+    device = models.ForeignKey(
+        BiometricDevice, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='logs'
+    )
+    # employee is resolved at log-creation time; may be null if id is unrecognised.
+    employee = models.ForeignKey(
+        Employee, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='biometric_logs'
+    )
+    # The raw ID string sent by the device — used for matching.
+    biometric_user_id = models.CharField(max_length=50)
+    punch_time = models.DateTimeField()
+    punch_type = models.CharField(
+        max_length=20, choices=PUNCH_TYPE_CHOICES, default='unknown'
+    )
+    raw_status_code = models.CharField(max_length=20, blank=True)
+    raw_payload = models.JSONField(default=dict, blank=True)
+    processed = models.BooleanField(default=False)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    attendance_record = models.ForeignKey(
+        'AttendanceRecord', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='biometric_logs'
+    )
+    error_message = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-punch_time']
+        indexes = [
+            models.Index(fields=['company', 'punch_time']),
+            models.Index(fields=['company', 'biometric_user_id']),
+            models.Index(fields=['processed']),
+        ]
+
+    def __str__(self):
+        emp = self.employee or f'uid:{self.biometric_user_id}'
+        return f'{self.company.name} — {emp} @ {self.punch_time:%Y-%m-%d %H:%M} ({self.punch_type})'
+
+
 class WorkSchedule(models.Model):
     company = models.ForeignKey(
         Company, on_delete=models.CASCADE,

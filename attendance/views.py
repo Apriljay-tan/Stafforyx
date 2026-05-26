@@ -7,7 +7,12 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
+from accounts.company_access import (
+    filter_queryset_by_user_companies,
+    get_accessible_companies,
+    get_selected_company_from_request,
+    user_can_access_company,
+)
 from employees.models import Employee
 from leaves.models import LeaveRequest
 
@@ -24,10 +29,14 @@ _DAY_FIELDS = [
 ]
 
 
-def _potential_absences_today():
+def _potential_absences_today(company=None, accessible_companies_qs=None):
     """
     Active employees with an active schedule, today is a scheduled workday,
     no attendance record exists yet for today, and not on approved leave.
+
+    company: filter to one specific Company object.
+    accessible_companies_qs: filter to a queryset of companies (used when no
+        single company is selected but access must still be restricted).
     """
     today = _date.today()
     day_field = _DAY_FIELDS[today.weekday()]
@@ -37,6 +46,11 @@ def _potential_absences_today():
         f'work_schedule__{day_field}': True,
         'status': 'active',
     }
+    if company is not None:
+        schedule_filter['company'] = company
+    elif accessible_companies_qs is not None:
+        schedule_filter['company__in'] = accessible_companies_qs
+
     already_present = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
     on_approved_leave = LeaveRequest.objects.filter(
         status='approved',
@@ -48,7 +62,7 @@ def _potential_absences_today():
         .filter(**schedule_filter)
         .exclude(id__in=already_present)
         .exclude(id__in=on_approved_leave)
-        .select_related('work_schedule', 'department')
+        .select_related('work_schedule', 'department', 'company')
         .order_by('last_name', 'first_name')
     )
 
@@ -56,12 +70,19 @@ def _potential_absences_today():
 # ── Attendance CRUD ────────────────────────────────────────────────────────────
 
 def attendance_list(request):
+    selected_company = get_selected_company_from_request(request)
+    accessible = get_accessible_companies(request.user)
+
+    # Base queryset scoped to accessible companies
     records = filter_queryset_by_user_companies(
         AttendanceRecord.objects.select_related(
             'company', 'employee', 'employee__department', 'employee__position'
         ),
         request.user,
     )
+    # Further narrow to selected company if one is chosen
+    if selected_company:
+        records = records.filter(company=selected_company)
 
     employee_id = request.GET.get('employee', '')
     if employee_id:
@@ -75,9 +96,22 @@ def attendance_list(request):
     if status:
         records = records.filter(status=status)
 
+    # Employee dropdown — scoped to selected company or all accessible
     employees_qs = filter_queryset_by_user_companies(
         Employee.objects.all(), request.user
-    ).order_by('last_name', 'first_name')
+    )
+    if selected_company:
+        employees_qs = employees_qs.filter(company=selected_company)
+    employees_qs = employees_qs.order_by('last_name', 'first_name')
+
+    # Potential absences — scoped to selected company or all accessible
+    if selected_company:
+        potential_absences = _potential_absences_today(company=selected_company)
+    else:
+        potential_absences = _potential_absences_today(accessible_companies_qs=accessible)
+
+    # Show company column in live table when superuser views all companies
+    show_company_column = (selected_company is None) and request.user.is_superuser
 
     context = {
         'records': records,
@@ -86,7 +120,10 @@ def attendance_list(request):
         'date_filter': date,
         'status_filter': status,
         'status_choices': AttendanceRecord.STATUS_CHOICES,
-        'potential_absences': _potential_absences_today(),
+        'potential_absences': potential_absences,
+        'selected_company': selected_company,
+        'accessible_companies': accessible,
+        'show_company_column': show_company_column,
     }
     return render(request, 'attendance/attendance_list.html', context)
 
@@ -147,15 +184,23 @@ def attendance_delete(request, pk):
 
 def attendance_recent_json(request):
     today = _date.today()
+    selected_company = get_selected_company_from_request(request)
+
+    records = filter_queryset_by_user_companies(AttendanceRecord.objects.all(), request.user)
+    if selected_company:
+        records = records.filter(company=selected_company)
+
     records = (
-        filter_queryset_by_user_companies(AttendanceRecord.objects.all(), request.user)
+        records
         .filter(date=today)
-        .select_related('employee', 'employee__department')
+        .select_related('employee', 'employee__department', 'company')
         .order_by('-created_at')
     )
+
+    show_company = (selected_company is None) and request.user.is_superuser
     data = []
     for r in records:
-        data.append({
+        entry = {
             'employee_id':   r.employee.employee_id,
             'employee_name': r.employee.full_name,
             'department':    r.employee.department.name if r.employee.department else '',
@@ -164,8 +209,11 @@ def attendance_recent_json(request):
             'status':        r.computed_status or r.get_status_display(),
             'status_key':    r.computed_status or r.status,
             'total_hours':   str(r.total_hours),
-        })
-    return JsonResponse({'records': data, 'count': len(data)})
+        }
+        if show_company:
+            entry['company'] = r.company.name
+        data.append(entry)
+    return JsonResponse({'records': data, 'count': len(data), 'show_company': show_company})
 
 
 # ── Temporary phone/manual clock-in (dev/testing only) ────────────────────────

@@ -5,10 +5,17 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
+from django.utils import timezone
+
 from companies.models import Company
 from employees.models import Employee
-from .models import AttendanceRecord, WorkSchedule
+from .models import AttendanceRecord, BiometricDevice, BiometricLog, WorkSchedule
 from .services import compute_attendance
+from .biometric_services import (
+    create_biometric_log,
+    mark_log_processed,
+    match_employee_for_biometric_log,
+)
 
 
 def _make_company():
@@ -187,6 +194,160 @@ class AttendanceAccessTests(TestCase):
     def test_attendance_list_requires_login(self):
         response = self.client.get(reverse('attendance:attendance_list'))
         self.assertIn(response.status_code, [302, 403])
+
+
+# ---------------------------------------------------------------------------
+# Company-scoped attendance monitoring tests
+# ---------------------------------------------------------------------------
+
+from accounts.models import UserCompanyAccess, UserProfile
+
+
+def _setup_two_companies():
+    """Return (company_a, company_b, employee_a, employee_b)."""
+    co_a = Company.objects.create(name='Alpha Corp')
+    co_b = Company.objects.create(name='Beta Corp')
+    emp_a = Employee.objects.create(
+        company=co_a, employee_id='A001', first_name='Alice', last_name='Alpha',
+        date_hired=datetime.date(2024, 1, 1), status='active',
+    )
+    emp_b = Employee.objects.create(
+        company=co_b, employee_id='B001', first_name='Bob', last_name='Beta',
+        date_hired=datetime.date(2024, 1, 1), status='active',
+    )
+    return co_a, co_b, emp_a, emp_b
+
+
+class AttendanceCompanyScopeTests(TestCase):
+    """Verify attendance list + recent-json respect company isolation."""
+
+    def setUp(self):
+        self.co_a, self.co_b, self.emp_a, self.emp_b = _setup_two_companies()
+
+        # Superuser
+        self.superuser = User.objects.create_superuser('su_att', password='testpass123')
+
+        # User assigned only to Company A
+        self.user_a = User.objects.create_user('user_att_a', password='testpass123')
+        UserCompanyAccess.objects.create(user=self.user_a, company=self.co_a, role='hr_admin', is_active=True)
+        UserProfile.objects.create(
+            user=self.user_a, role='hr_admin', is_active_stafforyx=True,
+            can_manage_attendance=True,
+        )
+
+        # Today's records for both companies
+        today = datetime.date.today()
+        self.record_a = AttendanceRecord.objects.create(
+            company=self.co_a, employee=self.emp_a, date=today,
+            time_in=datetime.time(8, 0), status='present',
+        )
+        self.record_b = AttendanceRecord.objects.create(
+            company=self.co_b, employee=self.emp_b, date=today,
+            time_in=datetime.time(8, 0), status='present',
+        )
+
+    # -- attendance_list view --
+
+    def test_superuser_sees_records_from_all_companies(self):
+        self.client.login(username='su_att', password='testpass123')
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertEqual(response.status_code, 200)
+        pks = [r.pk for r in response.context['records']]
+        self.assertIn(self.record_a.pk, pks)
+        self.assertIn(self.record_b.pk, pks)
+
+    def test_user_a_only_sees_company_a_records(self):
+        self.client.login(username='user_att_a', password='testpass123')
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertEqual(response.status_code, 200)
+        pks = [r.pk for r in response.context['records']]
+        self.assertIn(self.record_a.pk, pks)
+        self.assertNotIn(self.record_b.pk, pks)
+
+    def test_superuser_selecting_company_a_filters_live_and_records(self):
+        self.client.login(username='su_att', password='testpass123')
+        session = self.client.session
+        session['selected_company_id'] = self.co_a.pk
+        session.save()
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertEqual(response.status_code, 200)
+        pks = [r.pk for r in response.context['records']]
+        self.assertIn(self.record_a.pk, pks)
+        self.assertNotIn(self.record_b.pk, pks)
+        # show_company_column is False when a specific company is selected
+        self.assertFalse(response.context['show_company_column'])
+
+    def test_superuser_all_companies_sets_show_company_column(self):
+        self.client.login(username='su_att', password='testpass123')
+        # No session company → all companies
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertTrue(response.context['show_company_column'])
+
+    def test_employee_dropdown_scoped_to_selected_company(self):
+        self.client.login(username='su_att', password='testpass123')
+        session = self.client.session
+        session['selected_company_id'] = self.co_a.pk
+        session.save()
+        response = self.client.get(reverse('attendance:attendance_list'))
+        emp_pks = [e.pk for e in response.context['employees']]
+        self.assertIn(self.emp_a.pk, emp_pks)
+        self.assertNotIn(self.emp_b.pk, emp_pks)
+
+    # -- recent-json endpoint --
+
+    def test_recent_json_user_a_does_not_leak_company_b(self):
+        self.client.login(username='user_att_a', password='testpass123')
+        response = self.client.get(reverse('attendance:attendance_recent_json'))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        emp_ids = [r['employee_id'] for r in data['records']]
+        self.assertIn('A001', emp_ids)
+        self.assertNotIn('B001', emp_ids)
+
+    def test_recent_json_superuser_all_includes_both(self):
+        self.client.login(username='su_att', password='testpass123')
+        response = self.client.get(reverse('attendance:attendance_recent_json'))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        emp_ids = [r['employee_id'] for r in data['records']]
+        self.assertIn('A001', emp_ids)
+        self.assertIn('B001', emp_ids)
+        self.assertTrue(data['show_company'])
+
+    def test_recent_json_superuser_company_a_selected_excludes_b(self):
+        self.client.login(username='su_att', password='testpass123')
+        session = self.client.session
+        session['selected_company_id'] = self.co_a.pk
+        session.save()
+        response = self.client.get(reverse('attendance:attendance_recent_json'))
+        data = response.json()
+        emp_ids = [r['employee_id'] for r in data['records']]
+        self.assertIn('A001', emp_ids)
+        self.assertNotIn('B001', emp_ids)
+        self.assertFalse(data['show_company'])
+
+    def test_invalid_company_in_session_is_ignored_safely(self):
+        """A stale or tampered session company_id that doesn't exist is cleared."""
+        self.client.login(username='su_att', password='testpass123')
+        session = self.client.session
+        session['selected_company_id'] = 99999  # non-existent
+        session.save()
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertEqual(response.status_code, 200)
+        # selected_company should be None (cleared) — all companies shown
+        self.assertIsNone(response.context['selected_company'])
+
+    def test_user_a_cannot_access_company_b_via_session(self):
+        """user_a sets session to co_b (not their company) — helper must reject it."""
+        self.client.login(username='user_att_a', password='testpass123')
+        session = self.client.session
+        session['selected_company_id'] = self.co_b.pk
+        session.save()
+        # Still only sees company A data (get_selected_company_from_request validates access)
+        response = self.client.get(reverse('attendance:attendance_recent_json'))
+        data = response.json()
+        emp_ids = [r['employee_id'] for r in data['records']]
+        self.assertNotIn('B001', emp_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -380,3 +541,179 @@ class RecomputeAttendanceCommandTests(TestCase):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             call_command('recompute_attendance', date_from='not-a-date', stdout=StringIO())
+
+
+# ---------------------------------------------------------------------------
+# Biometric Device Foundation Tests
+# ---------------------------------------------------------------------------
+
+class BiometricDeviceModelTests(TestCase):
+    """BiometricDevice model — basic field/constraint coverage."""
+
+    def setUp(self):
+        self.co_a = Company.objects.create(name='Alpha Corp')
+        self.co_b = Company.objects.create(name='Beta Corp')
+
+    def _make_device(self, company, code='DEV-01', **kwargs):
+        return BiometricDevice.objects.create(
+            company=company, name='Main Entrance', device_code=code, **kwargs
+        )
+
+    def test_device_belongs_to_company(self):
+        dev = self._make_device(self.co_a)
+        self.assertEqual(dev.company, self.co_a)
+
+    def test_device_code_unique_per_company(self):
+        from django.db import IntegrityError
+        self._make_device(self.co_a, code='DOOR-01')
+        with self.assertRaises(IntegrityError):
+            self._make_device(self.co_a, code='DOOR-01')
+
+    def test_same_device_code_allowed_in_different_companies(self):
+        self._make_device(self.co_a, code='DOOR-01')
+        dev_b = self._make_device(self.co_b, code='DOOR-01')
+        self.assertEqual(dev_b.company, self.co_b)
+
+    def test_device_str_shows_company_and_name(self):
+        dev = self._make_device(self.co_a)
+        self.assertIn('Alpha Corp', str(dev))
+        self.assertIn('Main Entrance', str(dev))
+
+    def test_is_active_default_true(self):
+        dev = self._make_device(self.co_a)
+        self.assertTrue(dev.is_active)
+
+    def test_last_sync_at_nullable(self):
+        dev = self._make_device(self.co_a)
+        self.assertIsNone(dev.last_sync_at)
+
+
+class BiometricLogModelTests(TestCase):
+    """BiometricLog model and biometric_services helper tests."""
+
+    def setUp(self):
+        self.co_a = Company.objects.create(name='Alpha Corp')
+        self.co_b = Company.objects.create(name='Beta Corp')
+
+        self.dev_a = BiometricDevice.objects.create(
+            company=self.co_a, name='Main Door', device_code='A-DOOR'
+        )
+
+        self.emp_a = Employee.objects.create(
+            company=self.co_a,
+            employee_id='A001',
+            first_name='Alice',
+            last_name='Alpha',
+            date_hired=datetime.date(2024, 1, 1),
+            status='active',
+            biometric_user_id='42',
+        )
+        # Employee B has the SAME biometric_user_id '42' but in a different company.
+        self.emp_b = Employee.objects.create(
+            company=self.co_b,
+            employee_id='B001',
+            first_name='Bob',
+            last_name='Beta',
+            date_hired=datetime.date(2024, 1, 1),
+            status='active',
+            biometric_user_id='42',
+        )
+
+    def _now(self):
+        return timezone.now()
+
+    # -- BiometricLog belongs to company --
+
+    def test_log_belongs_to_company(self):
+        log = BiometricLog.objects.create(
+            company=self.co_a,
+            biometric_user_id='42',
+            punch_time=self._now(),
+        )
+        self.assertEqual(log.company, self.co_a)
+
+    # -- match_employee_for_biometric_log --
+
+    def test_match_returns_correct_employee_for_company(self):
+        emp = match_employee_for_biometric_log(self.co_a, '42')
+        self.assertEqual(emp, self.emp_a)
+
+    def test_match_uses_company_scope_not_global(self):
+        # Same biometric_user_id '42' exists in both companies — must not cross-match.
+        emp_from_a = match_employee_for_biometric_log(self.co_a, '42')
+        emp_from_b = match_employee_for_biometric_log(self.co_b, '42')
+        self.assertEqual(emp_from_a, self.emp_a)
+        self.assertEqual(emp_from_b, self.emp_b)
+        self.assertNotEqual(emp_from_a, emp_from_b)
+
+    def test_match_returns_none_for_unknown_id(self):
+        emp = match_employee_for_biometric_log(self.co_a, '9999')
+        self.assertIsNone(emp)
+
+    def test_match_returns_none_for_empty_id(self):
+        emp = match_employee_for_biometric_log(self.co_a, '')
+        self.assertIsNone(emp)
+
+    # -- create_biometric_log --
+
+    def test_create_log_stores_raw_payload(self):
+        payload = {'uid': '42', 'timestamp': '2026-05-27T08:00:00'}
+        log = create_biometric_log(
+            company=self.co_a,
+            punch_time=self._now(),
+            biometric_user_id='42',
+            device=self.dev_a,
+            punch_type='check_in',
+            raw_payload=payload,
+        )
+        self.assertEqual(log.raw_payload, payload)
+        self.assertEqual(log.punch_type, 'check_in')
+        self.assertEqual(log.device, self.dev_a)
+
+    def test_create_log_matches_employee_when_found(self):
+        log = create_biometric_log(
+            company=self.co_a,
+            punch_time=self._now(),
+            biometric_user_id='42',
+        )
+        self.assertEqual(log.employee, self.emp_a)
+        self.assertFalse(log.processed)
+
+    def test_create_log_does_not_crash_when_employee_not_found(self):
+        log = create_biometric_log(
+            company=self.co_a,
+            punch_time=self._now(),
+            biometric_user_id='UNKNOWN_ID',
+        )
+        self.assertIsNone(log.employee)
+        self.assertEqual(log.biometric_user_id, 'UNKNOWN_ID')
+
+    def test_create_log_defaults_raw_payload_to_empty_dict(self):
+        log = create_biometric_log(
+            company=self.co_a,
+            punch_time=self._now(),
+            biometric_user_id='42',
+        )
+        self.assertEqual(log.raw_payload, {})
+
+    # -- mark_log_processed --
+
+    def test_mark_log_processed_sets_flag_and_timestamp(self):
+        log = create_biometric_log(
+            company=self.co_a, punch_time=self._now(), biometric_user_id='42'
+        )
+        self.assertFalse(log.processed)
+        self.assertIsNone(log.processed_at)
+        mark_log_processed(log)
+        log.refresh_from_db()
+        self.assertTrue(log.processed)
+        self.assertIsNotNone(log.processed_at)
+
+    def test_mark_log_processed_with_error_message(self):
+        log = create_biometric_log(
+            company=self.co_a, punch_time=self._now(), biometric_user_id='42'
+        )
+        mark_log_processed(log, error_message='Duplicate record skipped')
+        log.refresh_from_db()
+        self.assertTrue(log.processed)
+        self.assertIn('Duplicate', log.error_message)
