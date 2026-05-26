@@ -1,10 +1,12 @@
 # Django
 *.pyc
+*.pyo
 __pycache__/
 *.sqlite3
 staticfiles/
 media/
 .env
+local_settings.py
 
 # Stafforyx runtime files — machine-specific, never commit
 .stafforyx_machine_id
@@ -12,3 +14,23 @@ media/
 
 # Virtualenv
 venv/
+env/
+.venv/
+
+# IDE / OS
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Claude AI session files — never commit
+.claude/
+
+# Backup / archive files
+*.bak
+*.backup
+*.orig
+*.zip
+*.tar.gz

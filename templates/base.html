@@ -305,10 +305,11 @@
   <!-- ── SIDEBAR ── -->
   <nav id="sidebar">
     <div class="sidebar-brand">
-      <div class="brand-name">
-        <span class="brand-dot"></span>Stafforyx HR
-      </div>
-      <div class="brand-sub">by SYNTRIX PH</div>
+      <a href="/" style="display:block;text-decoration:none;">
+        <img src="/media/companies/logos/logo_staffroryx.png"
+             alt="Stafforyx HR"
+             style="height:48px;width:auto;display:block;filter:brightness(0) invert(1);opacity:0.92;">
+      </a>
     </div>
 
     <div class="sidebar-section-label">Main</div>
@@ -328,9 +329,11 @@
           <i class="bi bi-people"></i> Employees
         </a>
       </li>
+      {% if request.user.is_superuser %}
       <li class="nav-item">
-        <a href="#" class="nav-link"><i class="bi bi-building"></i> Companies</a>
+        <a href="/admin/companies/company/" class="nav-link"><i class="bi bi-building"></i> Companies</a>
       </li>
+      {% endif %}
     </ul>
 
     <div class="sidebar-section-label">Workforce</div>
@@ -432,8 +435,12 @@
         <i class="bi bi-search"></i>
       </a>
       <a href="#" class="avatar-btn">
-        <div class="avatar-circle">A</div>
-        <span class="avatar-name">Admin</span>
+        <div class="avatar-circle">
+          {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
+        </div>
+        <span class="avatar-name">
+          {% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}
+        </span>
         <i class="bi bi-chevron-down" style="font-size:0.65rem; color:#94a3b8;"></i>
       </a>
     </div>

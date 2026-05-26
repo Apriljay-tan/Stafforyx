@@ -11,4 +11,5 @@ urlpatterns = [
     path('add/', documents_access(views.employee_document_add), name='employee_document_add'),
     path('<int:pk>/edit/', documents_access(views.employee_document_edit), name='employee_document_edit'),
     path('<int:pk>/delete/', documents_access(views.employee_document_delete), name='employee_document_delete'),
+    path('<int:pk>/download/', documents_access(views.employee_document_download), name='employee_document_download'),
 ]

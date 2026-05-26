@@ -1,4 +1,8 @@
+import mimetypes
+import os
+
 from django.contrib import messages
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
 from companies.models import Company
@@ -72,6 +76,20 @@ def employee_document_edit(request, pk):
         'document': document,
         'action': 'Edit',
     })
+
+
+def employee_document_download(request, pk):
+    """Serve a document file through Django — only authenticated users with documents access."""
+    document = get_object_or_404(EmployeeDocument, pk=pk)
+    if not document.file:
+        raise Http404
+    file_path = document.file.path
+    if not os.path.exists(file_path):
+        raise Http404
+    content_type, _ = mimetypes.guess_type(file_path)
+    content_type = content_type or 'application/octet-stream'
+    return FileResponse(open(file_path, 'rb'), content_type=content_type,
+                        as_attachment=False, filename=os.path.basename(file_path))
 
 
 def employee_document_delete(request, pk):

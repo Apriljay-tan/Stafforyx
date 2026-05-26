@@ -8,6 +8,7 @@ payroll_access = module_access_required('can_manage_payroll')
 
 urlpatterns = [
     path('', payroll_access(views.payroll_record_list), name='payroll_record_list'),
+    path('generate/', payroll_access(views.payroll_generate), name='payroll_generate'),
     path('records/add/', payroll_access(views.payroll_record_add), name='payroll_record_add'),
     path('records/<int:pk>/edit/', payroll_access(views.payroll_record_edit), name='payroll_record_edit'),
     path('records/<int:pk>/delete/', payroll_access(views.payroll_record_delete), name='payroll_record_delete'),

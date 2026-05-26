@@ -5,6 +5,10 @@ from django.conf.urls.static import static
 from dashboard.views import dashboard_home
 from accounts.access import module_access_required
 
+admin.site.site_header = "Stafforyx HR"
+admin.site.site_title = "Stafforyx HR Admin"
+admin.site.index_title = "Admin Panel"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', module_access_required('can_access_dashboard')(dashboard_home), name='dashboard_home'),

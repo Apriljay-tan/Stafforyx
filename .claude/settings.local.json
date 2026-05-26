@@ -9,7 +9,12 @@
       "Bash(.\\\\Scripts\\\\activate.bat)",
       "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py makemigrations licenses 2>&1)",
       "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\pip.exe install cryptography 2>&1)",
-      "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe -c \"import sys; print\\(sys.prefix\\); print\\(sys.path\\)\" 2>&1)"
+      "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe -c \"import sys; print\\(sys.prefix\\); print\\(sys.path\\)\" 2>&1)",
+      "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py check 2>&1)",
+      "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py runserver 2>&1)",
+      "PowerShell(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py makemigrations 2>&1)",
+      "Bash(d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py check)",
+      "PowerShell($job = Start-Job { d:\\\\Stafforyx\\\\venv\\\\Scripts\\\\python.exe d:\\\\Stafforyx\\\\manage.py runserver 0.0.0.0:8000 2>&1 }; Start-Sleep 6; Receive-Job $job; Stop-Job $job; Remove-Job $job)"
     ]
   }
 }

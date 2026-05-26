@@ -1,8 +1,9 @@
 from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from companies.models import Company
-from employees.models import Employee
+from employees.models import Department, Employee
 
 from .forms import PayrollPeriodForm, PayrollRecordForm
 from .models import PayrollPeriod, PayrollRecord
@@ -93,6 +94,38 @@ def payroll_record_delete(request, pk):
         messages.success(request, f'Payroll record for {employee_name} in {period_name} has been deleted.')
         return redirect('payroll:payroll_record_list')
     return render(request, 'payroll/payroll_record_confirm_delete.html', {'record': record})
+
+
+def payroll_generate(request):
+    periods = PayrollPeriod.objects.select_related('company').order_by('-start_date')
+    departments = Department.objects.select_related('company').order_by('company__name', 'name')
+
+    if request.method == 'POST':
+        period_id = request.POST.get('payroll_period', '').strip()
+        department_id = request.POST.get('department', '').strip() or None
+        if not period_id:
+            messages.error(request, 'Please select a payroll period.')
+            return render(request, 'payroll/payroll_generate.html', {
+                'periods': periods,
+                'departments': departments,
+            })
+        period = get_object_or_404(PayrollPeriod, pk=period_id)
+        from .services import generate_payroll_for_period
+        created, skipped = generate_payroll_for_period(period, department_id=department_id)
+        if created:
+            skip_note = f' {skipped} already existed and were skipped.' if skipped else ''
+            messages.success(request, f'{created} payroll record(s) created for "{period.name}".{skip_note}')
+        else:
+            if skipped:
+                messages.warning(request, f'No new records created — all {skipped} record(s) for "{period.name}" already exist.')
+            else:
+                messages.warning(request, f'No records created. No active employees found for the selected filters.')
+        return redirect(reverse('payroll:payroll_record_list') + f'?payroll_period={period.pk}')
+
+    return render(request, 'payroll/payroll_generate.html', {
+        'periods': periods,
+        'departments': departments,
+    })
 
 
 def payroll_period_list(request):

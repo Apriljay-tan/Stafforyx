@@ -1,0 +1,147 @@
+{% extends 'base.html' %}
+{% block title %}Generate Payroll{% endblock %}
+{% block page_title %}Generate Payroll{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item">
+      <a href="{% url 'payroll:payroll_record_list' %}" class="text-decoration-none">Payroll</a>
+    </li>
+    <li class="breadcrumb-item active">Generate</li>
+  </ol>
+</nav>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7">
+
+    <div class="page-header mb-3">
+      <h1>Generate Payroll from Attendance</h1>
+      <p>Bulk-create draft payroll records for active employees using attendance data.</p>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header">
+        <i class="bi bi-lightning me-1" style="color:#1565C0;"></i>Generation Options
+      </div>
+      <div class="card-body p-4">
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">
+              Payroll Period <span class="text-danger">*</span>
+            </label>
+            <select name="payroll_period" id="period-select" class="form-select" required>
+              <option value="">— Select a period —</option>
+              {% for period in periods %}
+                <option value="{{ period.pk }}"
+                  data-start="{{ period.start_date|date:'Y-m-d' }}"
+                  data-end="{{ period.end_date|date:'Y-m-d' }}"
+                  data-start-display="{{ period.start_date|date:'M d, Y' }}"
+                  data-end-display="{{ period.end_date|date:'M d, Y' }}"
+                  data-pay="{{ period.pay_date|date:'M d, Y'|default:'' }}"
+                  data-type="{{ period.get_cutoff_type_display }}">
+                  {{ period.name }} ({{ period.company.name }})
+                  &nbsp;&bull;&nbsp;
+                  {{ period.start_date|date:"M d" }}–{{ period.end_date|date:"M d, Y" }}
+                </option>
+              {% endfor %}
+            </select>
+            <div class="form-text">All active employees in the period's company will be included.</div>
+          </div>
+
+          <!-- Period detail panel — shown by JS when a period is selected -->
+          <div id="period-detail" class="alert alert-primary mb-3 d-none" style="font-size:.82rem;">
+            <div class="fw-semibold mb-1">
+              <i class="bi bi-calendar-check me-1"></i>Attendance will be pulled from this date range:
+            </div>
+            <div class="d-flex flex-wrap gap-3 mt-1">
+              <div>
+                <span class="text-muted">Cutoff Start</span><br>
+                <span class="fw-semibold" id="pd-start">—</span>
+              </div>
+              <div>
+                <span class="text-muted">Cutoff End</span><br>
+                <span class="fw-semibold" id="pd-end">—</span>
+              </div>
+              <div>
+                <span class="text-muted">Pay Date</span><br>
+                <span class="fw-semibold" id="pd-pay">—</span>
+              </div>
+              <div>
+                <span class="text-muted">Type</span><br>
+                <span class="fw-semibold" id="pd-type">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label fw-semibold small">
+              Department
+              <span class="fw-normal text-muted">(optional — leave blank for all)</span>
+            </label>
+            <select name="department" class="form-select">
+              <option value="">All Departments</option>
+              {% for dept in departments %}
+                <option value="{{ dept.pk }}">{{ dept.name }} — {{ dept.company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="alert alert-info mb-4" style="font-size:.8rem;">
+            <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Calculation method</div>
+            <ul class="mb-0 ps-3">
+              <li><strong>Basic pay</strong> — prorated: <code>basic_salary ÷ 26 × weekdays in cutoff range</code></li>
+              <li><strong>Overtime pay</strong> — <code>total OT minutes ÷ 60 × hourly rate × 1.25</code></li>
+              <li><strong>Late deduction</strong> — <code>total late minutes ÷ 60 × hourly rate</code></li>
+              <li><strong>Absence deduction</strong> — <code>absent days × daily rate</code></li>
+              <li>All records are created as <strong>Draft</strong> — review and edit before approving.</li>
+              <li>Employees who already have a record for the selected period are <strong>skipped</strong>.</li>
+            </ul>
+          </div>
+
+          <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-lightning me-1"></i>Generate Payroll Records
+            </button>
+            <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var sel = document.getElementById('period-select');
+  var detail = document.getElementById('period-detail');
+  var pdStart = document.getElementById('pd-start');
+  var pdEnd = document.getElementById('pd-end');
+  var pdPay = document.getElementById('pd-pay');
+  var pdType = document.getElementById('pd-type');
+
+  function update() {
+    var opt = sel.options[sel.selectedIndex];
+    if (!opt || !opt.value) {
+      detail.classList.add('d-none');
+      return;
+    }
+    pdStart.textContent = opt.dataset.startDisplay || '—';
+    pdEnd.textContent   = opt.dataset.endDisplay   || '—';
+    pdPay.textContent   = opt.dataset.pay           || '—';
+    pdType.textContent  = opt.dataset.type          || '—';
+    detail.classList.remove('d-none');
+  }
+
+  sel.addEventListener('change', update);
+  update();
+}());
+</script>
+{% endblock %}

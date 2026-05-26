@@ -16,7 +16,7 @@
 <div class="page-header mb-3">
   <h1>{{ action }} Payroll Period</h1>
   <p>
-    {% if action == 'Add' %}Create a payroll cycle.
+    {% if action == 'Add' %}Define a cutoff range and pay date for a payroll cycle.
     {% else %}Update this payroll cycle.{% endif %}
   </p>
 </div>
@@ -28,12 +28,32 @@
     <div class="alert alert-danger mb-3">{{ form.non_field_errors }}</div>
   {% endif %}
 
+  <!-- Examples callout -->
+  <div class="alert alert-light border mb-3" style="font-size:.8rem;">
+    <div class="fw-semibold mb-1"><i class="bi bi-lightbulb me-1" style="color:#D97706;"></i>Cutoff examples</div>
+    <div class="row g-0">
+      <div class="col-12 col-sm-6">
+        <ul class="mb-0 ps-3">
+          <li>Semi-monthly: <strong>May 1–15</strong>, pay date May 20</li>
+          <li>Semi-monthly: <strong>May 16–31</strong>, pay date June 5</li>
+        </ul>
+      </div>
+      <div class="col-12 col-sm-6">
+        <ul class="mb-0 ps-3">
+          <li>Custom: <strong>May 5–20</strong>, pay date May 25</li>
+          <li>Cross-month: <strong>May 21–June 4</strong>, pay date June 5</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <div class="card mb-4">
     <div class="card-header">
       <i class="bi bi-calendar-range me-1" style="color:#1565C0;"></i>Payroll Period Details
     </div>
     <div class="card-body p-4">
       <div class="row g-3">
+
         <div class="col-12 col-md-6">
           <label class="form-label fw-semibold small">{{ form.company.label }}</label>
           {{ form.company }}
@@ -44,21 +64,46 @@
           {{ form.name }}
           {% if form.name.errors %}<div class="text-danger small mt-1">{{ form.name.errors.as_text }}</div>{% endif %}
         </div>
+
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.start_date.label }}</label>
           {{ form.start_date }}
+          {% if form.start_date.help_text %}
+            <div class="form-text">{{ form.start_date.help_text }}</div>
+          {% endif %}
           {% if form.start_date.errors %}<div class="text-danger small mt-1">{{ form.start_date.errors.as_text }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.end_date.label }}</label>
           {{ form.end_date }}
+          {% if form.end_date.help_text %}
+            <div class="form-text">{{ form.end_date.help_text }}</div>
+          {% endif %}
           {% if form.end_date.errors %}<div class="text-danger small mt-1">{{ form.end_date.errors.as_text }}</div>{% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.pay_date.label }}
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.pay_date }}
+          {% if form.pay_date.help_text %}
+            <div class="form-text">{{ form.pay_date.help_text }}</div>
+          {% endif %}
+          {% if form.pay_date.errors %}<div class="text-danger small mt-1">{{ form.pay_date.errors.as_text }}</div>{% endif %}
+        </div>
+
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.cutoff_type.label }}</label>
+          {{ form.cutoff_type }}
+          {% if form.cutoff_type.errors %}<div class="text-danger small mt-1">{{ form.cutoff_type.errors.as_text }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.status.label }}</label>
           {{ form.status }}
           {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>{% endif %}
         </div>
+
       </div>
     </div>
   </div>

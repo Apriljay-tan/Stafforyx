@@ -10,11 +10,21 @@ class PayrollPeriod(models.Model):
         ('approved', 'Approved'),
         ('paid', 'Paid'),
     ]
+    CUTOFF_TYPE_CHOICES = [
+        ('custom', 'Custom'),
+        ('semi_monthly', 'Semi-Monthly'),
+        ('monthly', 'Monthly'),
+        ('weekly', 'Weekly'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='payroll_periods')
     name = models.CharField(max_length=100)
     start_date = models.DateField()
     end_date = models.DateField()
+    pay_date = models.DateField(null=True, blank=True)
+    cutoff_type = models.CharField(
+        max_length=20, choices=CUTOFF_TYPE_CHOICES, default='custom', blank=True
+    )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='draft')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

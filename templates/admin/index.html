@@ -1,0 +1,288 @@
+{% extends "admin/base_site.html" %}
+{% load i18n log %}
+
+{% block title %}Admin Panel | Stafforyx HR{% endblock %}
+{% block bodyclass %}{{ block.super }} dashboard{% endblock %}
+{% block coltype %}colMS{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+  /* ── Dashboard layout ── */
+  .stx-dash { padding: 0; }
+
+  /* ── Welcome banner — always dark navy (brand hero) ── */
+  .stx-welcome {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    background: linear-gradient(135deg, #162436 0%, #1E3050 100%);
+    border: 1px solid #1E3050;
+    border-radius: 12px; padding: 1.2rem 1.5rem; margin-bottom: 1.5rem;
+  }
+  .stx-welcome-left { display: flex; align-items: center; gap: 14px; }
+  .stx-avatar {
+    width: 46px; height: 46px; border-radius: 11px;
+    background: linear-gradient(135deg, #1565C0, #00BCD4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .stx-welcome-title { font-size: 1rem; font-weight: 700; color: #fff; margin-bottom: 3px; }
+  .stx-welcome-sub { font-size: 0.72rem; color: #8aa0b8; text-transform: uppercase; letter-spacing: 0.8px; }
+  .stx-badge {
+    display: flex; align-items: center; gap: 8px;
+    background: rgba(0,188,212,0.07); border: 1px solid rgba(0,188,212,0.18);
+    border-radius: 20px; padding: 5px 13px;
+    font-size: 0.68rem; font-weight: 600; color: #00BCD4;
+    text-transform: uppercase; letter-spacing: 0.9px; flex-shrink: 0;
+  }
+  .stx-pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #00BCD4; box-shadow: 0 0 5px #00BCD4; animation: stxPulse 2s infinite;
+  }
+  @keyframes stxPulse { 0%,100%{opacity:1}50%{opacity:0.35} }
+
+  /* ── Section label ── */
+  .stx-section {
+    font-size: 0.65rem; font-weight: 600; color: var(--stx-muted);
+    text-transform: uppercase; letter-spacing: 1.6px;
+    margin-bottom: 0.75rem; padding-left: 2px;
+  }
+
+  /* ── App grid ── */
+  .stx-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+
+  /* ── App card ── */
+  .stx-card {
+    background: var(--stx-card) !important;
+    border: 1px solid var(--stx-bd) !important;
+    border-radius: 12px !important; overflow: hidden !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06) !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .stx-card:hover {
+    border-color: rgba(21,101,192,0.4) !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+  }
+
+  /* ── Card header ── */
+  .stx-card-head {
+    display: flex; align-items: center; gap: 11px;
+    padding: 0.85rem 1.1rem;
+    background: var(--stx-th-bg);
+    border-bottom: 1px solid var(--stx-bd);
+  }
+  .stx-icon {
+    width: 36px; height: 36px; border-radius: 9px;
+    background: rgba(21,101,192,0.1); border: 1px solid rgba(21,101,192,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; color: var(--stx-blue); flex-shrink: 0;
+  }
+  .stx-card-name { font-size: 0.85rem; font-weight: 700; color: var(--stx-txt); text-transform: capitalize; }
+  .stx-card-meta { font-size: 0.66rem; color: var(--stx-muted); margin-top: 1px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .stx-card-link {
+    margin-left: auto; flex-shrink: 0;
+    color: var(--stx-muted) !important;
+    font-size: 1.25rem !important; text-decoration: none !important;
+    background: none !important; padding: 0 !important; border: none !important;
+    transition: color 0.15s;
+  }
+  .stx-card-link:hover { color: var(--stx-blue) !important; }
+
+  /* ── Model rows ── */
+  .stx-card-body { padding: 0.2rem 0; }
+  .stx-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.48rem 1.1rem;
+    border-bottom: 1px solid var(--stx-bd);
+    transition: background 0.12s;
+  }
+  .stx-row:last-child { border-bottom: none; }
+  .stx-row:hover { background: var(--stx-hover); }
+  .stx-model a, .stx-model {
+    font-size: 0.82rem !important; color: var(--stx-dim) !important;
+    text-decoration: none !important; background: none !important;
+    padding: 0 !important; border: none !important; font-weight: 400 !important;
+  }
+  .stx-model a:hover { color: var(--stx-blue) !important; }
+
+  /* ── Action icon buttons ── */
+  .stx-acts { display: flex; gap: 5px; }
+  .stx-btn {
+    width: 26px; height: 26px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.76rem; text-decoration: none !important;
+    transition: all 0.15s; padding: 0 !important;
+  }
+  .stx-btn-add {
+    color: var(--stx-blue) !important;
+    background: var(--stx-add-bg) !important;
+    border: 1px solid var(--stx-add-bd) !important;
+  }
+  .stx-btn-add:hover { background: var(--stx-blue) !important; color: #fff !important; border-color: var(--stx-blue) !important; }
+  .stx-btn-edit {
+    color: var(--stx-cyan) !important;
+    background: var(--stx-chg-bg) !important;
+    border: 1px solid var(--stx-chg-bd) !important;
+  }
+  .stx-btn-edit:hover { background: var(--stx-cyan) !important; color: #0D1B2A !important; border-color: var(--stx-cyan) !important; }
+
+  /* ── Recent actions panel ── */
+  #content-related {
+    background: var(--stx-pg) !important;
+    padding: 0 !important;
+    border-left: 1px solid var(--stx-bd) !important;
+  }
+  #content-related .module {
+    background: var(--stx-card) !important;
+    border: 1px solid var(--stx-bd) !important;
+    border-radius: 12px !important; box-shadow: none !important;
+    overflow: hidden !important; margin: 1rem !important;
+  }
+  #content-related .module h2 {
+    background: #0D1B2A !important;
+    color: #fff !important; font-size: 0.7rem !important; font-weight: 600 !important;
+    text-transform: uppercase !important; letter-spacing: 0.9px !important;
+    padding: 10px 14px !important; border-bottom: 1px solid #1E3050 !important;
+  }
+  .stx-al { list-style: none !important; margin: 0 !important; padding: 0 !important; }
+  .stx-al-item {
+    display: flex; align-items: flex-start; gap: 9px;
+    padding: 9px 14px; border-bottom: 1px solid var(--stx-bd);
+  }
+  .stx-al-item:last-child { border-bottom: none; }
+  .stx-al-dot {
+    width: 24px; height: 24px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.68rem; flex-shrink: 0; margin-top: 1px;
+  }
+  .al-add { background: rgba(22,163,74,0.1); color: var(--stx-ra-add); }
+  .al-chg { background: rgba(21,101,192,0.1); color: var(--stx-ra-chg); }
+  .al-del { background: rgba(220,38,38,0.1); color: var(--stx-ra-del); }
+  .stx-al-info { flex: 1; min-width: 0; }
+  .stx-al-name {
+    display: block; font-size: 0.8rem; color: var(--stx-dim) !important;
+    font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    text-decoration: none !important; background: none !important; padding: 0 !important;
+  }
+  .stx-al-name:hover { color: var(--stx-blue) !important; }
+  .stx-al-type { font-size: 0.67rem; color: var(--stx-muted); text-transform: capitalize; margin-top: 1px; }
+  .stx-no-actions { color: var(--stx-muted); font-size: 0.82rem; padding: 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="stx-dash">
+
+  <!-- Welcome banner -->
+  <div class="stx-welcome">
+    <div class="stx-welcome-left">
+      <div class="stx-avatar">{{ user.get_username|first|upper }}</div>
+      <div>
+        <div class="stx-welcome-title">Welcome, {{ user.get_username }}</div>
+        <div class="stx-welcome-sub">Stafforyx HR &nbsp;·&nbsp; Administration</div>
+      </div>
+    </div>
+    <div class="stx-badge"><span class="stx-pulse"></span>System Online</div>
+  </div>
+
+  <!-- Modules grid -->
+  {% if app_list %}
+  <div class="stx-section">Modules</div>
+  <div class="stx-grid">
+    {% for app in app_list %}
+    <div class="stx-card">
+      <div class="stx-card-head">
+        <div class="stx-icon">
+          {% if app.app_label == 'employees' %}<i class="bi bi-people-fill"></i>
+          {% elif app.app_label == 'attendance' %}<i class="bi bi-clock-fill"></i>
+          {% elif app.app_label == 'payroll' %}<i class="bi bi-cash-stack"></i>
+          {% elif app.app_label == 'leaves' %}<i class="bi bi-calendar2-check"></i>
+          {% elif app.app_label == 'documents' %}<i class="bi bi-file-earmark-text-fill"></i>
+          {% elif app.app_label == 'announcements' %}<i class="bi bi-megaphone-fill"></i>
+          {% elif app.app_label == 'auth' %}<i class="bi bi-shield-lock-fill"></i>
+          {% elif app.app_label == 'companies' %}<i class="bi bi-building"></i>
+          {% elif app.app_label == 'accounts' %}<i class="bi bi-person-circle"></i>
+          {% elif app.app_label == 'licenses' %}<i class="bi bi-key-fill"></i>
+          {% else %}<i class="bi bi-grid-fill"></i>{% endif %}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="stx-card-name">{{ app.name }}</div>
+          <div class="stx-card-meta">{{ app.models|length }} model{{ app.models|length|pluralize }}</div>
+        </div>
+        {% if app.app_url %}
+        <a href="{{ app.app_url }}" class="stx-card-link" title="View {{ app.name }}">
+          <i class="bi bi-arrow-right-short"></i>
+        </a>
+        {% endif %}
+      </div>
+      <div class="stx-card-body">
+        {% for model in app.models %}
+        <div class="stx-row">
+          <div class="stx-model">
+            {% if model.admin_url %}
+            <a href="{{ model.admin_url }}">{{ model.name }}</a>
+            {% else %}{{ model.name }}{% endif %}
+          </div>
+          <div class="stx-acts">
+            {% if model.add_url %}
+            <a href="{{ model.add_url }}" class="stx-btn stx-btn-add" title="Add {{ model.name }}">
+              <i class="bi bi-plus-lg"></i>
+            </a>
+            {% endif %}
+            {% if model.admin_url %}
+            <a href="{{ model.admin_url }}" class="stx-btn stx-btn-edit" title="{% if model.view_only %}View{% else %}Manage{% endif %}">
+              <i class="bi bi-{% if model.view_only %}eye{% else %}pencil{% endif %}"></i>
+            </a>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p style="color:#4a6080;font-size:0.9rem;padding:2rem 0;">You don't have permission to view or edit anything.</p>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block sidebar %}
+{% get_admin_log 10 as admin_log for_user user %}
+<div id="content-related">
+  <div class="module" id="recent-actions-module">
+    <h2>{% trans 'Recent Actions' %}</h2>
+    {% if not admin_log %}
+      <p class="stx-no-actions">No recent actions.</p>
+    {% else %}
+    <ul class="stx-al">
+      {% for entry in admin_log %}
+      <li class="stx-al-item">
+        <div class="stx-al-dot {% if entry.is_addition %}al-add{% elif entry.is_deletion %}al-del{% else %}al-chg{% endif %}">
+          <i class="bi bi-{% if entry.is_addition %}plus-lg{% elif entry.is_deletion %}trash{% else %}pencil{% endif %}"></i>
+        </div>
+        <div class="stx-al-info">
+          {% if entry.is_deletion or not entry.get_admin_url %}
+            <span class="stx-al-name">{{ entry.object_repr }}</span>
+          {% else %}
+            <a class="stx-al-name" href="{{ entry.get_admin_url }}">{{ entry.object_repr }}</a>
+          {% endif %}
+          {% if entry.content_type %}
+            <div class="stx-al-type">{{ entry.content_type.name }}</div>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

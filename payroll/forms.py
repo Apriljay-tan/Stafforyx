@@ -19,14 +19,27 @@ def _bootstrap(form):
 class PayrollPeriodForm(forms.ModelForm):
     class Meta:
         model = PayrollPeriod
-        fields = ['company', 'name', 'start_date', 'end_date', 'status']
+        fields = ['company', 'name', 'start_date', 'end_date', 'pay_date', 'cutoff_type', 'status']
         widgets = {
             'start_date': forms.DateInput(attrs={'type': 'date'}),
             'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'pay_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+        labels = {
+            'start_date': 'Cutoff Start Date',
+            'end_date': 'Cutoff End Date',
+            'pay_date': 'Pay Date',
+            'cutoff_type': 'Cutoff Type',
+        }
+        help_texts = {
+            'start_date': 'Use any cutoff range, for example 1–15, 16–30, 5–20, or 21–4.',
+            'end_date': 'Must be the same date or later than the cutoff start.',
+            'pay_date': 'The date employees will be paid. Can be after the cutoff end date.',
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['pay_date'].required = False
         _bootstrap(self)
 
     def clean(self):
@@ -35,7 +48,7 @@ class PayrollPeriodForm(forms.ModelForm):
         end_date = cleaned_data.get('end_date')
 
         if start_date and end_date and end_date < start_date:
-            raise forms.ValidationError('End date must not be earlier than start date.')
+            self.add_error('end_date', 'Cutoff end date must not be earlier than start date.')
 
         return cleaned_data
 

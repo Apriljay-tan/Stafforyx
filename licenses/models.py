@@ -65,6 +65,14 @@ class License(models.Model):
         return (self.valid_until - timezone.now().date()).days
 
     @property
+    def masked_key(self):
+        """Return a safe partial view of the key for display — never expose the full key."""
+        k = self.license_key or ''
+        if len(k) <= 30:
+            return k[:8] + '•••' if k else '—'
+        return k[:20] + ' ••••••••••••••••••••••••••••• ' + k[-8:]
+
+    @property
     def display_company(self):
         """Return the best available company name for display."""
         if self.company:
