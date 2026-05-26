@@ -5,15 +5,24 @@ compute_attendance(record) — reads the employee's assigned WorkSchedule and
 populates the derived fields on an AttendanceRecord, then saves them.
 """
 
+from decimal import Decimal, ROUND_HALF_UP
+
 _DAY_FIELDS = [
     'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
     'work_friday', 'work_saturday', 'work_sunday',
 ]
 
+_60 = Decimal(60)
+
 
 def _to_min(t):
     """Convert a time object to minutes since midnight."""
     return t.hour * 60 + t.minute
+
+
+def _minutes_to_hours(minutes):
+    """Convert integer minutes to a 2-decimal-place Decimal hours value."""
+    return (Decimal(minutes) / _60).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
 def compute_attendance(record):
@@ -61,6 +70,8 @@ def compute_attendance(record):
             computed = 'rest_day'
 
         elif not record.time_in:
+            # TODO: check LeaveRequest for this employee/date; if approved leave exists,
+            # set computed = 'on_leave' and skip late/undertime/overtime calculation.
             computed = 'absent'
 
         else:
@@ -101,8 +112,10 @@ def compute_attendance(record):
     record.undertime_minutes = undertime_min
     record.overtime_minutes = overtime_min
     record.total_work_minutes = total_work_min
+    record.total_hours = _minutes_to_hours(total_work_min)
+    record.overtime_hours = _minutes_to_hours(overtime_min)
     record.computed_status = computed
     record.save(update_fields=[
         'late_minutes', 'undertime_minutes', 'overtime_minutes',
-        'total_work_minutes', 'computed_status',
+        'total_work_minutes', 'total_hours', 'overtime_hours', 'computed_status',
     ])

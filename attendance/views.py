@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from employees.models import Employee
+from leaves.models import LeaveRequest
 
 from .forms import AttendanceRecordForm, WorkScheduleForm
 from .models import AttendanceRecord, WorkSchedule
@@ -24,8 +25,7 @@ _DAY_FIELDS = [
 def _potential_absences_today():
     """
     Active employees with an active schedule, today is a scheduled workday,
-    and no attendance record exists yet for today.
-    TODO: exclude employees on approved leave once leave integration is added.
+    no attendance record exists yet for today, and not on approved leave.
     """
     today = _date.today()
     day_field = _DAY_FIELDS[today.weekday()]
@@ -36,10 +36,16 @@ def _potential_absences_today():
         'status': 'active',
     }
     already_present = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
+    on_approved_leave = LeaveRequest.objects.filter(
+        status='approved',
+        start_date__lte=today,
+        end_date__gte=today,
+    ).values_list('employee_id', flat=True)
     return (
         Employee.objects
         .filter(**schedule_filter)
         .exclude(id__in=already_present)
+        .exclude(id__in=on_approved_leave)
         .select_related('work_schedule', 'department')
         .order_by('last_name', 'first_name')
     )

@@ -427,13 +427,6 @@
   <header id="topbar">
     <span class="topbar-title">{% block page_title %}Dashboard{% endblock %}</span>
     <div class="topbar-actions">
-      <a href="#" class="topbar-icon-btn" title="Notifications">
-        <i class="bi bi-bell"></i>
-        <span class="badge-dot"></span>
-      </a>
-      <a href="#" class="topbar-icon-btn" title="Search">
-        <i class="bi bi-search"></i>
-      </a>
       <a href="#" class="avatar-btn">
         <div class="avatar-circle">
           {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
