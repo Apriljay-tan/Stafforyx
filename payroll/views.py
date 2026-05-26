@@ -1,7 +1,9 @@
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from companies.models import Company
 from employees.models import Department, Employee
 
@@ -17,8 +19,11 @@ def _employee_salary_map():
 
 
 def payroll_record_list(request):
-    records = PayrollRecord.objects.select_related(
-        'company', 'payroll_period', 'employee', 'employee__department'
+    records = filter_queryset_by_user_companies(
+        PayrollRecord.objects.select_related(
+            'company', 'payroll_period', 'employee', 'employee__department'
+        ),
+        request.user,
     )
 
     payroll_period_id = request.GET.get('payroll_period', '')
@@ -37,11 +42,16 @@ def payroll_record_list(request):
     if company_id:
         records = records.filter(company_id=company_id)
 
+    accessible_companies = filter_queryset_by_user_companies(Company.objects.all(), request.user)
     context = {
         'records': records,
-        'payroll_periods': PayrollPeriod.objects.select_related('company'),
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
-        'companies': Company.objects.all(),
+        'payroll_periods': filter_queryset_by_user_companies(
+            PayrollPeriod.objects.all(), request.user
+        ).select_related('company'),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
+        'companies': accessible_companies,
         'payroll_period_filter': payroll_period_id,
         'employee_filter': employee_id,
         'status_filter': status,
@@ -69,6 +79,8 @@ def payroll_record_edit(request, pk):
         PayrollRecord.objects.select_related('company', 'payroll_period', 'employee'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, record.company):
+        raise PermissionDenied
     form = PayrollRecordForm(request.POST or None, instance=record)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -84,9 +96,11 @@ def payroll_record_edit(request, pk):
 
 def payroll_record_delete(request, pk):
     record = get_object_or_404(
-        PayrollRecord.objects.select_related('employee', 'payroll_period'),
+        PayrollRecord.objects.select_related('employee', 'payroll_period', 'company'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, record.company):
+        raise PermissionDenied
     if request.method == 'POST':
         employee_name = record.employee.full_name
         period_name = record.payroll_period.name
@@ -97,8 +111,16 @@ def payroll_record_delete(request, pk):
 
 
 def payroll_generate(request):
-    periods = PayrollPeriod.objects.select_related('company').order_by('-start_date')
-    departments = Department.objects.select_related('company').order_by('company__name', 'name')
+    periods = (
+        filter_queryset_by_user_companies(PayrollPeriod.objects.all(), request.user)
+        .select_related('company')
+        .order_by('-start_date')
+    )
+    departments = (
+        filter_queryset_by_user_companies(Department.objects.all(), request.user)
+        .select_related('company')
+        .order_by('company__name', 'name')
+    )
 
     if request.method == 'POST':
         period_id = request.POST.get('payroll_period', '').strip()
@@ -109,7 +131,9 @@ def payroll_generate(request):
                 'periods': periods,
                 'departments': departments,
             })
-        period = get_object_or_404(PayrollPeriod, pk=period_id)
+        period = get_object_or_404(PayrollPeriod.objects.select_related('company'), pk=period_id)
+        if not user_can_access_company(request.user, period.company):
+            raise PermissionDenied
         from .services import generate_payroll_for_period
         created, skipped = generate_payroll_for_period(period, department_id=department_id)
         if created:
@@ -129,7 +153,9 @@ def payroll_generate(request):
 
 
 def payroll_period_list(request):
-    periods = PayrollPeriod.objects.select_related('company')
+    periods = filter_queryset_by_user_companies(
+        PayrollPeriod.objects.select_related('company'), request.user
+    )
 
     company_id = request.GET.get('company', '')
     if company_id:
@@ -139,9 +165,10 @@ def payroll_period_list(request):
     if status:
         periods = periods.filter(status=status)
 
+    accessible_companies = filter_queryset_by_user_companies(Company.objects.all(), request.user)
     context = {
         'periods': periods,
-        'companies': Company.objects.all(),
+        'companies': accessible_companies,
         'company_filter': company_id,
         'status_filter': status,
         'status_choices': PayrollPeriod.STATUS_CHOICES,
@@ -162,7 +189,9 @@ def payroll_period_add(request):
 
 
 def payroll_period_edit(request, pk):
-    period = get_object_or_404(PayrollPeriod, pk=pk)
+    period = get_object_or_404(PayrollPeriod.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, period.company):
+        raise PermissionDenied
     form = PayrollPeriodForm(request.POST or None, instance=period)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -176,7 +205,9 @@ def payroll_period_edit(request, pk):
 
 
 def payroll_period_delete(request, pk):
-    period = get_object_or_404(PayrollPeriod, pk=pk)
+    period = get_object_or_404(PayrollPeriod.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, period.company):
+        raise PermissionDenied
     if request.method == 'POST':
         name = period.name
         period.delete()

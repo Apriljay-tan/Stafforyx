@@ -2,10 +2,12 @@ from datetime import date as _date, datetime as _datetime
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from employees.models import Employee
 from leaves.models import LeaveRequest
 
@@ -54,8 +56,11 @@ def _potential_absences_today():
 # ── Attendance CRUD ────────────────────────────────────────────────────────────
 
 def attendance_list(request):
-    records = AttendanceRecord.objects.select_related(
-        'company', 'employee', 'employee__department', 'employee__position'
+    records = filter_queryset_by_user_companies(
+        AttendanceRecord.objects.select_related(
+            'company', 'employee', 'employee__department', 'employee__position'
+        ),
+        request.user,
     )
 
     employee_id = request.GET.get('employee', '')
@@ -70,9 +75,13 @@ def attendance_list(request):
     if status:
         records = records.filter(status=status)
 
+    employees_qs = filter_queryset_by_user_companies(
+        Employee.objects.all(), request.user
+    ).order_by('last_name', 'first_name')
+
     context = {
         'records': records,
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
+        'employees': employees_qs,
         'employee_filter': employee_id,
         'date_filter': date,
         'status_filter': status,
@@ -100,6 +109,8 @@ def attendance_edit(request, pk):
         AttendanceRecord.objects.select_related('employee', 'company'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, record.company):
+        raise PermissionDenied
     form = AttendanceRecordForm(request.POST or None, instance=record)
     if request.method == 'POST' and form.is_valid():
         record = form.save()
@@ -118,6 +129,8 @@ def attendance_delete(request, pk):
         AttendanceRecord.objects.select_related('employee', 'company'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, record.company):
+        raise PermissionDenied
     if request.method == 'POST':
         employee_name = record.employee.full_name
         record_date = record.date
@@ -135,7 +148,7 @@ def attendance_delete(request, pk):
 def attendance_recent_json(request):
     today = _date.today()
     records = (
-        AttendanceRecord.objects
+        filter_queryset_by_user_companies(AttendanceRecord.objects.all(), request.user)
         .filter(date=today)
         .select_related('employee', 'employee__department')
         .order_by('-created_at')
@@ -159,9 +172,11 @@ def attendance_recent_json(request):
 
 def attendance_clock(request):
     today = _date.today()
-    employees = Employee.objects.filter(status='active').select_related(
-        'company', 'department', 'work_schedule',
-    ).order_by('last_name', 'first_name')
+    employees = (
+        filter_queryset_by_user_companies(Employee.objects.filter(status='active'), request.user)
+        .select_related('company', 'department', 'work_schedule')
+        .order_by('last_name', 'first_name')
+    )
 
     emp_pk = request.POST.get('employee') or request.GET.get('employee', '')
     selected_emp = None
@@ -226,7 +241,11 @@ def attendance_clock(request):
 # ── Work Schedule CRUD ─────────────────────────────────────────────────────────
 
 def schedule_list(request):
-    schedules = WorkSchedule.objects.select_related('company').prefetch_related('employees')
+    schedules = (
+        filter_queryset_by_user_companies(WorkSchedule.objects.all(), request.user)
+        .select_related('company')
+        .prefetch_related('employees')
+    )
     return render(request, 'attendance/schedule_list.html', {'schedules': schedules})
 
 
@@ -241,6 +260,8 @@ def schedule_add(request):
 
 def schedule_edit(request, pk):
     sched = get_object_or_404(WorkSchedule, pk=pk)
+    if not user_can_access_company(request.user, sched.company):
+        raise PermissionDenied
     form = WorkScheduleForm(request.POST or None, instance=sched)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -253,6 +274,8 @@ def schedule_edit(request, pk):
 
 def schedule_delete(request, pk):
     sched = get_object_or_404(WorkSchedule, pk=pk)
+    if not user_can_access_company(request.user, sched.company):
+        raise PermissionDenied
     if request.method == 'POST':
         name = sched.name
         sched.delete()

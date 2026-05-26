@@ -5,6 +5,31 @@ from companies.models import Company
 from employees.models import Employee
 
 
+class UserCompanyAccess(models.Model):
+    ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('company_admin', 'Company Admin'),
+        ('hr_admin', 'HR Admin'),
+        ('payroll_officer', 'Payroll Officer'),
+        ('attendance_officer', 'Attendance Officer'),
+        ('viewer', 'Viewer'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='company_accesses')
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='user_accesses')
+    role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='viewer')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('user', 'company')]
+        ordering = ['company__name', 'user__username']
+
+    def __str__(self):
+        return f'{self.user.username} → {self.company.name} ({self.get_role_display()})'
+
+
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('super_admin', 'Super Admin'),

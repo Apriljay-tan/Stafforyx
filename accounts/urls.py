@@ -11,4 +11,5 @@ urlpatterns = [
     path('users/', views.user_list, name='user_list'),
     path('users/add/', views.user_add, name='user_add'),
     path('users/<int:pk>/edit/', views.user_edit, name='user_edit'),
+    path('select-company/', views.select_company, name='select_company'),
 ]

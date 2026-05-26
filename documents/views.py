@@ -2,9 +2,11 @@ import mimetypes
 import os
 
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from companies.models import Company
 from employees.models import Employee
 
@@ -13,8 +15,11 @@ from .models import EmployeeDocument
 
 
 def employee_document_list(request):
-    documents = EmployeeDocument.objects.select_related(
-        'company', 'employee', 'employee__department', 'uploaded_by'
+    documents = filter_queryset_by_user_companies(
+        EmployeeDocument.objects.select_related(
+            'company', 'employee', 'employee__department', 'uploaded_by'
+        ),
+        request.user,
     )
 
     employee_id = request.GET.get('employee', '')
@@ -35,8 +40,10 @@ def employee_document_list(request):
 
     context = {
         'documents': documents,
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
-        'companies': Company.objects.all(),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
+        'companies': filter_queryset_by_user_companies(Company.objects.all(), request.user),
         'document_type_choices': EmployeeDocument.DOCUMENT_TYPE_CHOICES,
         'employee_filter': employee_id,
         'document_type_filter': document_type,
@@ -66,6 +73,8 @@ def employee_document_edit(request, pk):
         EmployeeDocument.objects.select_related('company', 'employee', 'uploaded_by'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, document.company):
+        raise PermissionDenied
     form = EmployeeDocumentForm(request.POST or None, request.FILES or None, instance=document)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -80,7 +89,9 @@ def employee_document_edit(request, pk):
 
 def employee_document_download(request, pk):
     """Serve a document file through Django — only authenticated users with documents access."""
-    document = get_object_or_404(EmployeeDocument, pk=pk)
+    document = get_object_or_404(EmployeeDocument.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, document.company):
+        raise PermissionDenied
     if not document.file:
         raise Http404
     file_path = document.file.path
@@ -97,6 +108,8 @@ def employee_document_delete(request, pk):
         EmployeeDocument.objects.select_related('employee', 'company'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, document.company):
+        raise PermissionDenied
     if request.method == 'POST':
         title = document.title
         document.delete()

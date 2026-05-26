@@ -1,14 +1,48 @@
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from .access import super_admin_required
+from .company_access import get_accessible_companies, user_can_access_company
 from .forms import StafforyxUserCreationForm, UserProfileForm
 from .models import UserProfile
 
 
 def permission_denied_view(request, exception=None):
     return render(request, '403.html', status=403)
+
+
+@login_required
+@require_POST
+def select_company(request):
+    """Store the chosen company in the session. Called via POST from any page."""
+    company_id = request.POST.get('company_id')
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or '/'
+
+    if not company_id:
+        request.session.pop('selected_company_id', None)
+        return redirect(next_url)
+
+    try:
+        company_id = int(company_id)
+    except (TypeError, ValueError):
+        return redirect(next_url)
+
+    from companies.models import Company
+    try:
+        company = Company.objects.get(pk=company_id)
+    except Company.DoesNotExist:
+        return redirect(next_url)
+
+    if not user_can_access_company(request.user, company):
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied
+
+    request.session['selected_company_id'] = company_id
+    return redirect(next_url)
 
 
 @super_admin_required

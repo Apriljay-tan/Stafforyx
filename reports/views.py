@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
+from accounts.company_access import filter_queryset_by_user_companies
 from announcements.models import Announcement
 from attendance.models import AttendanceRecord
 from companies.models import Company
@@ -29,7 +30,10 @@ def _write_csv(filename, headers, rows):
 
 
 def _employee_queryset(request):
-    employees = Employee.objects.select_related('company', 'department', 'position')
+    employees = filter_queryset_by_user_companies(
+        Employee.objects.select_related('company', 'department', 'position'),
+        request.user,
+    )
 
     company_id = request.GET.get('company', '')
     if company_id:
@@ -51,7 +55,10 @@ def _employee_queryset(request):
 
 
 def _attendance_queryset(request):
-    records = AttendanceRecord.objects.select_related('company', 'employee', 'employee__department')
+    records = filter_queryset_by_user_companies(
+        AttendanceRecord.objects.select_related('company', 'employee', 'employee__department'),
+        request.user,
+    )
 
     employee_id = request.GET.get('employee', '')
     if employee_id:
@@ -78,7 +85,10 @@ def _attendance_queryset(request):
 
 
 def _leave_queryset(request):
-    leave_requests = LeaveRequest.objects.select_related('company', 'employee', 'leave_type')
+    leave_requests = filter_queryset_by_user_companies(
+        LeaveRequest.objects.select_related('company', 'employee', 'leave_type'),
+        request.user,
+    )
 
     employee_id = request.GET.get('employee', '')
     if employee_id:
@@ -110,7 +120,10 @@ def _leave_queryset(request):
 
 
 def _payroll_queryset(request):
-    records = PayrollRecord.objects.select_related('company', 'payroll_period', 'employee')
+    records = filter_queryset_by_user_companies(
+        PayrollRecord.objects.select_related('company', 'payroll_period', 'employee'),
+        request.user,
+    )
 
     payroll_period_id = request.GET.get('payroll_period', '')
     if payroll_period_id:
@@ -137,7 +150,10 @@ def _payroll_queryset(request):
 
 
 def _documents_queryset(request):
-    documents = EmployeeDocument.objects.select_related('company', 'employee', 'employee__department')
+    documents = filter_queryset_by_user_companies(
+        EmployeeDocument.objects.select_related('company', 'employee', 'employee__department'),
+        request.user,
+    )
 
     employee_id = request.GET.get('employee', '')
     if employee_id:
@@ -159,12 +175,15 @@ def _documents_queryset(request):
 
 
 def reports_dashboard(request):
+    def _scope(qs):
+        return filter_queryset_by_user_companies(qs, request.user)
+
     context = {
-        'employee_count': Employee.objects.count(),
-        'attendance_count': AttendanceRecord.objects.count(),
-        'leave_count': LeaveRequest.objects.count(),
-        'payroll_count': PayrollRecord.objects.count(),
-        'document_count': EmployeeDocument.objects.count(),
+        'employee_count': _scope(Employee.objects.all()).count(),
+        'attendance_count': _scope(AttendanceRecord.objects.all()).count(),
+        'leave_count': _scope(LeaveRequest.objects.all()).count(),
+        'payroll_count': _scope(PayrollRecord.objects.all()).count(),
+        'document_count': _scope(EmployeeDocument.objects.all()).count(),
     }
     return render(request, 'reports/reports_dashboard.html', context)
 
@@ -238,18 +257,21 @@ def _add_sheet(wb, title, headers, rows, export_time, currency_columns=None, dat
 def export_all_data(request):
     from openpyxl import Workbook
 
+    def _scope(qs):
+        return filter_queryset_by_user_companies(qs, request.user)
+
     export_time = timezone.localtime()
     wb = Workbook()
     wb.remove(wb.active)
 
     summary_rows = [
-        ['Total Companies', Company.objects.count()],
-        ['Total Active Employees', Employee.objects.filter(status='active').count()],
-        ['Total Attendance Records', AttendanceRecord.objects.count()],
-        ['Total Leave Requests', LeaveRequest.objects.count()],
-        ['Total Payroll Records', PayrollRecord.objects.count()],
-        ['Total Documents', EmployeeDocument.objects.count()],
-        ['Total Announcements', Announcement.objects.count()],
+        ['Total Companies', _scope(Company.objects.all()).count()],
+        ['Total Active Employees', _scope(Employee.objects.filter(status='active')).count()],
+        ['Total Attendance Records', _scope(AttendanceRecord.objects.all()).count()],
+        ['Total Leave Requests', _scope(LeaveRequest.objects.all()).count()],
+        ['Total Payroll Records', _scope(PayrollRecord.objects.all()).count()],
+        ['Total Documents', _scope(EmployeeDocument.objects.all()).count()],
+        ['Total Announcements', _scope(Announcement.objects.all()).count()],
     ]
     _add_sheet(
         wb,
@@ -272,7 +294,7 @@ def export_all_data(request):
                 company.get_subscription_plan_display(),
                 timezone.localtime(company.created_at).date(),
             ]
-            for company in Company.objects.all()
+            for company in _scope(Company.objects.all())
         ],
         export_time,
         date_columns=[6],
@@ -295,7 +317,7 @@ def export_all_data(request):
                 employee.date_hired,
                 employee.basic_salary,
             ]
-            for employee in Employee.objects.select_related('company', 'department', 'position')
+            for employee in _scope(Employee.objects.select_related('company', 'department', 'position'))
         ],
         export_time,
         currency_columns=[10],
@@ -329,7 +351,7 @@ def export_all_data(request):
                 record.get_status_display(),
                 record.computed_status,
             ]
-            for record in AttendanceRecord.objects.select_related('company', 'employee')
+            for record in _scope(AttendanceRecord.objects.select_related('company', 'employee'))
         ],
         export_time,
         date_columns=[1],
@@ -353,7 +375,7 @@ def export_all_data(request):
                 leave_request.reason,
                 leave_request.remarks,
             ]
-            for leave_request in LeaveRequest.objects.select_related('company', 'employee', 'leave_type')
+            for leave_request in _scope(LeaveRequest.objects.select_related('company', 'employee', 'leave_type'))
         ],
         export_time,
         date_columns=[5, 6, 9],
@@ -388,7 +410,7 @@ def export_all_data(request):
                 record.net_pay,
                 record.get_status_display(),
             ]
-            for record in PayrollRecord.objects.select_related('company', 'payroll_period', 'employee')
+            for record in _scope(PayrollRecord.objects.select_related('company', 'payroll_period', 'employee'))
         ],
         export_time,
         currency_columns=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
@@ -409,7 +431,7 @@ def export_all_data(request):
                 document.file.url if document.file else '',
                 document.notes,
             ]
-            for document in EmployeeDocument.objects.select_related('company', 'employee')
+            for document in _scope(EmployeeDocument.objects.select_related('company', 'employee'))
         ],
         export_time,
         date_columns=[6],
@@ -429,7 +451,7 @@ def export_all_data(request):
                 timezone.localtime(announcement.created_at).date(),
                 announcement.content,
             ]
-            for announcement in Announcement.objects.select_related('company', 'target_department', 'posted_by')
+            for announcement in _scope(Announcement.objects.select_related('company', 'target_department', 'posted_by'))
         ],
         export_time,
         date_columns=[6],
@@ -451,8 +473,10 @@ def employee_report(request):
     employees, filters = _employee_queryset(request)
     context = {
         'employees': employees,
-        'companies': Company.objects.all(),
-        'departments': Department.objects.select_related('company'),
+        'companies': filter_queryset_by_user_companies(Company.objects.all(), request.user),
+        'departments': filter_queryset_by_user_companies(
+            Department.objects.all(), request.user
+        ).select_related('company'),
         'status_choices': Employee.STATUS_CHOICES,
         **filters,
     }
@@ -486,7 +510,9 @@ def attendance_report(request):
     records, filters = _attendance_queryset(request)
     context = {
         'records': records,
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
         'status_choices': AttendanceRecord.STATUS_CHOICES,
         **filters,
     }
@@ -520,8 +546,12 @@ def leave_report(request):
     leave_requests, filters = _leave_queryset(request)
     context = {
         'leave_requests': leave_requests,
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
-        'leave_types': LeaveType.objects.select_related('company'),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
+        'leave_types': filter_queryset_by_user_companies(
+            LeaveType.objects.all(), request.user
+        ).select_related('company'),
         'status_choices': LeaveRequest.STATUS_CHOICES,
         **filters,
     }
@@ -554,9 +584,13 @@ def payroll_report(request):
     records, filters = _payroll_queryset(request)
     context = {
         'records': records,
-        'payroll_periods': PayrollPeriod.objects.select_related('company'),
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
-        'companies': Company.objects.all(),
+        'payroll_periods': filter_queryset_by_user_companies(
+            PayrollPeriod.objects.all(), request.user
+        ).select_related('company'),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
+        'companies': filter_queryset_by_user_companies(Company.objects.all(), request.user),
         'status_choices': PayrollRecord.STATUS_CHOICES,
         **filters,
     }
@@ -603,8 +637,10 @@ def documents_report(request):
     documents, filters = _documents_queryset(request)
     context = {
         'documents': documents,
-        'employees': Employee.objects.all().order_by('last_name', 'first_name'),
-        'companies': Company.objects.all(),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.all(), request.user
+        ).order_by('last_name', 'first_name'),
+        'companies': filter_queryset_by_user_companies(Company.objects.all(), request.user),
         'document_type_choices': EmployeeDocument.DOCUMENT_TYPE_CHOICES,
         **filters,
     }

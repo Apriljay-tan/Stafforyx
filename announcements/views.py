@@ -1,6 +1,8 @@
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from companies.models import Company
 from employees.models import Department
 
@@ -9,8 +11,9 @@ from .models import Announcement
 
 
 def announcement_list(request):
-    announcements = Announcement.objects.select_related(
-        'company', 'target_department', 'posted_by'
+    announcements = filter_queryset_by_user_companies(
+        Announcement.objects.select_related('company', 'target_department', 'posted_by'),
+        request.user,
     )
 
     company_id = request.GET.get('company', '')
@@ -33,8 +36,10 @@ def announcement_list(request):
 
     context = {
         'announcements': announcements,
-        'companies': Company.objects.all(),
-        'departments': Department.objects.select_related('company'),
+        'companies': filter_queryset_by_user_companies(Company.objects.all(), request.user),
+        'departments': filter_queryset_by_user_companies(
+            Department.objects.all(), request.user
+        ).select_related('company'),
         'company_filter': company_id,
         'department_filter': department_id,
         'active_filter': active,
@@ -48,6 +53,8 @@ def announcement_detail(request, pk):
         Announcement.objects.select_related('company', 'target_department', 'posted_by'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, announcement.company):
+        raise PermissionDenied
     return render(request, 'announcements/announcement_detail.html', {
         'announcement': announcement,
     })
@@ -73,6 +80,8 @@ def announcement_edit(request, pk):
         Announcement.objects.select_related('company', 'target_department', 'posted_by'),
         pk=pk,
     )
+    if not user_can_access_company(request.user, announcement.company):
+        raise PermissionDenied
     form = AnnouncementForm(request.POST or None, instance=announcement)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -86,7 +95,11 @@ def announcement_edit(request, pk):
 
 
 def announcement_delete(request, pk):
-    announcement = get_object_or_404(Announcement, pk=pk)
+    announcement = get_object_or_404(
+        Announcement.objects.select_related('company'), pk=pk
+    )
+    if not user_can_access_company(request.user, announcement.company):
+        raise PermissionDenied
     if request.method == 'POST':
         title = announcement.title
         announcement.delete()

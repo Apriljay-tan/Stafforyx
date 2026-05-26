@@ -1,10 +1,18 @@
-from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q, Count
+from django.shortcuts import render, get_object_or_404, redirect
 
+from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
+from licenses.context_processors import get_license_state
 from .models import Employee, Department, Position
 from .forms import EmployeeForm, DepartmentForm, PositionForm
-from licenses.context_processors import get_license_state
+
+
+def _require_company_access(request, obj):
+    """Raise 403 if the user cannot access obj.company."""
+    if not user_can_access_company(request.user, obj.company):
+        raise PermissionDenied
 
 _LIMIT_MSG = (
     'Employee limit reached for your current license. '
@@ -16,6 +24,7 @@ _LIMIT_MSG = (
 
 def employee_list(request):
     qs = Employee.objects.select_related('company', 'department', 'position')
+    qs = filter_queryset_by_user_companies(qs, request.user)
 
     q = request.GET.get('q', '').strip()
     if q:
@@ -33,13 +42,14 @@ def employee_list(request):
         qs = qs.filter(department_id=dept_id)
 
     state = get_license_state()
-    total_employees = Employee.objects.count()
-    max_employees   = state['max_employees']      # 0 = no valid limit from payload
+    total_employees = qs.count()
+    max_employees   = state['max_employees']
     at_limit        = state['valid'] and max_employees > 0 and total_employees >= max_employees
 
+    dept_qs = filter_queryset_by_user_companies(Department.objects.all(), request.user)
     context = {
         'employees':       qs,
-        'departments':     Department.objects.all(),
+        'departments':     dept_qs,
         'q':               q,
         'status_filter':   status,
         'dept_filter':     dept_id,
@@ -56,6 +66,7 @@ def employee_detail(request, pk):
         Employee.objects.select_related('company', 'department', 'position', 'work_schedule'),
         pk=pk,
     )
+    _require_company_access(request, employee)
     return render(request, 'employees/employee_detail.html', {'employee': employee})
 
 
@@ -82,6 +93,7 @@ def employee_add(request):
 
 def employee_edit(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
+    _require_company_access(request, employee)
     form = EmployeeForm(request.POST or None, request.FILES or None, instance=employee)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -94,6 +106,7 @@ def employee_edit(request, pk):
 
 def employee_delete(request, pk):
     employee = get_object_or_404(Employee, pk=pk)
+    _require_company_access(request, employee)
     if request.method == 'POST':
         name = employee.full_name
         employee.delete()
@@ -105,8 +118,10 @@ def employee_delete(request, pk):
 # ── Departments ───────────────────────────────────────────────────────────────
 
 def department_list(request):
-    departments = Department.objects.select_related('company').annotate(
-        employee_count=Count('employees')
+    departments = (
+        filter_queryset_by_user_companies(Department.objects.all(), request.user)
+        .select_related('company')
+        .annotate(employee_count=Count('employees'))
     )
     form = DepartmentForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
@@ -121,6 +136,7 @@ def department_list(request):
 
 def department_edit(request, pk):
     dept = get_object_or_404(Department, pk=pk)
+    _require_company_access(request, dept)
     form = DepartmentForm(request.POST or None, instance=dept)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -131,6 +147,7 @@ def department_edit(request, pk):
 
 def department_delete(request, pk):
     dept = get_object_or_404(Department, pk=pk)
+    _require_company_access(request, dept)
     if request.method == 'POST':
         dept.delete()
         messages.success(request, 'Department deleted.')
@@ -141,7 +158,10 @@ def department_delete(request, pk):
 # ── Positions ─────────────────────────────────────────────────────────────────
 
 def position_list(request):
-    positions = Position.objects.select_related('company', 'department')
+    positions = (
+        filter_queryset_by_user_companies(Position.objects.all(), request.user)
+        .select_related('company', 'department')
+    )
     form = PositionForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         pos = form.save()
@@ -155,6 +175,7 @@ def position_list(request):
 
 def position_edit(request, pk):
     pos = get_object_or_404(Position, pk=pk)
+    _require_company_access(request, pos)
     form = PositionForm(request.POST or None, instance=pos)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -165,6 +186,7 @@ def position_edit(request, pk):
 
 def position_delete(request, pk):
     pos = get_object_or_404(Position, pk=pk)
+    _require_company_access(request, pos)
     if request.method == 'POST':
         pos.delete()
         messages.success(request, 'Position deleted.')

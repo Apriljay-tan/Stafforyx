@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import UserProfile
+from .models import UserCompanyAccess, UserProfile
+
+
+@admin.register(UserCompanyAccess)
+class UserCompanyAccessAdmin(admin.ModelAdmin):
+    list_display = ('user', 'company', 'role', 'is_active', 'created_at')
+    list_filter = ('role', 'is_active', 'company')
+    search_fields = ('user__username', 'user__email', 'company__name')
+    autocomplete_fields = []
 
 
 @admin.register(UserProfile)
