@@ -133,6 +133,50 @@ class WorkSchedule(models.Model):
         )
 
 
+class AttendanceLocation(models.Model):
+    """
+    A registered company/branch network from which employees may clock in/out.
+    IP matching is done on the server-visible public IP — not WiFi SSID.
+    """
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='attendance_locations'
+    )
+    name = models.CharField(max_length=100, help_text='e.g. Main Office WiFi, Cebu Branch')
+    address = models.TextField(blank=True)
+    ip_address = models.GenericIPAddressField(
+        null=True, blank=True,
+        help_text='Exact public IP address allowed for clock-in/out.',
+    )
+    cidr_range = models.CharField(
+        max_length=50, blank=True,
+        help_text='CIDR range, e.g. 112.198.10.0/24. Leave blank if using exact IP.',
+    )
+    is_active = models.BooleanField(default=True)
+    # Placeholder fields — not yet enforced in portal flow
+    require_selfie = models.BooleanField(default=False)
+    require_gps = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['company', 'name']
+
+    def __str__(self):
+        return f'{self.company.name} — {self.name}'
+
+    def clean(self):
+        import ipaddress
+        from django.core.exceptions import ValidationError
+        if not self.ip_address and not self.cidr_range:
+            raise ValidationError('At least one of IP Address or CIDR Range must be provided.')
+        if self.cidr_range:
+            try:
+                ipaddress.ip_network(self.cidr_range, strict=False)
+            except ValueError:
+                raise ValidationError({'cidr_range': 'Enter a valid CIDR range, e.g. 192.168.1.0/24.'})
+
+
 class AttendanceRecord(models.Model):
     STATUS_CHOICES = [
         ('present', 'Present'),
@@ -151,6 +195,11 @@ class AttendanceRecord(models.Model):
         ('no_schedule', 'No Schedule'),
         ('rest_day',    'Rest Day'),
     ]
+    SOURCE_CHOICES = [
+        ('manual',    'Manual'),
+        ('portal',    'WiFi Portal'),
+        ('biometric', 'Biometric'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='attendance_records')
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='attendance_records')
@@ -167,6 +216,11 @@ class AttendanceRecord(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     computed_status = models.CharField(max_length=20, blank=True, default='')
     remarks = models.CharField(max_length=255, blank=True)
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
+    portal_location = models.ForeignKey(
+        'AttendanceLocation', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='attendance_records',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -176,3 +230,60 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.employee} — {self.date} ({self.get_status_display()})"
+
+
+class AttendancePortalLog(models.Model):
+    """
+    Audit log for every interaction with the WiFi/IP portal:
+    page opens, blocked attempts, and successful clock events.
+    """
+    ACTION_CHOICES = [
+        ('page_open', 'Page Opened'),
+        ('time_in',   'Time In'),
+        ('time_out',  'Time Out'),
+        ('blocked',   'Blocked'),
+    ]
+    STATUS_CHOICES = [
+        ('allowed',  'Allowed'),
+        ('blocked',  'Blocked'),
+        ('success',  'Success'),
+        ('failed',   'Failed'),
+    ]
+
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='portal_logs'
+    )
+    employee = models.ForeignKey(
+        Employee, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='portal_logs'
+    )
+    attendance_location = models.ForeignKey(
+        AttendanceLocation, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='portal_logs'
+    )
+    attendance_record = models.ForeignKey(
+        AttendanceRecord, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='portal_logs'
+    )
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    blocked_reason = models.TextField(blank=True)
+    # Placeholder GPS fields — not yet enforced
+    gps_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    gps_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'created_at']),
+            models.Index(fields=['employee', 'created_at']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        emp = self.employee or 'unknown'
+        return f'{emp} — {self.get_action_display()} @ {self.created_at:%Y-%m-%d %H:%M} ({self.get_status_display()})'

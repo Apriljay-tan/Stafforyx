@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
@@ -9,12 +10,17 @@ from django.utils import timezone
 
 from companies.models import Company
 from employees.models import Employee
-from .models import AttendanceRecord, BiometricDevice, BiometricLog, WorkSchedule
+from .models import AttendanceLocation, AttendancePortalLog, AttendanceRecord, BiometricDevice, BiometricLog, WorkSchedule
 from .services import compute_attendance
 from .biometric_services import (
     create_biometric_log,
     mark_log_processed,
     match_employee_for_biometric_log,
+)
+from .portal_services import (
+    can_employee_clock_from_request,
+    find_matching_attendance_location,
+    ip_matches_location,
 )
 
 
@@ -717,3 +723,289 @@ class BiometricLogModelTests(TestCase):
         log.refresh_from_db()
         self.assertTrue(log.processed)
         self.assertIn('Duplicate', log.error_message)
+
+
+# ── AttendanceLocation model tests ────────────────────────────────────────────
+
+class AttendanceLocationModelTests(TestCase):
+    def setUp(self):
+        self.company = _make_company()
+
+    def _make_location(self, **kwargs):
+        defaults = dict(company=self.company, name='Main Office', ip_address='112.198.10.5')
+        defaults.update(kwargs)
+        return AttendanceLocation.objects.create(**defaults)
+
+    def test_create_location_with_exact_ip(self):
+        loc = self._make_location(ip_address='112.198.10.5')
+        self.assertEqual(loc.company, self.company)
+        self.assertEqual(loc.ip_address, '112.198.10.5')
+        self.assertTrue(loc.is_active)
+
+    def test_create_location_with_cidr(self):
+        loc = self._make_location(ip_address=None, cidr_range='192.168.1.0/24')
+        self.assertEqual(loc.cidr_range, '192.168.1.0/24')
+        self.assertIsNone(loc.ip_address)
+
+    def test_str_shows_company_and_name(self):
+        loc = self._make_location(name='Cebu Branch')
+        self.assertIn('Test Co', str(loc))
+        self.assertIn('Cebu Branch', str(loc))
+
+    def test_clean_raises_if_neither_ip_nor_cidr(self):
+        from django.core.exceptions import ValidationError
+        loc = AttendanceLocation(company=self.company, name='Bad', ip_address=None, cidr_range='')
+        with self.assertRaises(ValidationError):
+            loc.clean()
+
+    def test_clean_raises_on_invalid_cidr(self):
+        from django.core.exceptions import ValidationError
+        loc = AttendanceLocation(company=self.company, name='Bad', cidr_range='not-a-cidr')
+        with self.assertRaises(ValidationError):
+            loc.clean()
+
+    def test_inactive_location_is_excluded_from_active_filter(self):
+        self._make_location(is_active=False, name='Old Office')
+        active = AttendanceLocation.objects.filter(company=self.company, is_active=True)
+        self.assertEqual(active.count(), 0)
+
+
+# ── ip_matches_location and find_matching_attendance_location tests ───────────
+
+class IPMatchingTests(TestCase):
+    def setUp(self):
+        self.co_a = _make_company()
+        self.co_b = Company.objects.create(name='Company B')
+
+    def _make_location(self, company, ip=None, cidr=None, is_active=True, name='Office'):
+        return AttendanceLocation.objects.create(
+            company=company,
+            name=name,
+            ip_address=ip,
+            cidr_range=cidr or '',
+            is_active=is_active,
+        )
+
+    def _make_emp(self, company):
+        return _make_employee(company)
+
+    # ip_matches_location — exact IP
+    def test_exact_ip_match(self):
+        loc = self._make_location(self.co_a, ip='1.2.3.4')
+        self.assertTrue(ip_matches_location('1.2.3.4', loc))
+
+    def test_exact_ip_no_match(self):
+        loc = self._make_location(self.co_a, ip='1.2.3.4')
+        self.assertFalse(ip_matches_location('1.2.3.5', loc))
+
+    # ip_matches_location — CIDR
+    def test_cidr_match_inside_range(self):
+        loc = self._make_location(self.co_a, ip=None, cidr='192.168.1.0/24')
+        self.assertTrue(ip_matches_location('192.168.1.100', loc))
+
+    def test_cidr_no_match_outside_range(self):
+        loc = self._make_location(self.co_a, ip=None, cidr='192.168.1.0/24')
+        self.assertFalse(ip_matches_location('192.168.2.1', loc))
+
+    def test_invalid_ip_returns_false(self):
+        loc = self._make_location(self.co_a, ip='1.2.3.4')
+        self.assertFalse(ip_matches_location('not-an-ip', loc))
+
+    def test_empty_ip_returns_false(self):
+        loc = self._make_location(self.co_a, ip='1.2.3.4')
+        self.assertFalse(ip_matches_location('', loc))
+
+    # find_matching_attendance_location — company scoping
+    def test_inactive_location_not_matched(self):
+        emp = self._make_emp(self.co_a)
+        self._make_location(self.co_a, ip='5.5.5.5', is_active=False)
+        result = find_matching_attendance_location(emp, '5.5.5.5')
+        self.assertIsNone(result)
+
+    def test_employee_company_a_cannot_use_company_b_location(self):
+        emp_a = self._make_emp(self.co_a)
+        # Register the same IP under Company B only
+        self._make_location(self.co_b, ip='9.9.9.9')
+        result = find_matching_attendance_location(emp_a, '9.9.9.9')
+        self.assertIsNone(result)
+
+    def test_find_returns_matching_location(self):
+        emp = self._make_emp(self.co_a)
+        loc = self._make_location(self.co_a, ip='7.7.7.7')
+        result = find_matching_attendance_location(emp, '7.7.7.7')
+        self.assertEqual(result, loc)
+
+    def test_find_returns_none_when_no_match(self):
+        emp = self._make_emp(self.co_a)
+        self._make_location(self.co_a, ip='7.7.7.7')
+        result = find_matching_attendance_location(emp, '8.8.8.8')
+        self.assertIsNone(result)
+
+
+# ── Portal view tests ─────────────────────────────────────────────────────────
+
+class AttendancePortalViewTests(TestCase):
+    """
+    Tests for /attendance/portal/ — IP-locked employee attendance portal.
+    All tests use 127.0.0.1 as REMOTE_ADDR (Django test client default).
+    """
+
+    def setUp(self):
+        self.company = _make_company()
+        self.employee = _make_employee(self.company)
+
+        # User linked to employee via OneToOneField
+        self.user = User.objects.create_user('portaluser', password='pass')
+        self.employee.user = self.user
+        self.employee.save(update_fields=['user'])
+
+        self.portal_url = reverse('attendance:attendance_portal')
+
+    def _make_location(self, ip='127.0.0.1', is_active=True):
+        return AttendanceLocation.objects.create(
+            company=self.company,
+            name='Test Network',
+            ip_address=ip,
+            is_active=is_active,
+        )
+
+    def test_portal_requires_login(self):
+        resp = self.client.get(self.portal_url)
+        self.assertRedirects(resp, f'/accounts/login/?next={self.portal_url}')
+
+    def test_portal_blocks_unapproved_ip(self):
+        # No location registered — 127.0.0.1 will not match anything
+        self.client.login(username='portaluser', password='pass')
+        resp = self.client.get(self.portal_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['allowed'])
+        self.assertIn('127.0.0.1', resp.context['ip'])
+
+    def test_portal_blocks_page_open_creates_log(self):
+        self.client.login(username='portaluser', password='pass')
+        self.client.get(self.portal_url)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='page_open').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, 'blocked')
+
+    def test_portal_allows_approved_ip(self):
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username='portaluser', password='pass')
+        resp = self.client.get(self.portal_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['allowed'])
+
+    def test_portal_allowed_page_open_creates_allowed_log(self):
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username='portaluser', password='pass')
+        self.client.get(self.portal_url)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='page_open').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, 'allowed')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_creates_attendance_record(self, _mock):
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        record = AttendanceRecord.objects.filter(employee=self.employee).first()
+        self.assertIsNotNone(record)
+        self.assertIsNotNone(record.time_in)
+        self.assertEqual(record.source, 'portal')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_blocked_without_approved_location(self, _mock):
+        # No location registered — 127.0.0.1 will not match anything
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.assertEqual(AttendanceRecord.objects.filter(employee=self.employee).count(), 0)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_creates_portal_log(self, _mock):
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        log = AttendancePortalLog.objects.filter(
+            employee=self.employee, action='time_in'
+        ).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, 'success')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_out_updates_record(self, _mock):
+        self._make_location(ip='127.0.0.1')
+        today = datetime.date.today()
+        record = AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.employee,
+            date=today,
+            time_in=datetime.time(8, 0),
+            status='present',
+            source='portal',
+        )
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_out'})
+        record.refresh_from_db()
+        self.assertIsNotNone(record.time_out)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_double_time_in_prevented(self, _mock):
+        self._make_location(ip='127.0.0.1')
+        today = datetime.date.today()
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.employee,
+            date=today,
+            time_in=datetime.time(8, 0),
+            status='present',
+            source='portal',
+        )
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        # Still only one record
+        self.assertEqual(
+            AttendanceRecord.objects.filter(employee=self.employee, date=today).count(), 1
+        )
+
+
+# ── Location CRUD access control tests ───────────────────────────────────────
+
+class AttendanceLocationAccessTests(TestCase):
+    """
+    Superuser can manage all locations; normal user without can_manage_attendance
+    is denied (module_access_required decorator redirects to 403 or login).
+    """
+
+    def setUp(self):
+        self.co_a = _make_company()
+        self.co_b = Company.objects.create(name='Company B')
+        self.loc_a = AttendanceLocation.objects.create(
+            company=self.co_a, name='Office A', ip_address='1.1.1.1'
+        )
+
+        self.superuser = User.objects.create_superuser('su', password='pass')
+
+        # Normal user with no module permissions
+        self.plain_user = User.objects.create_user('plain', password='pass')
+
+    def test_superuser_can_list_locations(self):
+        self.client.login(username='su', password='pass')
+        resp = self.client.get(reverse('attendance:location_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Office A')
+
+    def test_plain_user_cannot_list_locations(self):
+        self.client.login(username='plain', password='pass')
+        resp = self.client.get(reverse('attendance:location_list'))
+        # module_access_required redirects to 403 or login
+        self.assertIn(resp.status_code, [302, 403])
+
+    def test_superuser_can_reach_add_location(self):
+        self.client.login(username='su', password='pass')
+        resp = self.client.get(reverse('attendance:location_add'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_superuser_can_delete_location(self):
+        self.client.login(username='su', password='pass')
+        resp = self.client.get(reverse('attendance:location_delete', args=[self.loc_a.pk]))
+        self.assertEqual(resp.status_code, 200)

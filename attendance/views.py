@@ -16,8 +16,9 @@ from accounts.company_access import (
 from employees.models import Employee
 from leaves.models import LeaveRequest
 
-from .forms import AttendanceRecordForm, WorkScheduleForm
-from .models import AttendanceRecord, WorkSchedule
+from .forms import AttendanceLocationForm, AttendanceRecordForm, WorkScheduleForm
+from .models import AttendanceLocation, AttendancePortalLog, AttendanceRecord, WorkSchedule
+from .portal_services import can_employee_clock_from_request, get_client_ip
 from .services import compute_attendance
 
 
@@ -330,3 +331,194 @@ def schedule_delete(request, pk):
         messages.success(request, f'Work schedule "{name}" deleted.')
         return redirect('attendance:schedule_list')
     return render(request, 'attendance/schedule_confirm_delete.html', {'sched': sched})
+
+
+# ── Attendance Locations CRUD ──────────────────────────────────────────────────
+
+def location_list(request):
+    locations = (
+        filter_queryset_by_user_companies(AttendanceLocation.objects.all(), request.user)
+        .select_related('company')
+        .order_by('company__name', 'name')
+    )
+    return render(request, 'attendance/location_list.html', {'locations': locations})
+
+
+def location_add(request):
+    accessible = get_accessible_companies(request.user)
+    form = AttendanceLocationForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        location = form.save(commit=False)
+        if not user_can_access_company(request.user, location.company):
+            raise PermissionDenied
+        location.save()
+        messages.success(request, f'Attendance location "{location.name}" created.')
+        return redirect('attendance:location_list')
+    # Restrict company choices to accessible companies
+    form.fields['company'].queryset = accessible
+    return render(request, 'attendance/location_form.html', {
+        'form': form, 'action': 'Add',
+    })
+
+
+def location_edit(request, pk):
+    location = get_object_or_404(AttendanceLocation.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, location.company):
+        raise PermissionDenied
+    accessible = get_accessible_companies(request.user)
+    form = AttendanceLocationForm(request.POST or None, instance=location)
+    form.fields['company'].queryset = accessible
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f'Attendance location "{location.name}" updated.')
+        return redirect('attendance:location_list')
+    return render(request, 'attendance/location_form.html', {
+        'form': form, 'location': location, 'action': 'Edit',
+    })
+
+
+def location_delete(request, pk):
+    location = get_object_or_404(AttendanceLocation.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, location.company):
+        raise PermissionDenied
+    if request.method == 'POST':
+        name = location.name
+        location.delete()
+        messages.success(request, f'Attendance location "{name}" deleted.')
+        return redirect('attendance:location_list')
+    return render(request, 'attendance/location_confirm_delete.html', {'location': location})
+
+
+# ── Employee Attendance Portal (WiFi/IP-locked) ────────────────────────────────
+
+def attendance_portal(request):
+    """
+    Employee self-service clock-in/out portal.
+
+    The portal is locked to the employee's company network via public IP
+    matching. If the request IP does not match any active AttendanceLocation
+    for the employee's company, the clock buttons are blocked.
+
+    Employee resolution:
+      1. Employee.user OneToOneField (preferred)
+      2. UserProfile.employee FK (fallback)
+    """
+    today = _date.today()
+
+    # Resolve employee linked to this user
+    employee = None
+    try:
+        employee = request.user.employee_profile  # Employee.user OneToOneField
+    except Exception:
+        pass
+
+    if employee is None:
+        profile = getattr(request.user, 'stafforyx_profile', None)
+        if profile:
+            employee = profile.employee
+
+    if employee is None:
+        return render(request, 'attendance/portal_no_employee.html', {
+            'message': (
+                'Your account is not linked to an employee record. '
+                'Please contact your HR administrator.'
+            ),
+        })
+
+    # IP check
+    clock_check = can_employee_clock_from_request(request, employee)
+    ip = clock_check['ip']
+    allowed = clock_check['allowed']
+    matched_location = clock_check['location']
+    blocked_reason = clock_check['reason']
+
+    today_record = AttendanceRecord.objects.filter(
+        employee=employee, date=today
+    ).first()
+
+    # Log page open
+    AttendancePortalLog.objects.create(
+        company=employee.company,
+        employee=employee,
+        attendance_location=matched_location,
+        action='page_open',
+        ip_address=ip or None,
+        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+        status='allowed' if allowed else 'blocked',
+        blocked_reason='' if allowed else blocked_reason,
+    )
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if not allowed:
+            # Re-log blocked action attempt
+            AttendancePortalLog.objects.create(
+                company=employee.company,
+                employee=employee,
+                attendance_location=None,
+                action=action if action in ('time_in', 'time_out') else 'blocked',
+                ip_address=ip or None,
+                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                status='blocked',
+                blocked_reason=blocked_reason,
+            )
+            messages.error(request, blocked_reason)
+            return redirect('attendance:attendance_portal')
+
+        now_time = _datetime.now().time()
+        record = None
+
+        if action == 'time_in':
+            if today_record:
+                messages.warning(request, 'You have already timed in today.')
+            else:
+                record = AttendanceRecord.objects.create(
+                    company=employee.company,
+                    employee=employee,
+                    date=today,
+                    time_in=now_time,
+                    status='present',
+                    source='portal',
+                    portal_location=matched_location,
+                    remarks=f'Portal clock-in from {matched_location.name}',
+                )
+                compute_attendance(record)
+                messages.success(request, f'Time in recorded at {now_time.strftime("%I:%M %p")}.')
+
+        elif action == 'time_out':
+            if not today_record or not today_record.time_in:
+                messages.warning(request, 'You have not timed in yet today.')
+            elif today_record.time_out:
+                messages.warning(request, 'You have already timed out today.')
+            else:
+                today_record.time_out = now_time
+                today_record.portal_location = today_record.portal_location or matched_location
+                today_record.save(update_fields=['time_out', 'portal_location'])
+                compute_attendance(today_record)
+                record = today_record
+                messages.success(request, f'Time out recorded at {now_time.strftime("%I:%M %p")}.')
+
+        # Log the action result
+        AttendancePortalLog.objects.create(
+            company=employee.company,
+            employee=employee,
+            attendance_location=matched_location,
+            attendance_record=record,
+            action=action if action in ('time_in', 'time_out') else 'blocked',
+            ip_address=ip or None,
+            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+            status='success' if record else 'failed',
+            blocked_reason='',
+        )
+        return redirect('attendance:attendance_portal')
+
+    return render(request, 'attendance/portal.html', {
+        'employee': employee,
+        'today': today,
+        'today_record': today_record,
+        'allowed': allowed,
+        'ip': ip,
+        'matched_location': matched_location,
+        'blocked_reason': blocked_reason,
+    })

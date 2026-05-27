@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}Attendance Portal{% endblock %}
+{% block page_title %}Attendance Portal{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-sm-10 col-md-7 col-lg-5">
+
+    <!-- Date -->
+    <div class="card mb-3">
+      <div class="card-body text-center py-3">
+        <div class="fw-semibold" style="font-size:1.1rem;color:#0D1B2A;">
+          {{ today|date:"l, F j, Y" }}
+        </div>
+        <div class="text-muted" style="font-size:.8rem;">Today's Date</div>
+      </div>
+    </div>
+
+    <!-- Employee card -->
+    <div class="card mb-3">
+      <div class="card-body p-3">
+        <div class="d-flex align-items-center gap-3 mb-3">
+          {% if employee.photo %}
+            <img src="{{ employee.photo.url }}" class="rounded-circle flex-shrink-0"
+                 style="width:52px;height:52px;object-fit:cover;" alt="">
+          {% else %}
+            <div class="rounded-circle d-flex align-items-center justify-content-center fw-semibold flex-shrink-0"
+                 style="width:52px;height:52px;background:#1565C0;color:#fff;font-size:1rem;">
+              {{ employee.first_name.0 }}{{ employee.last_name.0 }}
+            </div>
+          {% endif %}
+          <div>
+            <div class="fw-semibold" style="font-size:1.05rem;color:#0D1B2A;">
+              {{ employee.full_name }}
+            </div>
+            <div class="text-muted" style="font-size:.8rem;">
+              {{ employee.employee_id }}
+              {% if employee.department %}&bull; {{ employee.department.name }}{% endif %}
+              &bull; {{ employee.company.name }}
+            </div>
+          </div>
+        </div>
+
+        <!-- Today's record summary -->
+        <div class="row g-2 text-center mb-2">
+          <div class="col-6">
+            <div class="rounded p-2" style="background:#f4f6fa;">
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">Time In</div>
+              <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
+                {% if today_record and today_record.time_in %}
+                  {{ today_record.time_in|time:"g:i A" }}
+                {% else %}
+                  <span class="text-muted" style="font-size:1rem;">—</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="rounded p-2" style="background:#f4f6fa;">
+              <div class="text-muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.5px;">Time Out</div>
+              <div class="fw-semibold mt-1" style="font-size:1.2rem;color:#0D1B2A;">
+                {% if today_record and today_record.time_out %}
+                  {{ today_record.time_out|time:"g:i A" }}
+                {% else %}
+                  <span class="text-muted" style="font-size:1rem;">—</span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {% if today_record and today_record.computed_status %}
+          <div class="text-center">
+            {% if today_record.computed_status == 'present' %}
+              <span class="badge text-bg-success">Present</span>
+            {% elif today_record.computed_status == 'late' %}
+              <span class="badge text-bg-warning">Late {% if today_record.late_minutes %}({{ today_record.late_minutes }} min){% endif %}</span>
+            {% elif today_record.computed_status == 'undertime' %}
+              <span class="badge" style="background:#f97316;color:#fff;">Undertime ({{ today_record.undertime_minutes }} min)</span>
+            {% elif today_record.computed_status == 'overtime' %}
+              <span class="badge text-bg-primary">Overtime ({{ today_record.overtime_minutes }} min)</span>
+            {% elif today_record.computed_status == 'incomplete' %}
+              <span class="badge text-bg-secondary">Incomplete — time out pending</span>
+            {% elif today_record.computed_status == 'rest_day' %}
+              <span class="badge text-bg-secondary">Rest Day</span>
+            {% elif today_record.computed_status == 'no_schedule' %}
+              <span class="badge text-bg-light border">No Schedule Assigned</span>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {% if today_record and today_record.portal_location %}
+          <div class="mt-2 text-center text-muted" style="font-size:.78rem;">
+            <i class="bi bi-wifi me-1"></i>{{ today_record.portal_location.name }}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Network status -->
+    {% if allowed %}
+      <div class="alert alert-success d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem;">
+        <i class="bi bi-wifi flex-shrink-0 mt-1"></i>
+        <div>
+          <strong>Network approved.</strong>
+          Location: {{ matched_location.name }}
+          <div class="text-muted mt-1" style="font-size:.78rem;">IP: {{ ip }}</div>
+        </div>
+      </div>
+    {% else %}
+      <div class="alert alert-danger d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem;">
+        <i class="bi bi-wifi-off flex-shrink-0 mt-1"></i>
+        <div>
+          <strong>Attendance is blocked.</strong><br>
+          You are not connected to an approved company network.
+          <div class="mt-1" style="font-size:.78rem;">Your IP: <code>{{ ip }}</code></div>
+          <div class="text-muted mt-1" style="font-size:.78rem;">
+            Contact your HR admin if you believe this is an error.
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Django messages -->
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2 mb-3" style="font-size:.85rem;" role="alert">
+          {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <!-- Action buttons -->
+    {% if license_read_only or clock_rollback %}
+      <div class="alert alert-secondary text-center" style="font-size:.9rem;">
+        <i class="bi bi-lock me-1"></i>
+        {% if clock_rollback %}
+          System date rollback detected — clock-in disabled.
+        {% else %}
+          Read-only mode — renew your license to make changes.
+        {% endif %}
+      </div>
+    {% else %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="d-grid gap-3">
+          <button type="submit" name="action" value="time_in"
+                  class="btn btn-success btn-lg py-3"
+                  {% if not allowed or today_record and today_record.time_in %}disabled{% endif %}>
+            <i class="bi bi-box-arrow-in-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
+            Time In
+          </button>
+          <button type="submit" name="action" value="time_out"
+                  class="btn btn-danger btn-lg py-3"
+                  {% if not allowed or not today_record or not today_record.time_in or today_record.time_out %}disabled{% endif %}>
+            <i class="bi bi-box-arrow-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
+            Time Out
+          </button>
+        </div>
+      </form>
+    {% endif %}
+
+    <div class="mt-4 text-center">
+      <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Attendance Records
+      </a>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,5 +1,8 @@
 from django.contrib import admin
-from .models import AttendanceRecord, BiometricDevice, BiometricLog, WorkSchedule
+from .models import (
+    AttendanceLocation, AttendancePortalLog, AttendanceRecord,
+    BiometricDevice, BiometricLog, WorkSchedule,
+)
 
 
 @admin.register(WorkSchedule)
@@ -90,3 +93,73 @@ class BiometricLogAdmin(admin.ModelAdmin):
             'fields': ('created_at',),
         }),
     )
+
+
+@admin.register(AttendanceLocation)
+class AttendanceLocationAdmin(admin.ModelAdmin):
+    list_display = ('company', 'name', 'ip_address', 'cidr_range', 'is_active', 'require_selfie', 'require_gps')
+    list_filter = ('company', 'is_active')
+    search_fields = ('company__name', 'name', 'ip_address', 'cidr_range')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Location', {
+            'fields': ('company', 'name', 'address', 'notes'),
+        }),
+        ('Network', {
+            'fields': ('ip_address', 'cidr_range'),
+            'description': (
+                'At least one of IP Address or CIDR Range is required. '
+                'The server checks the employee\'s visible public IP against these values.'
+            ),
+        }),
+        ('Options', {
+            'fields': ('is_active', 'require_selfie', 'require_gps'),
+        }),
+        ('Timestamps', {
+            'classes': ('collapse',),
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+
+
+@admin.register(AttendancePortalLog)
+class AttendancePortalLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'created_at', 'company', 'employee', 'action', 'status',
+        'ip_address', 'attendance_location',
+    )
+    list_filter = ('company', 'status', 'action', 'attendance_location')
+    search_fields = (
+        'employee__first_name', 'employee__last_name', 'employee__employee_id',
+        'ip_address', 'company__name',
+    )
+    readonly_fields = (
+        'company', 'employee', 'attendance_location', 'attendance_record',
+        'action', 'ip_address', 'user_agent', 'status', 'blocked_reason',
+        'gps_latitude', 'gps_longitude', 'created_at',
+    )
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Who & When', {
+            'fields': ('company', 'employee', 'created_at'),
+        }),
+        ('Action', {
+            'fields': ('action', 'status', 'blocked_reason'),
+        }),
+        ('Network', {
+            'fields': ('ip_address', 'attendance_location', 'user_agent'),
+        }),
+        ('Result', {
+            'fields': ('attendance_record',),
+        }),
+        ('GPS (placeholder)', {
+            'classes': ('collapse',),
+            'fields': ('gps_latitude', 'gps_longitude'),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

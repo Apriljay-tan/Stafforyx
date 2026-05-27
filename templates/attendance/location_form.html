@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Attendance Location{% endblock %}
+{% block page_title %}{{ action }} Attendance Location{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#f4f6fa;">
+        <span class="fw-semibold" style="font-size:.95rem;">
+          <i class="bi bi-wifi me-1 text-primary"></i>{{ action }} Attendance Location
+        </span>
+      </div>
+      <div class="card-body p-4">
+
+        {% if form.errors %}
+          <div class="alert alert-danger py-2" style="font-size:.85rem;">
+            <strong>Please fix the errors below.</strong>
+            {% for field in form %}
+              {% for err in field.errors %}
+                <div>{{ field.label }}: {{ err }}</div>
+              {% endfor %}
+            {% endfor %}
+            {% for err in form.non_field_errors %}
+              <div>{{ err }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Company</label>
+            {{ form.company }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Location Name</label>
+            {{ form.name }}
+            <div class="form-text">e.g. Main Office WiFi, Cebu Branch, Warehouse</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Address <span class="text-muted fw-normal">(optional)</span></label>
+            {{ form.address }}
+          </div>
+
+          <hr class="my-3">
+          <p class="fw-semibold mb-1" style="font-size:.9rem;color:#1565C0;">
+            <i class="bi bi-shield-lock me-1"></i>Network (at least one required)
+          </p>
+          <p class="text-muted mb-3" style="font-size:.8rem;">
+            The server checks the employee's visible public IP against these values.
+            This does not read WiFi SSID names.
+          </p>
+
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Exact IP Address</label>
+              {{ form.ip_address }}
+              <div class="form-text">e.g. 112.198.10.5</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">CIDR Range</label>
+              {{ form.cidr_range }}
+              <div class="form-text">e.g. 112.198.10.0/24</div>
+            </div>
+          </div>
+
+          <hr class="my-3">
+          <p class="fw-semibold mb-2" style="font-size:.9rem;">Options</p>
+
+          <div class="mb-2 form-check">
+            {{ form.is_active }}
+            <label class="form-check-label">Active (employees can use this location)</label>
+          </div>
+          <div class="mb-2 form-check">
+            {{ form.require_selfie }}
+            <label class="form-check-label">Require selfie <span class="badge text-bg-secondary ms-1" style="font-size:.7rem;">Placeholder — not yet enforced</span></label>
+          </div>
+          <div class="mb-3 form-check">
+            {{ form.require_gps }}
+            <label class="form-check-label">Require GPS <span class="badge text-bg-secondary ms-1" style="font-size:.7rem;">Placeholder — not yet enforced</span></label>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
+            {{ form.notes }}
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Save Location
+            </button>
+            <a href="{% url 'attendance:location_list' %}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

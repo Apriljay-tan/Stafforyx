@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block title %}Delete Attendance Location{% endblock %}
+{% block page_title %}Delete Attendance Location{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-5">
+    <div class="card shadow-sm border-danger">
+      <div class="card-header py-2 bg-danger text-white">
+        <i class="bi bi-exclamation-triangle me-1"></i>Confirm Deletion
+      </div>
+      <div class="card-body p-4">
+        <p>Are you sure you want to delete the attendance location:</p>
+        <p class="fw-semibold fs-5 mb-1">{{ location.name }}</p>
+        <p class="text-muted" style="font-size:.85rem;">{{ location.company.name }}</p>
+        {% if location.ip_address %}<p class="mb-1"><code>IP: {{ location.ip_address }}</code></p>{% endif %}
+        {% if location.cidr_range %}<p class="mb-0"><code>CIDR: {{ location.cidr_range }}</code></p>{% endif %}
+        <div class="alert alert-warning mt-3 py-2" style="font-size:.85rem;">
+          <i class="bi bi-exclamation-triangle me-1"></i>
+          Deleting this location will prevent employees who use this network from clocking in/out via the portal.
+        </div>
+        <form method="post" class="d-flex gap-2 mt-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+          <a href="{% url 'attendance:location_list' %}" class="btn btn-outline-secondary">
+            Cancel
+          </a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

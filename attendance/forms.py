@@ -1,6 +1,6 @@
 from django import forms
 
-from .models import AttendanceRecord, WorkSchedule
+from .models import AttendanceLocation, AttendanceRecord, WorkSchedule
 
 
 def _bootstrap(form):
@@ -27,6 +27,24 @@ class AttendanceRecordForm(forms.ModelForm):
             'time_in': forms.TimeInput(attrs={'type': 'time'}),
             'time_out': forms.TimeInput(attrs={'type': 'time'}),
             'remarks': forms.Textarea(attrs={'rows': 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _bootstrap(self)
+
+
+class AttendanceLocationForm(forms.ModelForm):
+    class Meta:
+        model = AttendanceLocation
+        fields = [
+            'company', 'name', 'address',
+            'ip_address', 'cidr_range',
+            'is_active', 'require_selfie', 'require_gps', 'notes',
+        ]
+        widgets = {
+            'address': forms.Textarea(attrs={'rows': 2}),
+            'notes':   forms.Textarea(attrs={'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):

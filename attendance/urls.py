@@ -23,4 +23,13 @@ urlpatterns = [
     path('clock/', login_required(views.attendance_clock), name='attendance_clock'),
     # JSON endpoint for live polling — login only
     path('recent-json/', login_required(views.attendance_recent_json), name='attendance_recent_json'),
+
+    # Attendance Locations (admin/HR only — module permission required)
+    path('locations/', attendance_access(views.location_list), name='location_list'),
+    path('locations/add/', attendance_access(views.location_add), name='location_add'),
+    path('locations/<int:pk>/edit/', attendance_access(views.location_edit), name='location_edit'),
+    path('locations/<int:pk>/delete/', attendance_access(views.location_delete), name='location_delete'),
+
+    # Employee WiFi/IP Portal — login only, no module permission (employee self-service)
+    path('portal/', login_required(views.attendance_portal), name='attendance_portal'),
 ]
