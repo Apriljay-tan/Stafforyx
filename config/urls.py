@@ -4,12 +4,15 @@ from django.conf import settings
 from django.conf.urls.static import static
 from dashboard.views import dashboard_home
 from accounts.access import module_access_required
+from config.pwa_views import manifest_webmanifest, service_worker
 
 admin.site.site_header = "Stafforyx HR"
 admin.site.site_title = "Stafforyx HR Admin"
 admin.site.index_title = "Admin Panel"
 
 urlpatterns = [
+    path('manifest.webmanifest', manifest_webmanifest, name='pwa_manifest'),
+    path('service-worker.js', service_worker, name='pwa_service_worker'),
     path('admin/', admin.site.urls),
     path('', module_access_required('can_access_dashboard')(dashboard_home), name='dashboard_home'),
     path('accounts/', include('accounts.urls')),

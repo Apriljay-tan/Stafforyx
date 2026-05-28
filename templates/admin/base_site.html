@@ -1,5 +1,5 @@
 {% extends "admin/base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{{ title }} | Stafforyx HR Admin{% endblock %}
 
@@ -14,6 +14,25 @@
     <span style="font-size:0.7rem;font-weight:500;color:#8aa0b8;letter-spacing:2px;text-transform:uppercase;">Admin Panel</span>
   </a>
 </div>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<meta name="theme-color" content="#0f172a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Stafforyx">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="{% static 'images/pwa/apple-touch-icon.png' %}">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/service-worker.js', { scope: '/' }).catch(function (error) {
+        console.warn('Service worker registration failed:', error);
+      });
+    });
+  }
+</script>
 {% endblock %}
 
 {% block extrastyle %}
