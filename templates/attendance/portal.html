@@ -69,6 +69,16 @@
           </div>
         </div>
 
+        <div class="mb-2 text-center">
+          {% if clock_state == 'timed_out' %}
+            <span class="badge text-bg-success">Status: Completed (Timed Out)</span>
+          {% elif clock_state == 'timed_in' %}
+            <span class="badge text-bg-primary">Status: Timed In</span>
+          {% else %}
+            <span class="badge text-bg-secondary">Status: Not Timed In Yet</span>
+          {% endif %}
+        </div>
+
         {% if today_record and today_record.computed_status %}
           <div class="text-center">
             {% if today_record.computed_status == 'present' %}
@@ -155,6 +165,34 @@
       </div>
     {% endif %}
 
+    <!-- Verification requirements -->
+    <div class="card mb-3">
+      <div class="card-body p-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="fw-semibold" style="font-size:.88rem;color:#0D1B2A;">
+            <i class="bi bi-shield-check me-1"></i>Clock Requirements
+          </div>
+          {% if matched_location %}
+            <span class="badge text-bg-light border">{{ matched_location.name }}</span>
+          {% else %}
+            <span class="badge text-bg-light border">No approved location</span>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          {% if require_selfie %}
+            <span class="badge text-bg-warning">Selfie Required</span>
+          {% else %}
+            <span class="badge text-bg-light border">Selfie Optional</span>
+          {% endif %}
+          {% if require_gps %}
+            <span class="badge text-bg-warning">GPS Required</span>
+          {% else %}
+            <span class="badge text-bg-light border">GPS Optional</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
     <!-- Django messages -->
     {% if messages %}
       {% for msg in messages %}
@@ -175,8 +213,60 @@
         {% endif %}
       </div>
     {% else %}
-      <form method="post">
+      <form method="post" id="portalClockForm">
         {% csrf_token %}
+
+        <input type="hidden" name="selfie_data" id="selfieDataInput">
+        <input type="hidden" name="gps_latitude" id="gpsLatitudeInput">
+        <input type="hidden" name="gps_longitude" id="gpsLongitudeInput">
+        <input type="hidden" name="gps_accuracy" id="gpsAccuracyInput">
+
+        {% if require_selfie %}
+          <div class="card mb-3 border-warning-subtle">
+            <div class="card-body p-3">
+              <div class="fw-semibold mb-2" style="font-size:.86rem;">
+                <i class="bi bi-camera me-1"></i>Selfie Verification
+              </div>
+              <video id="selfieVideo" class="w-100 rounded border mb-2" autoplay playsinline muted style="display:none;max-height:240px;"></video>
+              <canvas id="selfieCanvas" class="w-100 rounded border mb-2" style="display:none;max-height:240px;"></canvas>
+              <div id="selfieStatus" class="text-muted mb-2" style="font-size:.8rem;">
+                Selfie is required before you can submit.
+              </div>
+              <div id="selfieError" class="alert alert-danger py-2 mb-2 d-none" style="font-size:.8rem;"></div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="startCameraBtn">
+                  <i class="bi bi-camera-video me-1"></i>Start Camera
+                </button>
+                <button type="button" class="btn btn-outline-success btn-sm d-none" id="captureSelfieBtn">
+                  <i class="bi bi-camera-fill me-1"></i>Capture
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="retakeSelfieBtn">
+                  <i class="bi bi-arrow-repeat me-1"></i>Retake
+                </button>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if require_gps %}
+          <div class="card mb-3 border-warning-subtle">
+            <div class="card-body p-3">
+              <div class="fw-semibold mb-2" style="font-size:.86rem;">
+                <i class="bi bi-geo-alt me-1"></i>GPS Verification
+              </div>
+              <div id="gpsStatus" class="text-muted mb-2" style="font-size:.8rem;">
+                GPS is required before you can submit.
+              </div>
+              <div id="gpsError" class="alert alert-danger py-2 mb-2 d-none" style="font-size:.8rem;"></div>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="captureGpsBtn">
+                <i class="bi bi-crosshair me-1"></i>Capture Location
+              </button>
+            </div>
+          </div>
+        {% endif %}
+
+        <div id="portalClientError" class="alert alert-danger py-2 mb-3 d-none" style="font-size:.85rem;"></div>
+
         <div class="d-grid gap-3">
           <button type="submit" name="action" value="time_in"
                   class="btn btn-success btn-lg py-3"
@@ -195,11 +285,198 @@
     {% endif %}
 
     <div class="mt-4 text-center">
-      <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm">
-        <i class="bi bi-arrow-left me-1"></i>Back to Attendance Records
+      <a href="{% url 'portal:dashboard' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Portal
       </a>
     </div>
 
   </div>
 </div>
+
+<script>
+(function () {
+  const requireSelfie = {{ require_selfie|yesno:"true,false" }};
+  const requireGps = {{ require_gps|yesno:"true,false" }};
+
+  const form = document.getElementById('portalClockForm');
+  if (!form) return;
+
+  const clientError = document.getElementById('portalClientError');
+  const selfieDataInput = document.getElementById('selfieDataInput');
+  const gpsLatitudeInput = document.getElementById('gpsLatitudeInput');
+  const gpsLongitudeInput = document.getElementById('gpsLongitudeInput');
+  const gpsAccuracyInput = document.getElementById('gpsAccuracyInput');
+
+  const selfieVideo = document.getElementById('selfieVideo');
+  const selfieCanvas = document.getElementById('selfieCanvas');
+  const selfieStatus = document.getElementById('selfieStatus');
+  const selfieError = document.getElementById('selfieError');
+  const startCameraBtn = document.getElementById('startCameraBtn');
+  const captureSelfieBtn = document.getElementById('captureSelfieBtn');
+  const retakeSelfieBtn = document.getElementById('retakeSelfieBtn');
+
+  const gpsStatus = document.getElementById('gpsStatus');
+  const gpsError = document.getElementById('gpsError');
+  const captureGpsBtn = document.getElementById('captureGpsBtn');
+
+  let selfieStream = null;
+
+  function showClientError(message) {
+    if (!clientError) return;
+    clientError.textContent = message;
+    clientError.classList.remove('d-none');
+  }
+
+  function clearClientError() {
+    if (!clientError) return;
+    clientError.textContent = '';
+    clientError.classList.add('d-none');
+  }
+
+  function stopSelfieStream() {
+    if (selfieStream) {
+      selfieStream.getTracks().forEach((track) => track.stop());
+      selfieStream = null;
+    }
+  }
+
+  async function startCamera() {
+    if (!requireSelfie || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (requireSelfie && selfieError) {
+        selfieError.textContent = 'Camera is not available on this device/browser.';
+        selfieError.classList.remove('d-none');
+      }
+      return;
+    }
+    try {
+      stopSelfieStream();
+      selfieStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false
+      });
+      selfieVideo.srcObject = selfieStream;
+      selfieVideo.style.display = 'block';
+      selfieCanvas.style.display = 'none';
+      startCameraBtn.classList.add('d-none');
+      captureSelfieBtn.classList.remove('d-none');
+      retakeSelfieBtn.classList.add('d-none');
+      selfieError.classList.add('d-none');
+      selfieStatus.textContent = 'Camera ready. Capture your selfie now.';
+    } catch (error) {
+      let message = 'Camera permission is required for this location.';
+      if (error && (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError')) {
+        message = 'Camera permission was denied. Please allow camera access and try again.';
+      }
+      selfieError.textContent = message;
+      selfieError.classList.remove('d-none');
+    }
+  }
+
+  function captureSelfie() {
+    if (!selfieVideo || !selfieCanvas || !selfieStream) return;
+    const width = selfieVideo.videoWidth || 640;
+    const height = selfieVideo.videoHeight || 480;
+    selfieCanvas.width = width;
+    selfieCanvas.height = height;
+    const ctx = selfieCanvas.getContext('2d');
+    ctx.drawImage(selfieVideo, 0, 0, width, height);
+    selfieDataInput.value = selfieCanvas.toDataURL('image/jpeg', 0.85);
+    selfieCanvas.style.display = 'block';
+    selfieVideo.style.display = 'none';
+    captureSelfieBtn.classList.add('d-none');
+    retakeSelfieBtn.classList.remove('d-none');
+    startCameraBtn.classList.remove('d-none');
+    selfieStatus.textContent = 'Selfie captured. You can retake if needed.';
+    selfieError.classList.add('d-none');
+    stopSelfieStream();
+  }
+
+  function retakeSelfie() {
+    selfieDataInput.value = '';
+    selfieCanvas.style.display = 'none';
+    startCamera();
+  }
+
+  function setGpsStatus(message) {
+    if (gpsStatus) gpsStatus.textContent = message;
+  }
+
+  function setGpsError(message) {
+    if (!gpsError) return;
+    if (message) {
+      gpsError.textContent = message;
+      gpsError.classList.remove('d-none');
+    } else {
+      gpsError.textContent = '';
+      gpsError.classList.add('d-none');
+    }
+  }
+
+  function captureGps() {
+    if (!requireGps) return;
+    if (!navigator.geolocation) {
+      setGpsError('GPS is not supported by this browser/device.');
+      return;
+    }
+    setGpsStatus('Requesting current location...');
+    setGpsError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        gpsLatitudeInput.value = position.coords.latitude;
+        gpsLongitudeInput.value = position.coords.longitude;
+        gpsAccuracyInput.value = position.coords.accuracy || '';
+        setGpsStatus('Location captured successfully.');
+      },
+      (error) => {
+        let message = 'Location permission is required for this location.';
+        if (error && error.code === 1) {
+          message = 'Location permission was denied. Please allow GPS access and try again.';
+        } else if (error && error.code === 2) {
+          message = 'Location is unavailable right now. Please try again.';
+        } else if (error && error.code === 3) {
+          message = 'Location request timed out. Please try again.';
+        }
+        setGpsError(message);
+        setGpsStatus('Location has not been captured yet.');
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 15000,
+        maximumAge: 0
+      }
+    );
+  }
+
+  if (startCameraBtn) startCameraBtn.addEventListener('click', startCamera);
+  if (captureSelfieBtn) captureSelfieBtn.addEventListener('click', captureSelfie);
+  if (retakeSelfieBtn) retakeSelfieBtn.addEventListener('click', retakeSelfie);
+  if (captureGpsBtn) captureGpsBtn.addEventListener('click', captureGps);
+
+  form.addEventListener('submit', function (event) {
+    clearClientError();
+    if (requireSelfie && !selfieDataInput.value) {
+      event.preventDefault();
+      showClientError('Selfie is required before submitting Time In/Out.');
+      if (selfieError) {
+        selfieError.textContent = 'Selfie is required for this location.';
+        selfieError.classList.remove('d-none');
+      }
+      return;
+    }
+    if (requireGps && (!gpsLatitudeInput.value || !gpsLongitudeInput.value)) {
+      event.preventDefault();
+      showClientError('GPS location is required before submitting Time In/Out.');
+      setGpsError('Please capture your location first.');
+      return;
+    }
+  });
+
+  if (requireSelfie) {
+    startCamera();
+  }
+  if (requireGps) {
+    captureGps();
+  }
+})();
+</script>
 {% endblock %}

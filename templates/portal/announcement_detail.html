@@ -1,0 +1,28 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}Announcement{% endblock %}
+{% block page_title %}Announcement{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>{{ announcement.title }}</h1>
+  <p>
+    {{ announcement.created_at|date:"F d, Y" }}
+    {% if announcement.target_department %}
+      &bull; Department: {{ announcement.target_department.name }}
+    {% else %}
+      &bull; For all departments
+    {% endif %}
+  </p>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <div class="mb-0" style="white-space:pre-line;">{{ announcement.content }}</div>
+  </div>
+</div>
+
+<a href="{% url 'portal:announcements' %}" class="btn btn-outline-secondary btn-sm">
+  <i class="bi bi-arrow-left me-1"></i>Back to Announcements
+</a>
+{% endblock %}

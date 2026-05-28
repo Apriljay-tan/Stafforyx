@@ -169,7 +169,7 @@ class AttendancePortalLogAdmin(admin.ModelAdmin):
     readonly_fields = (
         'company', 'employee', 'attendance_location', 'attendance_record',
         'action', 'ip_address', 'user_agent', 'status', 'blocked_reason',
-        'gps_latitude', 'gps_longitude', 'created_at',
+        'gps_latitude', 'gps_longitude', 'gps_accuracy', 'selfie_image', 'created_at',
     )
     date_hierarchy = 'created_at'
     fieldsets = (
@@ -185,9 +185,9 @@ class AttendancePortalLogAdmin(admin.ModelAdmin):
         ('Result', {
             'fields': ('attendance_record',),
         }),
-        ('GPS (placeholder)', {
+        ('Verification Evidence', {
             'classes': ('collapse',),
-            'fields': ('gps_latitude', 'gps_longitude'),
+            'fields': ('gps_latitude', 'gps_longitude', 'gps_accuracy', 'selfie_image'),
         }),
     )
 

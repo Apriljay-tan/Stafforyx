@@ -1,4 +1,6 @@
+import base64
 import datetime
+import io
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -7,6 +9,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from django.utils import timezone
+from PIL import Image
 
 from companies.models import Company
 from employees.models import Employee
@@ -868,13 +871,21 @@ class AttendancePortalViewTests(TestCase):
 
         self.portal_url = reverse('attendance:attendance_portal')
 
-    def _make_location(self, ip='127.0.0.1', is_active=True):
+    def _make_location(self, ip='127.0.0.1', is_active=True, require_selfie=False, require_gps=False):
         return AttendanceLocation.objects.create(
             company=self.company,
             name='Test Network',
             ip_address=ip,
             is_active=is_active,
+            require_selfie=require_selfie,
+            require_gps=require_gps,
         )
+
+    def _selfie_payload(self):
+        image_buffer = io.BytesIO()
+        Image.new('RGB', (2, 2), color=(35, 35, 35)).save(image_buffer, format='JPEG')
+        encoded = base64.b64encode(image_buffer.getvalue()).decode('ascii')
+        return f'data:image/jpeg;base64,{encoded}'
 
     def test_portal_requires_login(self):
         resp = self.client.get(self.portal_url)
@@ -937,6 +948,107 @@ class AttendancePortalViewTests(TestCase):
         ).first()
         self.assertIsNotNone(log)
         self.assertEqual(log.status, 'success')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_blocked_when_selfie_required_but_missing(self, _mock):
+        self._make_location(ip='127.0.0.1', require_selfie=True)
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.assertEqual(AttendanceRecord.objects.filter(employee=self.employee).count(), 0)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='time_in').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, 'blocked')
+        self.assertIn('selfie', log.blocked_reason.lower())
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_blocked_when_gps_required_but_missing(self, _mock):
+        self._make_location(ip='127.0.0.1', require_gps=True)
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.assertEqual(AttendanceRecord.objects.filter(employee=self.employee).count(), 0)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='time_in').first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.status, 'blocked')
+        self.assertIn('gps', log.blocked_reason.lower())
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_works_with_required_selfie_and_gps(self, _mock):
+        self._make_location(ip='127.0.0.1', require_selfie=True, require_gps=True)
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {
+            'action': 'time_in',
+            'selfie_data': self._selfie_payload(),
+            'gps_latitude': '14.609100',
+            'gps_longitude': '121.022300',
+            'gps_accuracy': '10.20',
+        })
+        record = AttendanceRecord.objects.filter(employee=self.employee).first()
+        self.assertIsNotNone(record)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='time_in').first()
+        self.assertEqual(log.status, 'success')
+        self.assertIsNotNone(log.selfie_image)
+        self.assertEqual(str(log.gps_latitude), '14.609100')
+        self.assertEqual(str(log.gps_longitude), '121.022300')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_out_blocked_when_required_selfie_or_gps_missing(self, _mock):
+        self._make_location(ip='127.0.0.1', require_selfie=True, require_gps=True)
+        today = datetime.date.today()
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.employee,
+            date=today,
+            time_in=datetime.time(8, 0),
+            status='present',
+            source='portal',
+        )
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_out'})
+        record = AttendanceRecord.objects.get(employee=self.employee, date=today)
+        self.assertIsNone(record.time_out)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='time_out').first()
+        self.assertEqual(log.status, 'blocked')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_out_works_with_required_selfie_and_gps(self, _mock):
+        self._make_location(ip='127.0.0.1', require_selfie=True, require_gps=True)
+        today = datetime.date.today()
+        record = AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.employee,
+            date=today,
+            time_in=datetime.time(8, 0),
+            status='present',
+            source='portal',
+        )
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {
+            'action': 'time_out',
+            'selfie_data': self._selfie_payload(),
+            'gps_latitude': '14.609100',
+            'gps_longitude': '121.022300',
+            'gps_accuracy': '8.50',
+        })
+        record.refresh_from_db()
+        self.assertIsNotNone(record.time_out)
+        log = AttendancePortalLog.objects.filter(employee=self.employee, action='time_out').first()
+        self.assertEqual(log.status, 'success')
+        self.assertIsNotNone(log.selfie_image)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_portal_time_in_always_applies_to_logged_in_employee_only(self, _mock):
+        self._make_location(ip='127.0.0.1')
+        other_employee = _make_employee(self.company, self.schedule)
+        self.client.login(username='portaluser', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in', 'employee_id': other_employee.pk})
+        self.assertEqual(
+            AttendanceRecord.objects.filter(employee=other_employee, date=datetime.date.today()).count(),
+            0,
+        )
+        self.assertEqual(
+            AttendanceRecord.objects.filter(employee=self.employee, date=datetime.date.today()).count(),
+            1,
+        )
 
     @patch('licenses.middleware.is_license_active', return_value=True)
     def test_time_out_updates_record(self, _mock):

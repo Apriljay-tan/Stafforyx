@@ -1,0 +1,45 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}Announcements{% endblock %}
+{% block page_title %}Announcements{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1>Announcements</h1>
+    <p>Company updates and notices published by HR/Admin.</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-megaphone me-1" style="color:#0EA5E9;"></i>Active Announcements</span>
+    <span class="badge bg-info text-dark rounded-pill">{{ announcements.count }}</span>
+  </div>
+  <div class="list-group list-group-flush">
+    {% for announcement in announcements %}
+      <a href="{% url 'portal:announcement_detail' announcement.pk %}"
+         class="list-group-item list-group-item-action">
+        <div class="d-flex justify-content-between align-items-center">
+          <h6 class="mb-1">{{ announcement.title }}</h6>
+          <small class="text-muted">{{ announcement.created_at|date:"M d, Y" }}</small>
+        </div>
+        <p class="mb-1 text-muted" style="font-size:.86rem;">
+          {{ announcement.content|truncatechars:180 }}
+        </p>
+        <small class="text-muted">
+          {% if announcement.target_department %}
+            Department: {{ announcement.target_department.name }}
+          {% else %}
+            For all departments
+          {% endif %}
+        </small>
+      </a>
+    {% empty %}
+      <div class="text-center text-muted py-5">
+        No active announcements for your company.
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

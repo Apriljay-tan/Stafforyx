@@ -1,4 +1,6 @@
 import datetime
+import os
+import uuid
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
@@ -6,6 +8,11 @@ from django.db import models
 
 from companies.models import Company
 from employees.models import Employee
+
+
+def portal_selfie_upload_path(instance, filename):
+    ext = os.path.splitext(filename or '')[1].lower() or '.jpg'
+    return f'attendance/portal_selfies/{instance.company_id}/{uuid.uuid4().hex}{ext}'
 
 
 class BiometricDevice(models.Model):
@@ -409,6 +416,12 @@ class AttendancePortalLog(models.Model):
     # Placeholder GPS fields — not yet enforced
     gps_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     gps_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    gps_accuracy = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    selfie_image = models.ImageField(
+        upload_to=portal_selfie_upload_path,
+        null=True,
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

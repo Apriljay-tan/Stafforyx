@@ -6,6 +6,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import UserCompanyAccess, UserProfile
+from announcements.models import Announcement
 from attendance.models import AttendanceRecord
 from companies.models import Company
 from documents.models import EmployeeDocument
@@ -42,6 +43,7 @@ def _make_employee(company, user, emp_id):
 class PortalAccessAndIsolationTests(TestCase):
     def setUp(self):
         self.company = _make_company("Portal Co")
+        self.company_other = _make_company("Other Co")
         self.user_a = _make_user("portal_a")
         self.user_b = _make_user("portal_b")
         self.employee_a = _make_employee(self.company, self.user_a, "EMP-A")
@@ -146,6 +148,18 @@ class PortalAccessAndIsolationTests(TestCase):
             description="B description",
             location="B Site",
         )
+        self.announcement_a = Announcement.objects.create(
+            company=self.company,
+            title="Portal Announcement A",
+            content="Visible to company A employees.",
+            is_active=True,
+        )
+        self.announcement_b = Announcement.objects.create(
+            company=self.company_other,
+            title="Portal Announcement B",
+            content="Should not be visible to company A employees.",
+            is_active=True,
+        )
 
     def _login_a(self):
         self.client.login(username="portal_a", password="testpass123")
@@ -164,6 +178,7 @@ class PortalAccessAndIsolationTests(TestCase):
             "leave_list",
             "incident_list",
             "attendance",
+            "announcements",
         ]:
             with self.subTest(name=name):
                 response = self.client.get(reverse(f"portal:{name}"))
@@ -219,6 +234,32 @@ class PortalAccessAndIsolationTests(TestCase):
         response = self.client.get(reverse("portal:time_clock"))
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("attendance:attendance_portal"))
+
+    def test_portal_dashboard_shows_company_announcements_only(self):
+        self._login_a()
+        response = self.client.get(reverse("portal:dashboard"))
+        self.assertContains(response, self.announcement_a.title)
+        self.assertNotContains(response, self.announcement_b.title)
+
+    def test_portal_announcements_list_is_company_scoped(self):
+        self._login_a()
+        response = self.client.get(reverse("portal:announcements"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.announcement_a.title)
+        self.assertNotContains(response, self.announcement_b.title)
+
+    def test_portal_announcement_detail_blocks_other_company(self):
+        self._login_a()
+        own_detail = self.client.get(reverse("portal:announcement_detail", args=[self.announcement_a.pk]))
+        self.assertEqual(own_detail.status_code, 200)
+        other_detail = self.client.get(reverse("portal:announcement_detail", args=[self.announcement_b.pk]))
+        self.assertEqual(other_detail.status_code, 404)
+
+    def test_employee_cannot_create_edit_delete_announcements_from_portal(self):
+        self._login_a()
+        self.assertEqual(self.client.get("/portal/announcements/add/").status_code, 404)
+        self.assertEqual(self.client.get(f"/portal/announcements/{self.announcement_a.pk}/edit/").status_code, 404)
+        self.assertEqual(self.client.get(f"/portal/announcements/{self.announcement_a.pk}/delete/").status_code, 404)
 
 
 class IncidentManagementScopeTests(TestCase):

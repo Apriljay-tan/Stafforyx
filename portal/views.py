@@ -3,10 +3,12 @@ import mimetypes
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
+from announcements.models import Announcement
 from attendance.models import AttendanceRecord
 from documents.models import EmployeeDocument
 from leaves.models import LeaveRequest, LeaveType
@@ -45,6 +47,20 @@ def _require_portal_employee(request):
     return emp, None
 
 
+def _portal_announcements_queryset(employee):
+    queryset = Announcement.objects.filter(
+        company=employee.company,
+        is_active=True,
+    ).select_related('company', 'target_department', 'posted_by')
+    if employee.department_id:
+        queryset = queryset.filter(
+            Q(target_department__isnull=True) | Q(target_department=employee.department)
+        )
+    else:
+        queryset = queryset.filter(target_department__isnull=True)
+    return queryset.order_by('-created_at')
+
+
 # ── Portal: Dashboard ─────────────────────────────────────────────────────────
 
 @login_required
@@ -73,6 +89,7 @@ def portal_dashboard(request):
     open_incidents = IncidentReport.objects.filter(
         employee=employee, status__in=['submitted', 'under_review']
     ).count()
+    recent_announcements = _portal_announcements_queryset(employee)[:5]
 
     return render(request, 'portal/dashboard.html', {
         'employee': employee,
@@ -80,6 +97,7 @@ def portal_dashboard(request):
         'recent_leaves': recent_leaves,
         'recent_attendance': recent_attendance,
         'open_incidents': open_incidents,
+        'recent_announcements': recent_announcements,
     })
 
 
@@ -285,6 +303,37 @@ def portal_attendance(request):
 def portal_time_clock(request):
     """Redirect to the existing IP-validated attendance portal."""
     return redirect('attendance:attendance_portal')
+
+
+# —— Portal: Announcements ———————————————————————————————————————————————————————————
+
+@login_required
+def portal_announcements(request):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    announcements = _portal_announcements_queryset(employee)
+    return render(request, 'portal/announcements.html', {
+        'employee': employee,
+        'announcements': announcements,
+    })
+
+
+@login_required
+def portal_announcement_detail(request, pk):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    announcement = get_object_or_404(
+        _portal_announcements_queryset(employee),
+        pk=pk,
+    )
+    return render(request, 'portal/announcement_detail.html', {
+        'employee': employee,
+        'announcement': announcement,
+    })
 
 
 # ── HR: Manage Incidents ──────────────────────────────────────────────────────

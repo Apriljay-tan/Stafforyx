@@ -38,6 +38,12 @@
           <i class="bi bi-clock-history"></i> My Attendance
         </a>
       </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:announcements' %}"
+           class="nav-link {% if 'announcement' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-megaphone"></i> Announcements
+        </a>
+      </li>
     </ul>
 
     <div class="sidebar-section-label">Requests</div>

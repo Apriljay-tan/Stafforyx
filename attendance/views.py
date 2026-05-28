@@ -1,11 +1,16 @@
+import base64
+import binascii
+import io
 from datetime import date as _date, datetime as _datetime
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from PIL import Image, UnidentifiedImageError
 
 from accounts.company_access import (
     filter_queryset_by_user_companies,
@@ -24,8 +29,8 @@ from .models import (
     AttendanceLocation, AttendancePortalLog, AttendanceRecord,
     EmployeeDailySchedule, ShiftTemplate, WorkSchedule,
 )
-from .portal_services import can_employee_clock_from_request, get_client_ip
-from .schedule_services import employee_has_schedule_today, resolve_expected_shift
+from .portal_services import can_employee_clock_from_request
+from .schedule_services import resolve_expected_shift
 from .services import compute_attendance
 
 
@@ -35,6 +40,83 @@ _DAY_FIELDS = [
     'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
     'work_friday', 'work_saturday', 'work_sunday',
 ]
+_PORTAL_SELFIE_MAX_BYTES = 2 * 1024 * 1024
+_PORTAL_ALLOWED_SELFIE_TYPES = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+}
+
+
+def _parse_portal_decimal(value, *, field_name):
+    if value in (None, ''):
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        raise ValueError(f'Unable to read {field_name}. Please try again.')
+
+
+def _parse_portal_gps_from_request(request):
+    lat_raw = request.POST.get('gps_latitude')
+    lon_raw = request.POST.get('gps_longitude')
+    accuracy_raw = request.POST.get('gps_accuracy')
+
+    if lat_raw in (None, '') and lon_raw in (None, '') and accuracy_raw in (None, ''):
+        return None, None, None
+
+    lat = _parse_portal_decimal(lat_raw, field_name='GPS latitude')
+    lon = _parse_portal_decimal(lon_raw, field_name='GPS longitude')
+    accuracy = _parse_portal_decimal(accuracy_raw, field_name='GPS accuracy')
+
+    if lat is None or lon is None:
+        raise ValueError('Location capture is incomplete. Please allow GPS and try again.')
+    if lat < Decimal('-90') or lat > Decimal('90'):
+        raise ValueError('Invalid GPS latitude received. Please recapture your location.')
+    if lon < Decimal('-180') or lon > Decimal('180'):
+        raise ValueError('Invalid GPS longitude received. Please recapture your location.')
+    if accuracy is not None and accuracy < 0:
+        raise ValueError('Invalid GPS accuracy received. Please recapture your location.')
+    return lat, lon, accuracy
+
+
+def _parse_portal_selfie_from_request(request):
+    selfie_data = (request.POST.get('selfie_data') or '').strip()
+    if not selfie_data:
+        return None
+    if not selfie_data.startswith('data:image/'):
+        raise ValueError('Invalid selfie format. Please capture your selfie again.')
+
+    try:
+        header, encoded = selfie_data.split(',', 1)
+    except ValueError:
+        raise ValueError('Invalid selfie payload. Please capture your selfie again.')
+    if ';base64' not in header:
+        raise ValueError('Unsupported selfie encoding. Please capture your selfie again.')
+
+    mime_type = header[5:].split(';', 1)[0].lower()
+    ext = _PORTAL_ALLOWED_SELFIE_TYPES.get(mime_type)
+    if not ext:
+        raise ValueError('Selfie must be JPG, PNG, or WEBP.')
+
+    try:
+        image_bytes = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        raise ValueError('Selfie upload is corrupted. Please capture it again.')
+
+    if not image_bytes:
+        raise ValueError('Selfie image is empty. Please capture your selfie again.')
+    if len(image_bytes) > _PORTAL_SELFIE_MAX_BYTES:
+        raise ValueError('Selfie image is too large. Please capture a smaller image.')
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as image:
+            image.verify()
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError):
+        raise ValueError('Selfie image could not be validated. Please capture again.')
+
+    filename = f'portal_selfie_{request.user.id}_{_datetime.now().strftime("%Y%m%d%H%M%S%f")}.{ext}'
+    return ContentFile(image_bytes, name=filename)
 
 
 def _potential_absences_today(company=None, accessible_companies_qs=None):
@@ -709,6 +791,9 @@ def attendance_portal(request):
         else:
             schedule_blocked_reason = 'No schedule assigned for today. Please contact HR.'
 
+    require_selfie = bool(matched_location and matched_location.require_selfie)
+    require_gps = bool(matched_location and matched_location.require_gps)
+
     # Overall: both IP and schedule must be OK to clock in/out
     allowed = ip_allowed and schedule_allowed
     if not ip_allowed:
@@ -722,6 +807,8 @@ def attendance_portal(request):
         employee=employee, date=today
     ).first()
 
+    user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+
     # Log page open
     AttendancePortalLog.objects.create(
         company=employee.company,
@@ -729,27 +816,76 @@ def attendance_portal(request):
         attendance_location=matched_location,
         action='page_open',
         ip_address=ip or None,
-        user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+        user_agent=user_agent,
         status='allowed' if allowed else 'blocked',
         blocked_reason='' if allowed else blocked_reason,
     )
 
     if request.method == 'POST':
         action = request.POST.get('action')
+        action_key = action if action in ('time_in', 'time_out') else 'blocked'
+        gps_latitude = gps_longitude = gps_accuracy = None
+        selfie_image = None
+        gps_error = ''
+        selfie_error = ''
+
+        if request.POST.get('gps_latitude') or request.POST.get('gps_longitude') or request.POST.get('gps_accuracy'):
+            try:
+                gps_latitude, gps_longitude, gps_accuracy = _parse_portal_gps_from_request(request)
+            except ValueError as exc:
+                gps_error = str(exc)
+
+        if request.POST.get('selfie_data'):
+            try:
+                selfie_image = _parse_portal_selfie_from_request(request)
+            except ValueError as exc:
+                selfie_error = str(exc)
 
         if not allowed:
             # Re-log blocked action attempt
             AttendancePortalLog.objects.create(
                 company=employee.company,
                 employee=employee,
-                attendance_location=None,
-                action=action if action in ('time_in', 'time_out') else 'blocked',
+                attendance_location=matched_location,
+                action=action_key,
                 ip_address=ip or None,
-                user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+                user_agent=user_agent,
                 status='blocked',
                 blocked_reason=blocked_reason,
+                gps_latitude=gps_latitude,
+                gps_longitude=gps_longitude,
+                gps_accuracy=gps_accuracy,
+                selfie_image=selfie_image,
             )
             messages.error(request, blocked_reason)
+            return redirect('attendance:attendance_portal')
+
+        verification_error = ''
+        if require_selfie and not selfie_image:
+            verification_error = selfie_error or (
+                'This location requires a selfie before you can time in or time out.'
+            )
+        elif require_gps and (gps_latitude is None or gps_longitude is None):
+            verification_error = gps_error or (
+                'This location requires GPS permission before you can time in or time out.'
+            )
+
+        if verification_error:
+            AttendancePortalLog.objects.create(
+                company=employee.company,
+                employee=employee,
+                attendance_location=matched_location,
+                action=action_key,
+                ip_address=ip or None,
+                user_agent=user_agent,
+                status='blocked',
+                blocked_reason=verification_error,
+                gps_latitude=gps_latitude,
+                gps_longitude=gps_longitude,
+                gps_accuracy=gps_accuracy,
+                selfie_image=selfie_image,
+            )
+            messages.error(request, verification_error)
             return redirect('attendance:attendance_portal')
 
         now_time = _datetime.now().time()
@@ -791,13 +927,24 @@ def attendance_portal(request):
             employee=employee,
             attendance_location=matched_location,
             attendance_record=record,
-            action=action if action in ('time_in', 'time_out') else 'blocked',
+            action=action_key,
             ip_address=ip or None,
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:500],
+            user_agent=user_agent,
             status='success' if record else 'failed',
             blocked_reason='',
+            gps_latitude=gps_latitude,
+            gps_longitude=gps_longitude,
+            gps_accuracy=gps_accuracy,
+            selfie_image=selfie_image,
         )
         return redirect('attendance:attendance_portal')
+
+    if not today_record or not today_record.time_in:
+        clock_state = 'not_timed_in'
+    elif today_record.time_out:
+        clock_state = 'timed_out'
+    else:
+        clock_state = 'timed_in'
 
     return render(request, 'attendance/portal.html', {
         'employee': employee,
@@ -811,4 +958,7 @@ def attendance_portal(request):
         'shift_info': shift_info,
         'schedule_allowed': schedule_allowed,
         'schedule_blocked_reason': schedule_blocked_reason,
+        'require_selfie': require_selfie,
+        'require_gps': require_gps,
+        'clock_state': clock_state,
     })
