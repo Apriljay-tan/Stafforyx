@@ -211,6 +211,35 @@
     </div>
   </div>
 
+  <!-- Section: Payroll Contributions -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-cash-coin me-1" style="color:#1565C0;"></i>
+      Payroll Contributions
+      <span class="fw-normal text-muted ms-1" style="font-size:.8rem;">(employee share — copied to each payroll record at generation time)</span>
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.sss_contribution_amount.label }} <span class="fw-normal text-muted">(&#8369;)</span></label>
+          {{ form.sss_contribution_amount }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.philhealth_contribution_amount.label }} <span class="fw-normal text-muted">(&#8369;)</span></label>
+          {{ form.philhealth_contribution_amount }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.pagibig_contribution_amount.label }} <span class="fw-normal text-muted">(&#8369;)</span></label>
+          {{ form.pagibig_contribution_amount }}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.tax_deduction_amount.label }} <span class="fw-normal text-muted">(&#8369;)</span></label>
+          {{ form.tax_deduction_amount }}
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Section: Emergency Contact -->
   <div class="card mb-4">
     <div class="card-header">

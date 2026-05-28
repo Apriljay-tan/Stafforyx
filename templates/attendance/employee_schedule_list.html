@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Employee Daily Schedules{% endblock %}
+{% block page_title %}Employee Daily Schedules{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <p class="text-muted mb-0" style="font-size:.9rem;">Date-specific shift assignments override the employee's default work schedule.</p>
+  <div class="d-flex gap-2">
+    <a href="{% url 'attendance:employee_schedule_bulk' %}" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-calendar-range me-1"></i>Bulk Generate
+    </a>
+    <a href="{% url 'attendance:employee_schedule_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg me-1"></i>Add Schedule
+    </a>
+  </div>
+</div>
+
+{% if messages %}
+  {% for msg in messages %}
+    <div class="alert alert-{{ msg.tags }} alert-dismissible fade show py-2" role="alert">
+      {{ msg }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+  {% endfor %}
+{% endif %}
+
+<!-- Filters -->
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-auto">
+    <input type="date" name="date" class="form-control form-control-sm" value="{{ date_filter }}">
+  </div>
+  <div class="col-auto">
+    <select name="employee" class="form-select form-select-sm">
+      <option value="">All Employees</option>
+      {% for emp in employees %}
+        <option value="{{ emp.pk }}" {% if emp_filter == emp.pk|stringformat:'s' %}selected{% endif %}>
+          {{ emp.last_name }}, {{ emp.first_name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="source" class="form-select form-select-sm">
+      <option value="">All Sources</option>
+      {% for val, label in source_choices %}
+        <option value="{{ val }}" {% if source_filter == val %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-secondary btn-sm">Filter</button>
+    <a href="{% url 'attendance:employee_schedule_list' %}" class="btn btn-outline-secondary btn-sm ms-1">Clear</a>
+  </div>
+</form>
+
+{% if schedules %}
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.9rem;">
+      <thead style="background:#f4f6fa;">
+        <tr>
+          <th>Date</th>
+          <th>Employee</th>
+          <th>Shift / Times</th>
+          <th class="text-center">Rest Day</th>
+          <th>Source</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ds in schedules %}
+        <tr {% if ds.is_rest_day %}style="color:#888;"{% endif %}>
+          <td class="fw-semibold">{{ ds.schedule_date }}</td>
+          <td>
+            {{ ds.employee.full_name }}
+            <div class="text-muted" style="font-size:.78rem;">{{ ds.employee.employee_id }} &bull; {{ ds.company.name }}</div>
+          </td>
+          <td>
+            {% if ds.is_rest_day %}
+              <span class="badge text-bg-secondary">Rest Day</span>
+            {% elif ds.shift_template %}
+              {{ ds.shift_template.name }}
+              {% if ds.custom_start_time %}
+                <span class="text-muted" style="font-size:.78rem;">(custom: {{ ds.custom_start_time|time:"g:i A" }}–{{ ds.custom_end_time|time:"g:i A" }})</span>
+              {% else %}
+                <span class="text-muted" style="font-size:.78rem;">({{ ds.shift_template.start_time|time:"g:i A" }}–{{ ds.shift_template.end_time|time:"g:i A" }})</span>
+              {% endif %}
+            {% elif ds.custom_start_time %}
+              Custom: {{ ds.custom_start_time|time:"g:i A" }} – {{ ds.custom_end_time|time:"g:i A" }}
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td class="text-center">
+            {% if ds.is_rest_day %}<i class="bi bi-moon-stars text-muted"></i>{% else %}<span class="text-muted">—</span>{% endif %}
+          </td>
+          <td>
+            {% if ds.source == 'manual' %}<span class="badge text-bg-light border" style="color:#555;">Manual</span>
+            {% elif ds.source == 'generated' %}<span class="badge text-bg-primary">Generated</span>
+            {% else %}<span class="badge text-bg-secondary">{{ ds.source }}</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'attendance:employee_schedule_edit' ds.pk %}" class="btn btn-outline-secondary btn-sm py-0 px-2">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <a href="{% url 'attendance:employee_schedule_delete' ds.pk %}" class="btn btn-outline-danger btn-sm py-0 px-2 ms-1">
+              <i class="bi bi-trash"></i>
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-calendar3" style="font-size:2rem;"></i>
+    <p class="mt-2 mb-1 fw-semibold">No schedules found.</p>
+    <div class="d-flex gap-2 justify-content-center mt-2">
+      <a href="{% url 'attendance:employee_schedule_add' %}" class="btn btn-primary btn-sm">Add Single</a>
+      <a href="{% url 'attendance:employee_schedule_bulk' %}" class="btn btn-outline-primary btn-sm">Bulk Generate</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="mt-3 d-flex gap-2">
+  <a href="{% url 'attendance:shift_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-clock me-1"></i>Shift Templates
+  </a>
+  <a href="{% url 'attendance:attendance_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Attendance
+  </a>
+</div>
+{% endblock %}

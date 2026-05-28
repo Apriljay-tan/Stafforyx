@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Shift Template{% endblock %}
+{% block page_title %}{{ action }} Shift Template{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#f4f6fa;">
+        <span class="fw-semibold" style="font-size:.95rem;">
+          <i class="bi bi-clock me-1 text-primary"></i>{{ action }} Shift Template
+        </span>
+      </div>
+      <div class="card-body p-4">
+
+        {% if form.errors %}
+          <div class="alert alert-danger py-2" style="font-size:.85rem;">
+            <strong>Please fix the errors below.</strong>
+            {% for field in form %}{% for err in field.errors %}<div>{{ field.label }}: {{ err }}</div>{% endfor %}{% endfor %}
+            {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Company</label>
+            {{ form.company }}
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Shift Name</label>
+            {{ form.name }}
+            <div class="form-text">e.g. Morning Shift, Afternoon Shift, Night Shift</div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Start Time</label>
+              {{ form.start_time }}
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">End Time</label>
+              {{ form.end_time }}
+            </div>
+          </div>
+          <div class="mb-3 form-check">
+            {{ form.is_overnight }}
+            <label class="form-check-label">Overnight shift (crosses midnight)</label>
+          </div>
+
+          <hr class="my-3">
+          <p class="fw-semibold mb-2" style="font-size:.9rem;">Timing Rules</p>
+
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Break Minutes</label>
+              {{ form.break_minutes }}
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Grace Minutes</label>
+              {{ form.grace_minutes }}
+              <div class="form-text">Late counted after start + grace.</div>
+            </div>
+          </div>
+          <div class="row g-3 mb-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Early Clock-in Minutes</label>
+              {{ form.allow_early_clock_in_minutes }}
+              <div class="form-text">How early an employee can use the portal.</div>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Overtime After (min past end)</label>
+              {{ form.overtime_after_minutes }}
+              <div class="form-text">0 = OT starts exactly at end time.</div>
+            </div>
+          </div>
+
+          <hr class="my-3">
+          <div class="mb-2 form-check">
+            {{ form.is_active }}
+            <label class="form-check-label">Active (appears in schedule assignments)</label>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Notes <span class="text-muted fw-normal">(optional)</span></label>
+            {{ form.notes }}
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Save Shift
+            </button>
+            <a href="{% url 'attendance:shift_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

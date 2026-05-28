@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}Remove Adjustment{% endblock %}
+{% block page_title %}Remove Adjustment{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-5">
+    <div class="card shadow-sm border-danger">
+      <div class="card-header py-2 bg-danger text-white">
+        <i class="bi bi-exclamation-triangle me-1"></i>Confirm Removal
+      </div>
+      <div class="card-body p-4">
+        <p>Remove the following adjustment from this payroll record?</p>
+        <p class="fw-semibold fs-5 mb-1">{{ adj.name }}</p>
+        <p class="text-muted" style="font-size:.85rem;">
+          {{ adj.get_adjustment_type_display }} &bull; &#8369;{{ adj.amount|floatformat:2 }}
+          {% if adj.remarks %}&bull; {{ adj.remarks }}{% endif %}
+        </p>
+        <p class="text-muted" style="font-size:.82rem;">
+          Net pay will be recalculated automatically.
+        </p>
+        <form method="post" class="d-flex gap-2 mt-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger">
+            <i class="bi bi-trash me-1"></i>Remove
+          </button>
+          <a href="{% url 'payroll:payroll_record_edit' adj.payroll_record.pk %}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

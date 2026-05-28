@@ -1,7 +1,8 @@
 from django.contrib import admin
 from .models import (
     AttendanceLocation, AttendancePortalLog, AttendanceRecord,
-    BiometricDevice, BiometricLog, WorkSchedule,
+    BiometricDevice, BiometricLog,
+    EmployeeDailySchedule, ShiftTemplate, WorkSchedule,
 )
 
 
@@ -11,6 +12,38 @@ class WorkScheduleAdmin(admin.ModelAdmin):
     list_filter = ('is_active', 'company')
     search_fields = ('name',)
     readonly_fields = ('created_at', 'updated_at')
+
+
+@admin.register(ShiftTemplate)
+class ShiftTemplateAdmin(admin.ModelAdmin):
+    list_display = ('company', 'name', 'start_time', 'end_time', 'break_minutes', 'grace_minutes', 'is_overnight', 'is_active')
+    list_filter = ('company', 'is_active', 'is_overnight')
+    search_fields = ('name', 'company__name')
+    readonly_fields = ('created_at', 'updated_at')
+    fieldsets = (
+        ('Shift', {'fields': ('company', 'name', 'start_time', 'end_time', 'is_overnight', 'is_active', 'notes')}),
+        ('Timing Rules', {'fields': ('break_minutes', 'grace_minutes', 'allow_early_clock_in_minutes', 'overtime_after_minutes')}),
+        ('Timestamps', {'classes': ('collapse',), 'fields': ('created_at', 'updated_at')}),
+    )
+
+
+@admin.register(EmployeeDailySchedule)
+class EmployeeDailyScheduleAdmin(admin.ModelAdmin):
+    list_display = ('schedule_date', 'employee', 'company', 'shift_template', 'is_rest_day', 'source', 'created_by')
+    list_filter = ('company', 'source', 'is_rest_day', 'shift_template')
+    search_fields = ('employee__first_name', 'employee__last_name', 'employee__employee_id', 'shift_template__name')
+    date_hierarchy = 'schedule_date'
+    readonly_fields = ('created_at', 'updated_at', 'created_by')
+    fieldsets = (
+        ('Assignment', {'fields': ('company', 'employee', 'schedule_date', 'source', 'created_by')}),
+        ('Shift', {'fields': ('shift_template', 'is_rest_day', 'reason')}),
+        ('Custom Override', {
+            'classes': ('collapse',),
+            'fields': ('custom_start_time', 'custom_end_time', 'break_minutes', 'grace_minutes'),
+            'description': 'Use these to override the shift template times for this specific date.',
+        }),
+        ('Timestamps', {'classes': ('collapse',), 'fields': ('created_at', 'updated_at')}),
+    )
 
 
 @admin.register(AttendanceRecord)

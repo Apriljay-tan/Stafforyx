@@ -1,0 +1,291 @@
+{% extends 'base.html' %}
+{% block title %}Payslip — {{ record.employee.full_name }}{% endblock %}
+{% block page_title %}Payslip{% endblock %}
+
+{% block content %}
+
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb" style="font-size:.85rem;">
+    <li class="breadcrumb-item"><a href="{% url 'payroll:payroll_record_list' %}" class="text-decoration-none">Payroll</a></li>
+    <li class="breadcrumb-item active">Payslip</li>
+  </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+  <div></div>
+  <div class="d-flex gap-2 flex-wrap">
+    <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-printer me-1"></i>Print / Save PDF
+    </button>
+    {% if not license_read_only %}
+      <form method="post" action="{% url 'payroll:payslip_send_email' record.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-primary btn-sm"
+                onclick="return confirm('Send payslip to {{ record.employee.email }}?')">
+          <i class="bi bi-envelope me-1"></i>Send to Employee
+          {% if record.payslip_sent_at %}<span class="badge text-bg-success ms-1">Sent</span>{% endif %}
+        </button>
+      </form>
+    {% endif %}
+    <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+{% if record.payslip_sent_at %}
+  <div class="alert alert-success py-2 mb-3" style="font-size:.82rem;">
+    <i class="bi bi-check-circle me-1"></i>
+    Last sent to <strong>{{ record.employee.email }}</strong> on {{ record.payslip_sent_at|date:"M d, Y g:i A" }}.
+  </div>
+{% endif %}
+
+<!-- ── PAYSLIP DOCUMENT ────────────────────────────────────────────────────── -->
+<div class="card shadow-sm" id="payslip-doc" style="max-width:780px;margin:0 auto;">
+  <div class="card-body p-4 p-md-5">
+
+    <!-- Header -->
+    <div class="d-flex align-items-start justify-content-between mb-4 pb-3 border-bottom">
+      <div>
+        {% if company.logo %}
+          <img src="{{ company.logo.url }}" style="height:48px;object-fit:contain;" alt="{{ company.name }}">
+        {% else %}
+          <div class="fw-bold" style="font-size:1.2rem;color:#0D1B2A;">{{ company.name }}</div>
+        {% endif %}
+        <div class="text-muted" style="font-size:.8rem;">Payslip</div>
+      </div>
+      <div class="text-end">
+        <div class="fw-semibold" style="font-size:.95rem;">{{ record.payroll_period.name }}</div>
+        <div class="text-muted" style="font-size:.8rem;">
+          {{ record.payroll_period.start_date|date:"M d" }} – {{ record.payroll_period.end_date|date:"M d, Y" }}
+        </div>
+        {% if record.payroll_period.pay_date %}
+          <div class="text-muted" style="font-size:.8rem;">Pay Date: {{ record.payroll_period.pay_date|date:"M d, Y" }}</div>
+        {% endif %}
+        <div class="mt-1">
+          {% if record.status == 'paid' %}
+            <span class="badge text-bg-primary">Paid</span>
+          {% elif record.status == 'approved' %}
+            <span class="badge text-bg-success">Approved</span>
+          {% else %}
+            <span class="badge text-bg-secondary">Draft</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee Info -->
+    <div class="row g-2 mb-4">
+      <div class="col-12 col-sm-6">
+        <div class="text-muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Employee</div>
+        <div class="fw-bold" style="font-size:1rem;color:#0D1B2A;">{{ record.employee.full_name }}</div>
+        <div class="text-muted" style="font-size:.82rem;">
+          {{ record.employee.employee_id }}
+          {% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
+          {% if record.employee.position %} &bull; {{ record.employee.position.title }}{% endif %}
+        </div>
+        {% if record.employee.email %}
+          <div class="text-muted" style="font-size:.8rem;">{{ record.employee.email }}</div>
+        {% endif %}
+      </div>
+      <div class="col-12 col-sm-6 text-sm-end">
+        <div class="text-muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Daily Rate</div>
+        <div class="fw-semibold">&#8369;{{ record.daily_rate|floatformat:2 }}</div>
+      </div>
+    </div>
+
+    <!-- Attendance Summary -->
+    <div class="mb-4">
+      <div class="fw-semibold mb-2" style="font-size:.85rem;color:#1565C0;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
+        Attendance Summary
+      </div>
+      <div class="row g-2" style="font-size:.875rem;">
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Scheduled Days</div>
+            <div class="fw-bold" style="font-size:1.1rem;">{{ record.scheduled_days }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Present Days</div>
+            <div class="fw-bold text-success" style="font-size:1.1rem;">{{ record.present_days }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Paid Leave</div>
+            <div class="fw-bold" style="font-size:1.1rem;">{{ record.paid_leave_days|floatformat:0 }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Unpaid Leave</div>
+            <div class="fw-bold text-warning" style="font-size:1.1rem;">{{ record.unpaid_leave_days|floatformat:0 }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Absent Days</div>
+            <div class="fw-bold text-danger" style="font-size:1.1rem;">{{ record.absent_days|floatformat:0 }}</div>
+          </div>
+        </div>
+        <div class="col-6 col-sm-4">
+          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
+            <div class="text-muted" style="font-size:.72rem;">Payable Days</div>
+            <div class="fw-bold text-primary" style="font-size:1.1rem;">{{ record.payable_days|floatformat:2 }}</div>
+          </div>
+        </div>
+      </div>
+      <!-- Time summary -->
+      {% if record.late_minutes or record.undertime_minutes or record.overtime_minutes %}
+      <div class="row g-2 mt-1" style="font-size:.875rem;">
+        {% if record.late_minutes %}
+        <div class="col-auto">
+          <span class="badge text-bg-warning">Late: {{ record.late_minutes }} min</span>
+        </div>
+        {% endif %}
+        {% if record.undertime_minutes %}
+        <div class="col-auto">
+          <span class="badge text-bg-warning">Undertime: {{ record.undertime_minutes }} min</span>
+        </div>
+        {% endif %}
+        {% if record.overtime_minutes %}
+        <div class="col-auto">
+          <span class="badge text-bg-success">Overtime: {{ record.overtime_minutes }} min</span>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Earnings / Deductions side by side -->
+    <div class="row g-3 mb-4">
+
+      <!-- Earnings -->
+      <div class="col-12 col-sm-6">
+        <div class="fw-semibold mb-2" style="font-size:.85rem;color:#059669;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
+          Earnings
+        </div>
+        <table class="table table-sm mb-0" style="font-size:.875rem;">
+          <tbody>
+            <tr>
+              <td class="text-muted">Basic Pay <small class="text-muted">({{ record.payable_days|floatformat:2 }}d)</small></td>
+              <td class="text-end fw-semibold">&#8369;{{ record.basic_pay|floatformat:2 }}</td>
+            </tr>
+            {% if record.overtime_pay %}
+            <tr>
+              <td class="text-muted">Overtime Pay <small class="text-muted">({{ record.overtime_minutes }}min ×1.25)</small></td>
+              <td class="text-end fw-semibold">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.allowances %}
+            <tr>
+              <td class="text-muted">Allowances</td>
+              <td class="text-end fw-semibold">&#8369;{{ record.allowances|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% for adj in earning_adjs %}
+            <tr>
+              <td class="text-muted">{{ adj.name }}{% if adj.remarks %} <small class="text-muted">({{ adj.remarks }})</small>{% endif %}</td>
+              <td class="text-end fw-semibold text-success">+&#8369;{{ adj.amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+            <tr class="fw-bold border-top">
+              <td>Gross Pay</td>
+              <td class="text-end">&#8369;{{ record.gross_pay|floatformat:2 }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Deductions -->
+      <div class="col-12 col-sm-6">
+        <div class="fw-semibold mb-2" style="font-size:.85rem;color:#DC2626;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
+          Deductions
+        </div>
+        <table class="table table-sm mb-0" style="font-size:.875rem;">
+          <tbody>
+            {% if record.sss_deduction %}
+            <tr>
+              <td class="text-muted">SSS</td>
+              <td class="text-end">&#8369;{{ record.sss_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.philhealth_deduction %}
+            <tr>
+              <td class="text-muted">PhilHealth</td>
+              <td class="text-end">&#8369;{{ record.philhealth_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.pagibig_deduction %}
+            <tr>
+              <td class="text-muted">Pag-IBIG</td>
+              <td class="text-end">&#8369;{{ record.pagibig_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.tax_deduction %}
+            <tr>
+              <td class="text-muted">Withholding Tax</td>
+              <td class="text-end">&#8369;{{ record.tax_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.late_deduction %}
+            <tr>
+              <td class="text-muted">Late Deduction <small>({{ record.late_minutes }}min)</small></td>
+              <td class="text-end">&#8369;{{ record.late_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.undertime_deduction %}
+            <tr>
+              <td class="text-muted">Undertime Deduction <small>({{ record.undertime_minutes }}min)</small></td>
+              <td class="text-end">&#8369;{{ record.undertime_deduction|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% if record.other_deductions %}
+            <tr>
+              <td class="text-muted">Other Deductions</td>
+              <td class="text-end">&#8369;{{ record.other_deductions|floatformat:2 }}</td>
+            </tr>
+            {% endif %}
+            {% for adj in deduction_adjs %}
+            <tr>
+              <td class="text-muted">{{ adj.name }}{% if adj.remarks %} <small>({{ adj.remarks }})</small>{% endif %}</td>
+              <td class="text-end text-danger">&#8369;{{ adj.amount|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+            <!-- Absence info (display only — already excluded from basic_pay) -->
+            {% if record.absent_days %}
+            <tr class="text-muted" style="font-size:.8rem;">
+              <td colspan="2" class="pt-2">
+                <i class="bi bi-info-circle me-1"></i>
+                {{ record.absent_days|floatformat:0 }} absent day(s) already excluded from basic pay.
+              </td>
+            </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Net Pay -->
+    <div class="p-3 rounded text-center" style="background:#0D1B2A;color:#fff;">
+      <div class="text-muted" style="font-size:.8rem;letter-spacing:.5px;text-transform:uppercase;">Net Pay</div>
+      <div class="fw-bold" style="font-size:1.8rem;">&#8369;{{ record.net_pay|floatformat:2 }}</div>
+      <div style="font-size:.75rem;opacity:.7;">{{ record.payroll_period.name }}</div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<style>
+@media print {
+  nav, .d-flex.justify-content-between, .alert, .btn, nav[aria-label] { display: none !important; }
+  #payslip-doc { box-shadow: none !important; max-width: 100% !important; }
+  body { background: #fff !important; }
+}
+</style>
+{% endblock %}

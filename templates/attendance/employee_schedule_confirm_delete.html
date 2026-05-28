@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}Delete Schedule{% endblock %}
+{% block page_title %}Delete Employee Schedule{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-6 col-lg-5">
+    <div class="card shadow-sm border-danger">
+      <div class="card-header py-2 bg-danger text-white">
+        <i class="bi bi-exclamation-triangle me-1"></i>Confirm Deletion
+      </div>
+      <div class="card-body p-4">
+        <p>Delete schedule assignment:</p>
+        <p class="fw-semibold fs-5 mb-1">{{ ds.employee.full_name }}</p>
+        <p class="text-muted" style="font-size:.85rem;">{{ ds.schedule_date }} &bull; {{ ds }}</p>
+        <form method="post" class="d-flex gap-2 mt-3">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Delete</button>
+          <a href="{% url 'attendance:employee_schedule_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

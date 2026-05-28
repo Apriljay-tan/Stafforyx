@@ -16,9 +16,16 @@ from accounts.company_access import (
 from employees.models import Employee
 from leaves.models import LeaveRequest
 
-from .forms import AttendanceLocationForm, AttendanceRecordForm, WorkScheduleForm
-from .models import AttendanceLocation, AttendancePortalLog, AttendanceRecord, WorkSchedule
+from .forms import (
+    AttendanceLocationForm, AttendanceRecordForm,
+    BulkRosterForm, EmployeeDailyScheduleForm, ShiftTemplateForm, WorkScheduleForm,
+)
+from .models import (
+    AttendanceLocation, AttendancePortalLog, AttendanceRecord,
+    EmployeeDailySchedule, ShiftTemplate, WorkSchedule,
+)
 from .portal_services import can_employee_clock_from_request, get_client_ip
+from .schedule_services import employee_has_schedule_today, resolve_expected_shift
 from .services import compute_attendance
 
 
@@ -32,25 +39,52 @@ _DAY_FIELDS = [
 
 def _potential_absences_today(company=None, accessible_companies_qs=None):
     """
-    Active employees with an active schedule, today is a scheduled workday,
-    no attendance record exists yet for today, and not on approved leave.
+    Active employees expected to work today with no attendance record yet and
+    not on approved leave.
+
+    Schedule resolution order (mirrors resolve_expected_shift):
+      1. EmployeeDailySchedule for today → not rest day
+      2. Default WorkSchedule → today is a scheduled weekday
+      3. (No schedule → excluded)
 
     company: filter to one specific Company object.
-    accessible_companies_qs: filter to a queryset of companies (used when no
-        single company is selected but access must still be restricted).
+    accessible_companies_qs: filter to a queryset of companies.
     """
+    from django.db.models import Q
     today = _date.today()
     day_field = _DAY_FIELDS[today.weekday()]
-    schedule_filter = {
-        'work_schedule__isnull': False,
-        'work_schedule__is_active': True,
-        f'work_schedule__{day_field}': True,
-        'status': 'active',
-    }
+
+    # Company scope for daily schedules
+    ds_filter = {'schedule_date': today, 'is_rest_day': False}
+    ws_filter = {'work_schedule__isnull': False, 'work_schedule__is_active': True,
+                 f'work_schedule__{day_field}': True}
     if company is not None:
-        schedule_filter['company'] = company
+        ds_filter['company'] = company
+        ws_filter['company'] = company
     elif accessible_companies_qs is not None:
-        schedule_filter['company__in'] = accessible_companies_qs
+        ds_filter['company__in'] = accessible_companies_qs
+        ws_filter['company__in'] = accessible_companies_qs
+
+    # IDs with any daily schedule today (rest or not) — these override the work schedule
+    has_daily_ids = set(
+        EmployeeDailySchedule.objects.filter(
+            schedule_date=today,
+            **(({'company': company} if company else {'company__in': accessible_companies_qs})
+               if (company or accessible_companies_qs is not None) else {})
+        ).values_list('employee_id', flat=True)
+    )
+
+    # IDs scheduled via daily schedule (not rest day)
+    active_daily_ids = set(
+        EmployeeDailySchedule.objects.filter(**ds_filter)
+        .values_list('employee_id', flat=True)
+    )
+
+    # IDs scheduled via work schedule but with no daily override
+    ws_qs = Employee.objects.filter(status='active', **ws_filter).exclude(id__in=has_daily_ids)
+    ws_ids = set(ws_qs.values_list('id', flat=True))
+
+    scheduled_ids = active_daily_ids | ws_ids
 
     already_present = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
     on_approved_leave = LeaveRequest.objects.filter(
@@ -58,9 +92,16 @@ def _potential_absences_today(company=None, accessible_companies_qs=None):
         start_date__lte=today,
         end_date__gte=today,
     ).values_list('employee_id', flat=True)
+
+    base_filter = {'status': 'active', 'id__in': scheduled_ids}
+    if company is not None:
+        base_filter['company'] = company
+    elif accessible_companies_qs is not None:
+        base_filter['company__in'] = accessible_companies_qs
+
     return (
         Employee.objects
-        .filter(**schedule_filter)
+        .filter(**base_filter)
         .exclude(id__in=already_present)
         .exclude(id__in=on_approved_leave)
         .select_related('work_schedule', 'department', 'company')
@@ -389,6 +430,232 @@ def location_delete(request, pk):
     return render(request, 'attendance/location_confirm_delete.html', {'location': location})
 
 
+# ── Shift Templates CRUD ───────────────────────────────────────────────────────
+
+def shift_list(request):
+    shifts = (
+        filter_queryset_by_user_companies(ShiftTemplate.objects.all(), request.user)
+        .select_related('company')
+    )
+    return render(request, 'attendance/shift_list.html', {'shifts': shifts})
+
+
+def shift_add(request):
+    accessible = get_accessible_companies(request.user)
+    form = ShiftTemplateForm(request.POST or None)
+    form.fields['company'].queryset = accessible
+    if request.method == 'POST' and form.is_valid():
+        shift = form.save(commit=False)
+        if not user_can_access_company(request.user, shift.company):
+            raise PermissionDenied
+        shift.save()
+        messages.success(request, f'Shift template "{shift.name}" created.')
+        return redirect('attendance:shift_list')
+    return render(request, 'attendance/shift_form.html', {'form': form, 'action': 'Add'})
+
+
+def shift_edit(request, pk):
+    shift = get_object_or_404(ShiftTemplate.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, shift.company):
+        raise PermissionDenied
+    accessible = get_accessible_companies(request.user)
+    form = ShiftTemplateForm(request.POST or None, instance=shift)
+    form.fields['company'].queryset = accessible
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f'Shift template "{shift.name}" updated.')
+        return redirect('attendance:shift_list')
+    return render(request, 'attendance/shift_form.html', {
+        'form': form, 'shift': shift, 'action': 'Edit',
+    })
+
+
+def shift_delete(request, pk):
+    shift = get_object_or_404(ShiftTemplate.objects.select_related('company'), pk=pk)
+    if not user_can_access_company(request.user, shift.company):
+        raise PermissionDenied
+    if request.method == 'POST':
+        name = shift.name
+        shift.delete()
+        messages.success(request, f'Shift template "{name}" deleted.')
+        return redirect('attendance:shift_list')
+    return render(request, 'attendance/shift_confirm_delete.html', {'shift': shift})
+
+
+# ── Employee Daily Schedules CRUD + Bulk Generator ────────────────────────────
+
+def employee_schedule_list(request):
+    accessible = get_accessible_companies(request.user)
+    selected_company = get_selected_company_from_request(request)
+
+    qs = filter_queryset_by_user_companies(
+        EmployeeDailySchedule.objects.select_related(
+            'employee', 'company', 'shift_template', 'created_by'
+        ),
+        request.user,
+    )
+    if selected_company:
+        qs = qs.filter(company=selected_company)
+
+    # Filters from GET
+    date_filter = request.GET.get('date', '')
+    emp_filter = request.GET.get('employee', '')
+    source_filter = request.GET.get('source', '')
+
+    if date_filter:
+        qs = qs.filter(schedule_date=date_filter)
+    if emp_filter:
+        qs = qs.filter(employee_id=emp_filter)
+    if source_filter:
+        qs = qs.filter(source=source_filter)
+
+    qs = qs.order_by('-schedule_date', 'employee__last_name')
+
+    employees_qs = filter_queryset_by_user_companies(Employee.objects.all(), request.user)
+    if selected_company:
+        employees_qs = employees_qs.filter(company=selected_company)
+
+    return render(request, 'attendance/employee_schedule_list.html', {
+        'schedules': qs,
+        'employees': employees_qs.order_by('last_name', 'first_name'),
+        'date_filter': date_filter,
+        'emp_filter': emp_filter,
+        'source_filter': source_filter,
+        'source_choices': EmployeeDailySchedule.SOURCE_CHOICES,
+        'selected_company': selected_company,
+    })
+
+
+def employee_schedule_add(request):
+    accessible = get_accessible_companies(request.user)
+    form = EmployeeDailyScheduleForm(request.POST or None)
+    form.fields['company'].queryset = accessible
+    form.fields['employee'].queryset = filter_queryset_by_user_companies(
+        Employee.objects.all(), request.user
+    ).order_by('last_name', 'first_name')
+    form.fields['shift_template'].queryset = filter_queryset_by_user_companies(
+        ShiftTemplate.objects.filter(is_active=True), request.user
+    )
+    if request.method == 'POST' and form.is_valid():
+        ds = form.save(commit=False)
+        if not user_can_access_company(request.user, ds.company):
+            raise PermissionDenied
+        ds.created_by = request.user
+        ds.save()
+        messages.success(request, f'Schedule for {ds.employee.full_name} on {ds.schedule_date} saved.')
+        return redirect('attendance:employee_schedule_list')
+    return render(request, 'attendance/employee_schedule_form.html', {
+        'form': form, 'action': 'Add',
+    })
+
+
+def employee_schedule_edit(request, pk):
+    ds = get_object_or_404(
+        EmployeeDailySchedule.objects.select_related('employee', 'company'), pk=pk
+    )
+    if not user_can_access_company(request.user, ds.company):
+        raise PermissionDenied
+    accessible = get_accessible_companies(request.user)
+    form = EmployeeDailyScheduleForm(request.POST or None, instance=ds)
+    form.fields['company'].queryset = accessible
+    form.fields['employee'].queryset = filter_queryset_by_user_companies(
+        Employee.objects.all(), request.user
+    ).order_by('last_name', 'first_name')
+    form.fields['shift_template'].queryset = filter_queryset_by_user_companies(
+        ShiftTemplate.objects.filter(is_active=True), request.user
+    )
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        messages.success(request, f'Schedule for {ds.employee.full_name} on {ds.schedule_date} updated.')
+        return redirect('attendance:employee_schedule_list')
+    return render(request, 'attendance/employee_schedule_form.html', {
+        'form': form, 'ds': ds, 'action': 'Edit',
+    })
+
+
+def employee_schedule_delete(request, pk):
+    ds = get_object_or_404(
+        EmployeeDailySchedule.objects.select_related('employee', 'company'), pk=pk
+    )
+    if not user_can_access_company(request.user, ds.company):
+        raise PermissionDenied
+    if request.method == 'POST':
+        label = f'{ds.employee.full_name} on {ds.schedule_date}'
+        ds.delete()
+        messages.success(request, f'Schedule for {label} deleted.')
+        return redirect('attendance:employee_schedule_list')
+    return render(request, 'attendance/employee_schedule_confirm_delete.html', {'ds': ds})
+
+
+def employee_schedule_bulk(request):
+    """Bulk roster generator — assign a shift to employees over a date range."""
+    import datetime as _dt
+    accessible = get_accessible_companies(request.user)
+    form = BulkRosterForm(request.POST or None, accessible_companies=accessible)
+
+    if request.method == 'POST' and form.is_valid():
+        company = form.cleaned_data['company']
+        if not user_can_access_company(request.user, company):
+            raise PermissionDenied
+
+        shift = form.cleaned_data['shift_template']
+        date_from = form.cleaned_data['date_from']
+        date_to = form.cleaned_data['date_to']
+        weekdays = [int(d) for d in form.cleaned_data.get('weekdays', [])]
+        overwrite = form.cleaned_data.get('overwrite_existing', False)
+
+        employees = Employee.objects.filter(company=company, status='active')
+        created = updated = skipped = 0
+
+        current = date_from
+        while current <= date_to:
+            if not weekdays or current.weekday() in weekdays:
+                for emp in employees:
+                    if overwrite:
+                        obj, was_created = EmployeeDailySchedule.objects.update_or_create(
+                            employee=emp,
+                            schedule_date=current,
+                            defaults=dict(
+                                company=company,
+                                shift_template=shift,
+                                is_rest_day=False,
+                                source='generated',
+                                created_by=request.user,
+                            ),
+                        )
+                        if was_created:
+                            created += 1
+                        else:
+                            updated += 1
+                    else:
+                        if not EmployeeDailySchedule.objects.filter(
+                            employee=emp, schedule_date=current
+                        ).exists():
+                            EmployeeDailySchedule.objects.create(
+                                company=company,
+                                employee=emp,
+                                schedule_date=current,
+                                shift_template=shift,
+                                is_rest_day=False,
+                                source='generated',
+                                created_by=request.user,
+                            )
+                            created += 1
+                        else:
+                            skipped += 1
+            current += _dt.timedelta(days=1)
+
+        messages.success(
+            request,
+            f'Roster generated: {created} created, {updated} updated, {skipped} skipped.'
+        )
+        return redirect('attendance:employee_schedule_list')
+
+    return render(request, 'attendance/employee_schedule_bulk.html', {
+        'form': form,
+    })
+
+
 # ── Employee Attendance Portal (WiFi/IP-locked) ────────────────────────────────
 
 def attendance_portal(request):
@@ -428,9 +695,28 @@ def attendance_portal(request):
     # IP check
     clock_check = can_employee_clock_from_request(request, employee)
     ip = clock_check['ip']
-    allowed = clock_check['allowed']
+    ip_allowed = clock_check['allowed']
     matched_location = clock_check['location']
-    blocked_reason = clock_check['reason']
+    ip_blocked_reason = clock_check['reason']
+
+    # Schedule check — resolve today's expected shift
+    shift_info = resolve_expected_shift(employee, today)
+    schedule_allowed = shift_info['scheduled']
+    schedule_blocked_reason = ''
+    if not schedule_allowed:
+        if shift_info['is_rest_day']:
+            schedule_blocked_reason = 'Today is marked as a rest day. Contact HR if this is incorrect.'
+        else:
+            schedule_blocked_reason = 'No schedule assigned for today. Please contact HR.'
+
+    # Overall: both IP and schedule must be OK to clock in/out
+    allowed = ip_allowed and schedule_allowed
+    if not ip_allowed:
+        blocked_reason = ip_blocked_reason
+    elif not schedule_allowed:
+        blocked_reason = schedule_blocked_reason
+    else:
+        blocked_reason = ''
 
     today_record = AttendanceRecord.objects.filter(
         employee=employee, date=today
@@ -519,6 +805,10 @@ def attendance_portal(request):
         'today_record': today_record,
         'allowed': allowed,
         'ip': ip,
+        'ip_allowed': ip_allowed,
         'matched_location': matched_location,
         'blocked_reason': blocked_reason,
+        'shift_info': shift_info,
+        'schedule_allowed': schedule_allowed,
+        'schedule_blocked_reason': schedule_blocked_reason,
     })

@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block title %}{{ action }} Employee Schedule{% endblock %}
+{% block page_title %}{{ action }} Employee Schedule{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header py-2" style="background:#f4f6fa;">
+        <span class="fw-semibold" style="font-size:.95rem;">
+          <i class="bi bi-calendar-plus me-1 text-primary"></i>{{ action }} Employee Daily Schedule
+        </span>
+      </div>
+      <div class="card-body p-4">
+
+        {% if form.errors %}
+          <div class="alert alert-danger py-2" style="font-size:.85rem;">
+            <strong>Please fix the errors below.</strong>
+            {% for field in form %}{% for err in field.errors %}<div>{{ field.label }}: {{ err }}</div>{% endfor %}{% endfor %}
+            {% for err in form.non_field_errors %}<div>{{ err }}</div>{% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Company</label>
+              {{ form.company }}
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="form-label fw-semibold">Employee</label>
+              {{ form.employee }}
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date</label>
+            {{ form.schedule_date }}
+          </div>
+          <div class="mb-2 form-check">
+            {{ form.is_rest_day }}
+            <label class="form-check-label">Rest Day (employee not expected to work)</label>
+          </div>
+          <div id="shift-fields">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Shift Template</label>
+              {{ form.shift_template }}
+              <div class="form-text">Select a template, or use custom times below.</div>
+            </div>
+
+            <hr class="my-3">
+            <p class="fw-semibold mb-2" style="font-size:.9rem;color:#555;">
+              Custom Override <span class="text-muted fw-normal" style="font-size:.8rem;">(overrides template times for this date only)</span>
+            </p>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold">Custom Start Time</label>
+                {{ form.custom_start_time }}
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold">Custom End Time</label>
+                {{ form.custom_end_time }}
+              </div>
+            </div>
+            <div class="row g-3 mb-3">
+              <div class="col-6">
+                <label class="form-label fw-semibold">Break Minutes <span class="text-muted fw-normal">(blank = use template)</span></label>
+                {{ form.break_minutes }}
+              </div>
+              <div class="col-6">
+                <label class="form-label fw-semibold">Grace Minutes <span class="text-muted fw-normal">(blank = use template)</span></label>
+                {{ form.grace_minutes }}
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Reason <span class="text-muted fw-normal">(optional)</span></label>
+            {{ form.reason }}
+          </div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Save Schedule
+            </button>
+            <a href="{% url 'attendance:employee_schedule_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const restDayCheck = document.querySelector('[name="is_rest_day"]');
+    const shiftFields = document.getElementById('shift-fields');
+    function toggle() {
+      shiftFields.style.display = restDayCheck.checked ? 'none' : '';
+    }
+    restDayCheck.addEventListener('change', toggle);
+    toggle();
+  });
+</script>
+{% endblock %}

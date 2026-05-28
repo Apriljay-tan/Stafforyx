@@ -30,6 +30,19 @@ urlpatterns = [
     path('locations/<int:pk>/edit/', attendance_access(views.location_edit), name='location_edit'),
     path('locations/<int:pk>/delete/', attendance_access(views.location_delete), name='location_delete'),
 
+    # Shift Templates (admin/HR only)
+    path('shifts/', attendance_access(views.shift_list), name='shift_list'),
+    path('shifts/add/', attendance_access(views.shift_add), name='shift_add'),
+    path('shifts/<int:pk>/edit/', attendance_access(views.shift_edit), name='shift_edit'),
+    path('shifts/<int:pk>/delete/', attendance_access(views.shift_delete), name='shift_delete'),
+
+    # Employee Daily Schedules (admin/HR only)
+    path('employee-schedules/', attendance_access(views.employee_schedule_list), name='employee_schedule_list'),
+    path('employee-schedules/add/', attendance_access(views.employee_schedule_add), name='employee_schedule_add'),
+    path('employee-schedules/bulk/', attendance_access(views.employee_schedule_bulk), name='employee_schedule_bulk'),
+    path('employee-schedules/<int:pk>/edit/', attendance_access(views.employee_schedule_edit), name='employee_schedule_edit'),
+    path('employee-schedules/<int:pk>/delete/', attendance_access(views.employee_schedule_delete), name='employee_schedule_delete'),
+
     # Employee WiFi/IP Portal — login only, no module permission (employee self-service)
     path('portal/', login_required(views.attendance_portal), name='attendance_portal'),
 ]

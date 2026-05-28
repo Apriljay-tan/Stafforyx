@@ -9,17 +9,52 @@
     <li class="breadcrumb-item">
       <a href="{% url 'payroll:payroll_record_list' %}" class="text-decoration-none">Payroll</a>
     </li>
+    {% if record %}
+      <li class="breadcrumb-item">
+        <a href="{% url 'payroll:payslip_view' record.pk %}" class="text-decoration-none">Payslip</a>
+      </li>
+    {% endif %}
     <li class="breadcrumb-item active">{{ action }}</li>
   </ol>
 </nav>
 
-<div class="page-header mb-3">
-  <h1>{{ action }} Payroll Record</h1>
-  <p>
-    {% if action == 'Add' %}Create an employee payroll record.
-    {% else %}Update this payroll record.{% endif %}
-  </p>
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div class="page-header mb-0">
+    <h1>{{ action }} Payroll Record</h1>
+    <p>
+      {% if action == 'Add' %}Create an employee payroll record manually.
+      {% else %}Adjust pay components. Net pay is auto-recalculated on save.{% endif %}
+    </p>
+  </div>
+  {% if record %}
+    <a href="{% url 'payroll:payslip_view' record.pk %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-file-earmark-text me-1"></i>View Payslip
+    </a>
+  {% endif %}
 </div>
+
+{% if record %}
+  <!-- Attendance Summary (read-only) -->
+  <div class="card mb-3" style="border-left:3px solid #1565C0;">
+    <div class="card-body p-3">
+      <div class="fw-semibold mb-2" style="font-size:.85rem;color:#1565C0;">
+        <i class="bi bi-calendar-check me-1"></i>Attendance Summary
+        <span class="fw-normal text-muted ms-1" style="font-size:.78rem;">(read-only — regenerate to recalculate)</span>
+      </div>
+      <div class="d-flex flex-wrap gap-3" style="font-size:.82rem;">
+        <div><span class="text-muted">Scheduled:</span> <strong>{{ record.scheduled_days }}</strong></div>
+        <div><span class="text-muted">Present:</span> <strong>{{ record.present_days }}</strong></div>
+        <div><span class="text-muted">Paid Leave:</span> <strong>{{ record.paid_leave_days|floatformat:0 }}</strong></div>
+        <div><span class="text-muted">Unpaid Leave:</span> <strong>{{ record.unpaid_leave_days|floatformat:0 }}</strong></div>
+        <div><span class="text-muted">Absent:</span> <strong class="text-danger">{{ record.absent_days|floatformat:0 }}</strong></div>
+        <div><span class="text-muted">Payable Days:</span> <strong class="text-primary">{{ record.payable_days|floatformat:2 }}</strong></div>
+        {% if record.late_minutes %}<div><span class="text-muted">Late:</span> <strong>{{ record.late_minutes }} min</strong></div>{% endif %}
+        {% if record.undertime_minutes %}<div><span class="text-muted">Undertime:</span> <strong>{{ record.undertime_minutes }} min</strong></div>{% endif %}
+        {% if record.overtime_minutes %}<div><span class="text-muted">Overtime:</span> <strong>{{ record.overtime_minutes }} min</strong></div>{% endif %}
+      </div>
+    </div>
+  </div>
+{% endif %}
 
 <form method="post" novalidate>
   {% csrf_token %}
@@ -52,7 +87,6 @@
         <div class="col-12 col-md-6">
           <label class="form-label fw-semibold small">{{ form.status.label }}</label>
           {{ form.status }}
-          {% if form.status.errors %}<div class="text-danger small mt-1">{{ form.status.errors.as_text }}</div>{% endif %}
         </div>
       </div>
     </div>
@@ -67,17 +101,14 @@
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.basic_pay.label }}</label>
           {{ form.basic_pay }}
-          {% if form.basic_pay.errors %}<div class="text-danger small mt-1">{{ form.basic_pay.errors.as_text }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.allowances.label }}</label>
           {{ form.allowances }}
-          {% if form.allowances.errors %}<div class="text-danger small mt-1">{{ form.allowances.errors.as_text }}</div>{% endif %}
         </div>
         <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">{{ form.overtime_pay.label }}</label>
           {{ form.overtime_pay }}
-          {% if form.overtime_pay.errors %}<div class="text-danger small mt-1">{{ form.overtime_pay.errors.as_text }}</div>{% endif %}
         </div>
       </div>
     </div>
@@ -110,7 +141,14 @@
           {{ form.late_deduction }}
         </div>
         <div class="col-12 col-md-4">
-          <label class="form-label fw-semibold small">{{ form.absence_deduction.label }}</label>
+          <label class="form-label fw-semibold small">{{ form.undertime_deduction.label }}</label>
+          {{ form.undertime_deduction }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.absence_deduction.label }}
+            <span class="fw-normal text-muted">(display only)</span>
+          </label>
           {{ form.absence_deduction }}
         </div>
         <div class="col-12 col-md-4">
@@ -122,26 +160,21 @@
   </div>
 
   {% if record %}
-    <div class="card mb-4">
-      <div class="card-header">
-        <i class="bi bi-calculator me-1" style="color:#7C3AED;"></i>Calculated Pay
-      </div>
-      <div class="card-body p-4">
-        <div class="row g-3">
-          <div class="col-12 col-md-4">
-            <div class="text-muted small">Gross Pay</div>
-            <div class="fw-bold">PHP {{ record.gross_pay }}</div>
-          </div>
-          <div class="col-12 col-md-4">
-            <div class="text-muted small">Net Pay</div>
-            <div class="fw-bold">PHP {{ record.net_pay }}</div>
-          </div>
+    <div class="card mb-3" style="background:#f8f9fa;">
+      <div class="card-body p-3 d-flex flex-wrap gap-4 align-items-center">
+        <div>
+          <div class="text-muted small">Gross Pay</div>
+          <div class="fw-bold fs-5">&#8369;{{ record.gross_pay|floatformat:2 }}</div>
+        </div>
+        <div>
+          <div class="text-muted small">Net Pay</div>
+          <div class="fw-bold fs-5 text-primary">&#8369;{{ record.net_pay|floatformat:2 }}</div>
         </div>
       </div>
     </div>
   {% endif %}
 
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 mb-4">
     <button type="submit" class="btn btn-primary">
       <i class="bi bi-check-lg me-1"></i>
       {% if action == 'Add' %}Add Payroll Record{% else %}Save Changes{% endif %}
@@ -150,6 +183,94 @@
   </div>
 </form>
 
+<!-- ── Itemized Adjustments (edit mode only) ──────────────────────────────── -->
+{% if record %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-list-check me-1" style="color:#7C3AED;"></i>Itemized Adjustments</span>
+    <span class="badge bg-secondary rounded-pill">{{ adjustments|length }}</span>
+  </div>
+  {% if adjustments %}
+  <div class="table-responsive">
+    <table class="table table-sm align-middle mb-0" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Name</th>
+          <th>Type</th>
+          <th class="text-end">Amount</th>
+          <th>Remarks</th>
+          <th class="text-end pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for adj in adjustments %}
+        <tr>
+          <td class="ps-3 fw-semibold">{{ adj.name }}</td>
+          <td>
+            {% if adj.adjustment_type == 'earning' %}
+              <span class="badge text-bg-success">Earning</span>
+            {% else %}
+              <span class="badge text-bg-danger">Deduction</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            {% if adj.adjustment_type == 'earning' %}
+              <span class="text-success">+&#8369;{{ adj.amount|floatformat:2 }}</span>
+            {% else %}
+              <span class="text-danger">-&#8369;{{ adj.amount|floatformat:2 }}</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">{{ adj.remarks|default:"—" }}</td>
+          <td class="text-end pe-3">
+            {% if not license_read_only %}
+            <a href="{% url 'payroll:adjustment_delete' adj.pk %}"
+               class="btn btn-sm btn-outline-danger py-0 px-2" title="Remove">
+              <i class="bi bi-trash"></i>
+            </a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card-body text-center text-muted py-3" style="font-size:.875rem;">
+    No adjustments yet.
+  </div>
+  {% endif %}
+
+  {% if not license_read_only %}
+  <div class="card-footer">
+    <form method="post" action="{% url 'payroll:adjustment_add' record.pk %}" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-12 col-sm-4">
+        <label class="form-label small fw-semibold mb-1">Name</label>
+        {{ adjustment_form.name }}
+      </div>
+      <div class="col-6 col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Type</label>
+        {{ adjustment_form.adjustment_type }}
+      </div>
+      <div class="col-6 col-sm-2">
+        <label class="form-label small fw-semibold mb-1">Amount (&#8369;)</label>
+        {{ adjustment_form.amount }}
+      </div>
+      <div class="col-12 col-sm-3">
+        <label class="form-label small fw-semibold mb-1">Remarks</label>
+        {{ adjustment_form.remarks }}
+      </div>
+      <div class="col-12 col-sm-1">
+        <button type="submit" class="btn btn-primary btn-sm w-100">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
@@ -157,30 +278,20 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const employeeSelect = document.getElementById('id_employee');
-      const basicPayInput = document.getElementById('id_basic_pay');
-      const salaryDataElement = document.getElementById('employee-salary-map');
+      const basicPayInput  = document.getElementById('id_basic_pay');
+      const salaryEl       = document.getElementById('employee-salary-map');
+      if (!employeeSelect || !basicPayInput || !salaryEl) return;
+      const salaryMap = JSON.parse(salaryEl.textContent);
 
-      if (!employeeSelect || !basicPayInput || !salaryDataElement) {
-        return;
-      }
-
-      const employeeSalaryMap = JSON.parse(salaryDataElement.textContent);
-
-      function basicPayIsBlankOrZero() {
-        const value = basicPayInput.value.trim();
-        return value === '' || Number(value) === 0;
-      }
-
-      function fillBasicPayFromEmployee() {
-        const salary = employeeSalaryMap[employeeSelect.value];
-
-        if (salary && basicPayIsBlankOrZero()) {
+      function fill() {
+        const salary = salaryMap[employeeSelect.value];
+        const val    = basicPayInput.value.trim();
+        if (salary && (val === '' || Number(val) === 0)) {
           basicPayInput.value = salary;
         }
       }
-
-      employeeSelect.addEventListener('change', fillBasicPayFromEmployee);
-      fillBasicPayFromEmployee();
+      employeeSelect.addEventListener('change', fill);
+      fill();
     });
   </script>
 {% endblock %}

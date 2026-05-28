@@ -1,4 +1,9 @@
+import datetime
+
+from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.db import models
+
 from companies.models import Company
 from employees.models import Employee
 
@@ -131,6 +136,136 @@ class WorkSchedule(models.Model):
             f"{self.name} "
             f"({self.start_time.strftime('%I:%M %p')} – {self.end_time.strftime('%I:%M %p')})"
         )
+
+
+class ShiftTemplate(models.Model):
+    """
+    A named shift definition (e.g. Morning Shift 6AM-2PM) that can be assigned
+    to employees via EmployeeDailySchedule for any date.
+    """
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='shift_templates'
+    )
+    name = models.CharField(max_length=100)
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    break_minutes = models.PositiveIntegerField(default=0)
+    grace_minutes = models.PositiveIntegerField(default=10)
+    allow_early_clock_in_minutes = models.PositiveIntegerField(
+        default=30,
+        help_text='Minutes before start_time an employee may clock in via the portal.',
+    )
+    overtime_after_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text='Minutes after end_time before overtime is counted. 0 = OT starts at end_time.',
+    )
+    is_overnight = models.BooleanField(
+        default=False,
+        help_text='Check if this shift crosses midnight (e.g. 10 PM – 6 AM).',
+    )
+    is_active = models.BooleanField(default=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['company', 'name']
+
+    def __str__(self):
+        return (
+            f'{self.company.name} — {self.name} '
+            f'({self.start_time.strftime("%I:%M %p")} – {self.end_time.strftime("%I:%M %p")})'
+        )
+
+    def clean(self):
+        if self.start_time and self.end_time:
+            if self.end_time <= self.start_time and not self.is_overnight:
+                raise ValidationError(
+                    'End time is before or equal to start time. '
+                    'Check "Is Overnight" if this shift crosses midnight.'
+                )
+
+
+class EmployeeDailySchedule(models.Model):
+    """
+    A date-specific schedule assignment for one employee.
+    Takes priority over the employee's default WorkSchedule.
+    """
+    SOURCE_CHOICES = [
+        ('manual',    'Manual'),
+        ('generated', 'Generated'),
+        ('imported',  'Imported'),
+    ]
+
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='employee_daily_schedules'
+    )
+    employee = models.ForeignKey(
+        Employee, on_delete=models.CASCADE, related_name='daily_schedules'
+    )
+    schedule_date = models.DateField()
+    shift_template = models.ForeignKey(
+        ShiftTemplate, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='daily_schedules',
+    )
+    custom_start_time = models.TimeField(
+        null=True, blank=True,
+        help_text='Override the template start time. Requires custom_end_time.',
+    )
+    custom_end_time = models.TimeField(
+        null=True, blank=True,
+        help_text='Override the template end time. Requires custom_start_time.',
+    )
+    break_minutes = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Leave blank to use template value.',
+    )
+    grace_minutes = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text='Leave blank to use template value.',
+    )
+    is_rest_day = models.BooleanField(
+        default=False,
+        help_text='Employee is not expected to work on this date.',
+    )
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
+    reason = models.CharField(max_length=255, blank=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='created_daily_schedules',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['schedule_date', 'employee']
+        unique_together = [('employee', 'schedule_date')]
+
+    def __str__(self):
+        if self.is_rest_day:
+            label = 'Rest Day'
+        elif self.shift_template:
+            label = self.shift_template.name
+        elif self.custom_start_time:
+            label = f'{self.custom_start_time.strftime("%I:%M %p")} – {self.custom_end_time.strftime("%I:%M %p") if self.custom_end_time else "?"}'
+        else:
+            label = 'Unspecified'
+        return f'{self.employee} — {self.schedule_date} ({label})'
+
+    def clean(self):
+        if self.is_rest_day:
+            return
+        has_template = bool(self.shift_template_id)
+        has_custom = bool(self.custom_start_time) or bool(self.custom_end_time)
+        if not has_template and not has_custom:
+            raise ValidationError(
+                'Either a Shift Template or custom Start/End times must be provided unless this is a Rest Day.'
+            )
+        if has_custom:
+            if not self.custom_start_time or not self.custom_end_time:
+                raise ValidationError(
+                    'Both custom Start Time and End Time are required when overriding the template.'
+                )
 
 
 class AttendanceLocation(models.Model):

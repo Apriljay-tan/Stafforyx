@@ -14,11 +14,11 @@
 </nav>
 
 <div class="row justify-content-center">
-  <div class="col-12 col-md-7">
+  <div class="col-12 col-md-8">
 
     <div class="page-header mb-3">
       <h1>Generate Payroll from Attendance</h1>
-      <p>Bulk-create draft payroll records for active employees using attendance data.</p>
+      <p>Bulk-create or recalculate draft payroll records using attendance and schedule data.</p>
     </div>
 
     <div class="card mb-3">
@@ -52,7 +52,7 @@
             <div class="form-text">All active employees in the period's company will be included.</div>
           </div>
 
-          <!-- Period detail panel — shown by JS when a period is selected -->
+          <!-- Period detail panel -->
           <div id="period-detail" class="alert alert-primary mb-3 d-none" style="font-size:.82rem;">
             <div class="fw-semibold mb-1">
               <i class="bi bi-calendar-check me-1"></i>Attendance will be pulled from this date range:
@@ -77,7 +77,7 @@
             </div>
           </div>
 
-          <div class="mb-4">
+          <div class="mb-3">
             <label class="form-label fw-semibold small">
               Department
               <span class="fw-normal text-muted">(optional — leave blank for all)</span>
@@ -90,21 +90,37 @@
             </select>
           </div>
 
+          <!-- Regenerate option -->
+          <div class="mb-4 p-3 rounded" style="background:#f8f9fa;border:1px solid #dee2e6;">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="allow_update_draft" value="1" id="allow-update" checked>
+              <label class="form-check-label fw-semibold" for="allow-update">
+                Recalculate existing <span class="badge text-bg-secondary">Draft</span> records
+              </label>
+            </div>
+            <div class="text-muted ms-4" style="font-size:.8rem;">
+              When checked, any draft records for the selected period will be recalculated using the latest attendance data.
+              Approved or Paid records are always left unchanged.
+            </div>
+          </div>
+
           <div class="alert alert-info mb-4" style="font-size:.8rem;">
-            <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Calculation method</div>
+            <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Payroll Engine V2 — Attendance-based calculation</div>
             <ul class="mb-0 ps-3">
-              <li><strong>Basic pay</strong> — prorated: <code>basic_salary ÷ 26 × weekdays in cutoff range</code></li>
-              <li><strong>Overtime pay</strong> — <code>total OT minutes ÷ 60 × hourly rate × 1.25</code></li>
-              <li><strong>Late deduction</strong> — <code>total late minutes ÷ 60 × hourly rate</code></li>
-              <li><strong>Absence deduction</strong> — <code>absent days × daily rate</code></li>
-              <li>All records are created as <strong>Draft</strong> — review and edit before approving.</li>
-              <li>Employees who already have a record for the selected period are <strong>skipped</strong>.</li>
+              <li><strong>Scheduled days</strong> — resolved from employee's Shift Roster or default Work Schedule.</li>
+              <li><strong>Absent days</strong> — scheduled days with no time-in AND no approved leave (missing records count as absent).</li>
+              <li><strong>Payable days</strong> = present days + paid leave days.</li>
+              <li><strong>Basic pay</strong> = <code>basic_salary ÷ 26 × payable_days</code></li>
+              <li><strong>Overtime pay</strong> = <code>OT minutes ÷ 60 × hourly_rate × 1.25</code></li>
+              <li><strong>Late / Undertime deductions</strong> = <code>minutes ÷ 60 × hourly_rate</code></li>
+              <li><strong>Contributions</strong> copied from each employee's fixed deduction settings.</li>
+              <li>Records are created as <strong>Draft</strong> — review before approving.</li>
             </ul>
           </div>
 
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary">
-              <i class="bi bi-lightning me-1"></i>Generate Payroll Records
+              <i class="bi bi-lightning me-1"></i>Generate / Recalculate
             </button>
             <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary">Cancel</a>
           </div>
@@ -123,23 +139,19 @@
   var sel = document.getElementById('period-select');
   var detail = document.getElementById('period-detail');
   var pdStart = document.getElementById('pd-start');
-  var pdEnd = document.getElementById('pd-end');
-  var pdPay = document.getElementById('pd-pay');
-  var pdType = document.getElementById('pd-type');
+  var pdEnd   = document.getElementById('pd-end');
+  var pdPay   = document.getElementById('pd-pay');
+  var pdType  = document.getElementById('pd-type');
 
   function update() {
     var opt = sel.options[sel.selectedIndex];
-    if (!opt || !opt.value) {
-      detail.classList.add('d-none');
-      return;
-    }
+    if (!opt || !opt.value) { detail.classList.add('d-none'); return; }
     pdStart.textContent = opt.dataset.startDisplay || '—';
     pdEnd.textContent   = opt.dataset.endDisplay   || '—';
     pdPay.textContent   = opt.dataset.pay           || '—';
     pdType.textContent  = opt.dataset.type          || '—';
     detail.classList.remove('d-none');
   }
-
   sel.addEventListener('change', update);
   update();
 }());

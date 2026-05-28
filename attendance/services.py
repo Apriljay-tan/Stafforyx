@@ -1,16 +1,19 @@
 """
 Attendance computation helpers.
 
-compute_attendance(record) — reads the employee's assigned WorkSchedule and
-populates the derived fields on an AttendanceRecord, then saves them.
+compute_attendance(record) — resolves the employee's schedule for the exact
+attendance date (via schedule_services.resolve_expected_shift) and populates
+all derived fields on the AttendanceRecord, then saves them.
+
+Schedule priority (handled inside resolve_expected_shift):
+  1. EmployeeDailySchedule for that employee + date
+  2. Employee.work_schedule (legacy WorkSchedule with weekday flags)
+  3. No schedule
 """
 
 from decimal import Decimal, ROUND_HALF_UP
 
-_DAY_FIELDS = [
-    'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
-    'work_friday', 'work_saturday', 'work_sunday',
-]
+from .schedule_services import resolve_expected_shift
 
 _60 = Decimal(60)
 
@@ -29,16 +32,20 @@ def compute_attendance(record):
     """
     Compute late_minutes, undertime_minutes, overtime_minutes,
     total_work_minutes, and computed_status for a single AttendanceRecord,
-    then save those fields.
+    then save those derived fields.
+
+    The expected shift is resolved for the record's exact date, so rotating
+    shifts and date-specific overrides are handled automatically.
 
     Rules:
-    - No schedule → present/incomplete/no_schedule based on time fields.
-    - Non-workday → rest_day (no late/undertime/overtime).
-    - Missing time_in on workday → absent.
-    - Missing time_out on workday → incomplete.
-    - Overtime negates undertime (employee left late, so no undertime).
+    - Rest day (per schedule) → rest_day status; work minutes counted if clocked in.
+    - No schedule → no_schedule / incomplete / present depending on time fields.
+    - Missing time_in on scheduled workday → absent.
+    - Missing time_out on scheduled workday → incomplete.
+    - Overnight shift: time_out < time_in → add 24 h to time_out before arithmetic.
+    - Overtime cancels undertime (employee stayed late, so undertime is 0).
     """
-    schedule = getattr(record.employee, 'work_schedule', None)
+    shift = resolve_expected_shift(record.employee, record.date)
 
     late_min = 0
     undertime_min = 0
@@ -46,38 +53,41 @@ def compute_attendance(record):
     total_work_min = 0
     computed = ''
 
-    if schedule is None:
-        if record.time_in and not record.time_out:
-            computed = 'incomplete'
-        elif record.time_in and record.time_out:
-            total_work_min = max(
-                0,
-                _to_min(record.time_out) - _to_min(record.time_in) - (record.break_minutes or 0)
-            )
-            computed = 'present'
-        else:
-            computed = 'no_schedule'
-    else:
-        weekday = record.date.weekday()  # 0 = Monday
-        is_workday = getattr(schedule, _DAY_FIELDS[weekday], False)
-
-        if not is_workday:
+    if not shift['scheduled']:
+        # ── Rest day or no schedule ────────────────────────────────────────────
+        if shift['is_rest_day']:
             if record.time_in and record.time_out:
+                time_in_min = _to_min(record.time_in)
+                time_out_min = _to_min(record.time_out)
+                # Handle wrap-around (e.g. rest-day overnight work)
+                if time_out_min < time_in_min:
+                    time_out_min += 24 * 60
                 total_work_min = max(
                     0,
-                    _to_min(record.time_out) - _to_min(record.time_in) - (record.break_minutes or 0)
+                    time_out_min - time_in_min - (record.break_minutes or 0),
                 )
             computed = 'rest_day'
-
-        elif not record.time_in:
-            # TODO: check LeaveRequest for this employee/date; if approved leave exists,
-            # set computed = 'on_leave' and skip late/undertime/overtime calculation.
-            computed = 'absent'
-
         else:
-            # Scheduled workday with a time_in
-            sched_start_min = _to_min(schedule.start_time)
-            grace = schedule.grace_minutes or 0
+            # No schedule assigned
+            if record.time_in and not record.time_out:
+                computed = 'incomplete'
+            elif record.time_in and record.time_out:
+                total_work_min = max(
+                    0,
+                    _to_min(record.time_out) - _to_min(record.time_in)
+                    - (record.break_minutes or 0),
+                )
+                computed = 'present'
+            else:
+                computed = 'no_schedule'
+
+    else:
+        # ── Scheduled workday ─────────────────────────────────────────────────
+        if not record.time_in:
+            computed = 'absent'
+        else:
+            sched_start_min = _to_min(shift['start_time'])
+            grace = shift['grace_minutes'] or 0
             time_in_min = _to_min(record.time_in)
             late_min = max(0, time_in_min - (sched_start_min + grace))
 
@@ -85,17 +95,31 @@ def compute_attendance(record):
                 computed = 'incomplete'
             else:
                 time_out_min = _to_min(record.time_out)
-                break_min = record.break_minutes or 0
+                sched_end_min = _to_min(shift['end_time'])
+                is_overnight = shift.get('is_overnight', False)
+
+                # Overnight: adjust both ends to be continuous minutes from midnight
+                if is_overnight:
+                    if sched_end_min <= sched_start_min:
+                        sched_end_min += 24 * 60
+                    if time_out_min <= time_in_min:
+                        time_out_min += 24 * 60
+
+                break_min = (
+                    record.break_minutes
+                    if record.break_minutes is not None
+                    else shift['break_minutes']
+                )
                 total_work_min = max(0, time_out_min - time_in_min - break_min)
 
-                required_min = int(float(schedule.required_hours) * 60)
-                undertime_min = max(0, required_min - total_work_min)
+                # Expected minutes = scheduled span minus break
+                expected_min = max(0, sched_end_min - sched_start_min - shift['break_minutes'])
+                undertime_min = max(0, expected_min - total_work_min)
 
-                ot_after = schedule.overtime_after or schedule.end_time
-                ot_start_min = _to_min(ot_after)
+                ot_start_min = sched_end_min + (shift['overtime_after_minutes'] or 0)
                 overtime_min = max(0, time_out_min - ot_start_min)
 
-                # Overtime cancels undertime — employee stayed past end time
+                # Overtime cancels undertime
                 if overtime_min > 0:
                     undertime_min = 0
 

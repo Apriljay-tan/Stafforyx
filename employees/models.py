@@ -82,6 +82,22 @@ class Employee(models.Model):
     philhealth_number = models.CharField(max_length=30, blank=True)
     pagibig_number = models.CharField(max_length=30, blank=True)
     tin_number = models.CharField(max_length=30, blank=True)
+    sss_contribution_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Fixed monthly SSS contribution to deduct from payroll.',
+    )
+    philhealth_contribution_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Fixed monthly PhilHealth contribution to deduct from payroll.',
+    )
+    pagibig_contribution_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Fixed monthly Pag-IBIG contribution to deduct from payroll.',
+    )
+    tax_deduction_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text='Fixed monthly withholding tax to deduct from payroll.',
+    )
     emergency_contact_name = models.CharField(max_length=150, blank=True)
     emergency_contact_phone = models.CharField(max_length=30, blank=True)
     photo = models.ImageField(upload_to='employees/photos/', blank=True, null=True)

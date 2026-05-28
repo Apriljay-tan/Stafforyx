@@ -848,11 +848,18 @@ class AttendancePortalViewTests(TestCase):
     """
     Tests for /attendance/portal/ — IP-locked employee attendance portal.
     All tests use 127.0.0.1 as REMOTE_ADDR (Django test client default).
+    Phase 2: employee must also have a schedule today for the portal to allow.
     """
 
     def setUp(self):
         self.company = _make_company()
-        self.employee = _make_employee(self.company)
+        # All-week schedule so tests pass regardless of what day they run.
+        self.schedule = _make_schedule(
+            self.company,
+            work_saturday=True,
+            work_sunday=True,
+        )
+        self.employee = _make_employee(self.company, self.schedule)
 
         # User linked to employee via OneToOneField
         self.user = User.objects.create_user('portaluser', password='pass')
@@ -1009,3 +1016,433 @@ class AttendanceLocationAccessTests(TestCase):
         self.client.login(username='su', password='pass')
         resp = self.client.get(reverse('attendance:location_delete', args=[self.loc_a.pk]))
         self.assertEqual(resp.status_code, 200)
+
+
+# ===========================================================================
+# Phase 2 — Shift Roster and Date-Based Attendance Tests
+# ===========================================================================
+
+from .models import EmployeeDailySchedule, ShiftTemplate
+from .schedule_services import resolve_expected_shift
+
+
+def _make_shift(company, name='Day Shift', start=None, end=None, **kwargs):
+    return ShiftTemplate.objects.create(
+        company=company,
+        name=name,
+        start_time=start or datetime.time(8, 0),
+        end_time=end or datetime.time(17, 0),
+        **kwargs,
+    )
+
+
+def _make_daily_schedule(company, employee, date, shift=None, **kwargs):
+    return EmployeeDailySchedule.objects.create(
+        company=company,
+        employee=employee,
+        schedule_date=date,
+        shift_template=shift,
+        **kwargs,
+    )
+
+
+class ShiftTemplateModelTests(TestCase):
+    """Test 1 — ShiftTemplate creation and constraints."""
+
+    def setUp(self):
+        self.company = _make_company()
+
+    def test_shift_template_creation(self):
+        shift = _make_shift(
+            self.company,
+            name='Morning',
+            start=datetime.time(6, 0),
+            end=datetime.time(14, 0),
+            break_minutes=30,
+            grace_minutes=5,
+        )
+        self.assertEqual(shift.company, self.company)
+        self.assertEqual(shift.start_time, datetime.time(6, 0))
+        self.assertEqual(shift.end_time, datetime.time(14, 0))
+        self.assertEqual(shift.break_minutes, 30)
+        self.assertTrue(shift.is_active)
+        self.assertIn('Morning', str(shift))
+
+    def test_shift_template_clean_raises_when_end_before_start_not_overnight(self):
+        from django.core.exceptions import ValidationError
+        shift = ShiftTemplate(
+            company=self.company,
+            name='Bad',
+            start_time=datetime.time(17, 0),
+            end_time=datetime.time(8, 0),
+            is_overnight=False,
+        )
+        with self.assertRaises(ValidationError):
+            shift.clean()
+
+    def test_shift_template_overnight_does_not_raise(self):
+        shift = ShiftTemplate(
+            company=self.company,
+            name='Night',
+            start_time=datetime.time(22, 0),
+            end_time=datetime.time(6, 0),
+            is_overnight=True,
+        )
+        shift.clean()  # must not raise
+
+
+class EmployeeDailyScheduleUniqueTests(TestCase):
+    """Test 2 — EmployeeDailySchedule unique_together constraint."""
+
+    def setUp(self):
+        self.company = _make_company()
+        self.employee = _make_employee(self.company)
+        self.shift = _make_shift(self.company)
+        self.date = datetime.date(2026, 6, 1)
+
+    def test_unique_schedule_per_employee_per_date(self):
+        from django.db import IntegrityError
+        _make_daily_schedule(self.company, self.employee, self.date, self.shift)
+        with self.assertRaises(IntegrityError):
+            _make_daily_schedule(self.company, self.employee, self.date, self.shift)
+
+    def test_same_employee_different_dates_allowed(self):
+        _make_daily_schedule(self.company, self.employee, self.date, self.shift)
+        ds2 = _make_daily_schedule(
+            self.company, self.employee,
+            self.date + datetime.timedelta(days=1), self.shift,
+        )
+        self.assertIsNotNone(ds2.pk)
+
+
+class ScheduleResolverTests(TestCase):
+    """Tests 3 & 4 — schedule resolver priority and weekday detection."""
+
+    def setUp(self):
+        self.company = _make_company()
+
+    def test_daily_schedule_overrides_work_schedule(self):
+        """Test 3: date-specific EmployeeDailySchedule overrides WorkSchedule."""
+        ws = _make_schedule(
+            self.company,
+            start_time=datetime.time(9, 0),
+            end_time=datetime.time(18, 0),
+        )
+        emp = _make_employee(self.company, ws)
+        date = datetime.date(2026, 6, 1)  # Monday
+
+        # Without a daily schedule the WorkSchedule applies
+        shift_from_ws = resolve_expected_shift(emp, date)
+        self.assertEqual(shift_from_ws['source'], 'work_schedule')
+        self.assertEqual(shift_from_ws['start_time'], datetime.time(9, 0))
+
+        # Add a daily schedule with different times
+        template = _make_shift(
+            self.company,
+            start=datetime.time(6, 0),
+            end=datetime.time(14, 0),
+        )
+        _make_daily_schedule(self.company, emp, date, template)
+
+        shift_from_daily = resolve_expected_shift(emp, date)
+        self.assertEqual(shift_from_daily['source'], 'daily_schedule')
+        self.assertEqual(shift_from_daily['start_time'], datetime.time(6, 0))
+        self.assertEqual(shift_from_daily['end_time'], datetime.time(14, 0))
+
+    def test_rotating_weekly_schedule_workday_and_rest_day(self):
+        """Test 4: WorkSchedule weekday flags give correct scheduled / rest-day results."""
+        ws = _make_schedule(
+            self.company,
+            work_saturday=False,
+            work_sunday=False,
+        )
+        emp = _make_employee(self.company, ws)
+
+        monday = datetime.date(2026, 6, 1)    # weekday() == 0
+        saturday = datetime.date(2026, 6, 6)  # weekday() == 5
+
+        mon_shift = resolve_expected_shift(emp, monday)
+        self.assertTrue(mon_shift['scheduled'])
+        self.assertEqual(mon_shift['source'], 'work_schedule')
+        self.assertEqual(mon_shift['start_time'], ws.start_time)
+        self.assertEqual(mon_shift['end_time'], ws.end_time)
+
+        sat_shift = resolve_expected_shift(emp, saturday)
+        self.assertFalse(sat_shift['scheduled'])
+        self.assertTrue(sat_shift['is_rest_day'])
+
+    def test_no_schedule_returns_unscheduled(self):
+        emp = _make_employee(self.company)  # no work_schedule
+        date = datetime.date(2026, 6, 1)
+        shift = resolve_expected_shift(emp, date)
+        self.assertFalse(shift['scheduled'])
+        self.assertFalse(shift['is_rest_day'])
+        self.assertEqual(shift['source'], 'none')
+
+
+class DailyScheduleComputeTests(TestCase):
+    """Tests 5–8 — compute_attendance uses the resolved daily schedule."""
+
+    def setUp(self):
+        self.company = _make_company()
+        self.employee = _make_employee(self.company)
+        # Use a fixed Monday for all date-specific tests
+        self.date = datetime.date(2026, 6, 1)
+
+    def _assign_shift(self, start, end, break_minutes=60, grace_minutes=10,
+                      overtime_after_minutes=0, is_overnight=False):
+        shift = _make_shift(
+            self.company,
+            start=start,
+            end=end,
+            break_minutes=break_minutes,
+            grace_minutes=grace_minutes,
+            overtime_after_minutes=overtime_after_minutes,
+            is_overnight=is_overnight,
+        )
+        _make_daily_schedule(self.company, self.employee, self.date, shift)
+        return shift
+
+    def _record(self, time_in=None, time_out=None, break_minutes=60):
+        return AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.employee,
+            date=self.date,
+            time_in=time_in,
+            time_out=time_out,
+            break_minutes=break_minutes,
+            status='present',
+        )
+
+    def test_late_calculation_uses_daily_schedule(self):
+        """Test 5: late_minutes uses the assigned ShiftTemplate grace period."""
+        self._assign_shift(
+            start=datetime.time(8, 0),
+            end=datetime.time(17, 0),
+            break_minutes=60,
+            grace_minutes=10,
+        )
+        record = self._record(
+            time_in=datetime.time(8, 15),   # 5 minutes past grace cutoff (8:10)
+            time_out=datetime.time(17, 0),
+            break_minutes=60,
+        )
+        compute_attendance(record)
+        record.refresh_from_db()
+        self.assertEqual(record.late_minutes, 5)
+
+    def test_undertime_calculation_uses_daily_schedule(self):
+        """Test 6: undertime uses assigned shift (expected = sched_end - sched_start - break)."""
+        self._assign_shift(
+            start=datetime.time(8, 0),
+            end=datetime.time(17, 0),
+            break_minutes=60,
+        )
+        # Clock out at 13:00 → 4 h net work vs 8 h expected → undertime
+        record = self._record(
+            time_in=datetime.time(8, 0),
+            time_out=datetime.time(13, 0),
+            break_minutes=60,
+        )
+        compute_attendance(record)
+        record.refresh_from_db()
+        self.assertEqual(record.computed_status, 'undertime')
+        self.assertGreater(record.undertime_minutes, 0)
+
+    def test_overtime_calculation_uses_daily_schedule(self):
+        """Test 7: overtime starts at sched_end + overtime_after_minutes of the template."""
+        self._assign_shift(
+            start=datetime.time(8, 0),
+            end=datetime.time(17, 0),
+            break_minutes=60,
+            overtime_after_minutes=0,
+        )
+        # 2 hours overtime
+        record = self._record(
+            time_in=datetime.time(8, 0),
+            time_out=datetime.time(19, 0),
+            break_minutes=60,
+        )
+        compute_attendance(record)
+        record.refresh_from_db()
+        self.assertEqual(record.overtime_minutes, 120)
+        self.assertEqual(record.computed_status, 'overtime')
+
+    def test_overnight_shift_computes_correctly(self):
+        """Test 8: overnight shift (10 PM – 6 AM) does not produce negative work time."""
+        self._assign_shift(
+            start=datetime.time(22, 0),
+            end=datetime.time(6, 0),
+            break_minutes=0,
+            grace_minutes=0,
+            is_overnight=True,
+        )
+        record = self._record(
+            time_in=datetime.time(22, 0),
+            time_out=datetime.time(6, 0),   # next day 6 AM
+            break_minutes=0,
+        )
+        compute_attendance(record)
+        record.refresh_from_db()
+        # 22:00 → 06:00 = 8 h
+        self.assertEqual(record.total_work_minutes, 480)
+        self.assertEqual(record.computed_status, 'present')
+
+
+class PortalScheduleGatingTests(TestCase):
+    """Tests 9 & 10 — portal schedule gating combined with IP check."""
+
+    def setUp(self):
+        self.company = _make_company()
+        self.portal_url = reverse('attendance:attendance_portal')
+
+    def _make_user_with_employee(self, schedule=None):
+        emp = _make_employee(self.company, schedule)
+        user = User.objects.create_user(f'puser_{emp.pk}', password='pass')
+        emp.user = user
+        emp.save(update_fields=['user'])
+        return user, emp
+
+    def _make_location(self, ip='127.0.0.1'):
+        return AttendanceLocation.objects.create(
+            company=self.company, name='Office', ip_address=ip
+        )
+
+    def test_portal_blocks_if_no_schedule_today_even_with_approved_ip(self):
+        """Test 9: schedule_allowed=False even when IP matches."""
+        user, _emp = self._make_user_with_employee(schedule=None)  # no schedule
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username=user.username, password='pass')
+        resp = self.client.get(self.portal_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['allowed'])
+        self.assertFalse(resp.context['schedule_allowed'])
+
+    def test_portal_allows_if_schedule_and_ip_both_approved(self):
+        """Test 10: allowed=True when both IP and schedule pass."""
+        schedule = _make_schedule(
+            self.company,
+            work_saturday=True,
+            work_sunday=True,
+        )
+        user, _emp = self._make_user_with_employee(schedule=schedule)
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username=user.username, password='pass')
+        resp = self.client.get(self.portal_url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['allowed'])
+        self.assertTrue(resp.context['ip_allowed'])
+        self.assertTrue(resp.context['schedule_allowed'])
+
+
+_TEST_DAY_FIELDS = [
+    'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
+    'work_friday', 'work_saturday', 'work_sunday',
+]
+
+
+class PotentialAbsencesTodayTests(TestCase):
+    """Test 11 — _potential_absences_today respects schedule priority correctly."""
+
+    def setUp(self):
+        self.company = _make_company()
+        self.today = datetime.date.today()
+        self.day_field = _TEST_DAY_FIELDS[self.today.weekday()]
+
+    def test_employee_with_daily_schedule_included(self):
+        """Employee with EmployeeDailySchedule (non-rest) counts as scheduled today."""
+        from attendance.views import _potential_absences_today
+        emp = _make_employee(self.company)
+        shift = _make_shift(self.company)
+        _make_daily_schedule(self.company, emp, self.today, shift)
+
+        absent = _potential_absences_today(company=self.company)
+        self.assertIn(emp, list(absent))
+
+    def test_employee_with_rest_day_schedule_excluded(self):
+        """Employee whose daily schedule is rest_day must NOT appear in absences."""
+        from attendance.views import _potential_absences_today
+        emp = _make_employee(self.company)
+        _make_daily_schedule(self.company, emp, self.today, is_rest_day=True)
+
+        absent = _potential_absences_today(company=self.company)
+        self.assertNotIn(emp, list(absent))
+
+    def test_employee_without_schedule_excluded(self):
+        """Employee with no schedule (daily or work) must not appear."""
+        from attendance.views import _potential_absences_today
+        emp = _make_employee(self.company)  # no schedule
+
+        absent = _potential_absences_today(company=self.company)
+        self.assertNotIn(emp, list(absent))
+
+    def test_daily_schedule_overrides_work_schedule_rest_day(self):
+        """
+        Employee's WorkSchedule says today is a workday, but a daily schedule
+        marks today as rest_day — they must NOT appear in potential absences.
+        """
+        from attendance.views import _potential_absences_today
+        ws = WorkSchedule.objects.create(
+            company=self.company,
+            name='All Week',
+            start_time=datetime.time(8, 0),
+            end_time=datetime.time(17, 0),
+            work_monday=True, work_tuesday=True, work_wednesday=True,
+            work_thursday=True, work_friday=True,
+            work_saturday=True, work_sunday=True,
+        )
+        emp = _make_employee(self.company, ws)
+        # Override today with a rest-day daily schedule
+        _make_daily_schedule(self.company, emp, self.today, is_rest_day=True)
+
+        absent = _potential_absences_today(company=self.company)
+        self.assertNotIn(emp, list(absent))
+
+
+class ScheduleCrossCompanyAccessTests(TestCase):
+    """Test 12 — cross-company user cannot manage another company's schedules."""
+
+    def setUp(self):
+        self.co_a = _make_company()
+        self.co_b = Company.objects.create(name='Company B')
+
+        # Shift and schedule belonging to Company A
+        self.shift_a = _make_shift(self.co_a, name='Shift A')
+
+        # Superuser (can see everything)
+        self.superuser = User.objects.create_superuser('su_sched', password='pass')
+
+        # User assigned only to Company A with attendance module access
+        self.user_a = User.objects.create_user('user_sched_a', password='pass')
+        from accounts.models import UserCompanyAccess, UserProfile
+        UserCompanyAccess.objects.create(
+            user=self.user_a, company=self.co_a, role='hr_admin', is_active=True
+        )
+        UserProfile.objects.create(
+            user=self.user_a, role='hr_admin',
+            is_active_stafforyx=True,
+            can_manage_attendance=True,
+        )
+
+    def test_company_a_user_sees_shift_list(self):
+        self.client.login(username='user_sched_a', password='pass')
+        resp = self.client.get(reverse('attendance:shift_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_company_a_user_cannot_reach_company_b_shift_edit(self):
+        shift_b = _make_shift(self.co_b, name='Shift B')
+        self.client.login(username='user_sched_a', password='pass')
+        resp = self.client.get(reverse('attendance:shift_edit', args=[shift_b.pk]))
+        # View must return 403/404, not let the user edit Company B's shift
+        self.assertIn(resp.status_code, [403, 404])
+
+    def test_employee_schedule_list_accessible_to_hr(self):
+        self.client.login(username='user_sched_a', password='pass')
+        resp = self.client.get(reverse('attendance:employee_schedule_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_plain_user_cannot_access_shift_list(self):
+        plain = User.objects.create_user('plain_sched', password='pass')
+        self.client.login(username='plain_sched', password='pass')
+        resp = self.client.get(reverse('attendance:shift_list'))
+        self.assertIn(resp.status_code, [302, 403])

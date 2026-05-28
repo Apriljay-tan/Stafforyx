@@ -134,9 +134,13 @@
               {% endif %}
             </td>
             <td class="text-end pe-3">
+              <a href="{% url 'payroll:payslip_view' record.pk %}"
+                 class="btn btn-sm btn-outline-secondary" title="View Payslip">
+                <i class="bi bi-file-earmark-text"></i>
+              </a>
               {% if not license_read_only %}
                 <a href="{% url 'payroll:payroll_record_edit' record.pk %}"
-                   class="btn btn-sm btn-outline-primary" title="Edit">
+                   class="btn btn-sm btn-outline-primary ms-1" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </a>
                 <a href="{% url 'payroll:payroll_record_delete' record.pk %}"

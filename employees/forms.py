@@ -47,6 +47,8 @@ class EmployeeForm(forms.ModelForm):
             'work_schedule',
             'biometric_user_id',
             'sss_number', 'philhealth_number', 'pagibig_number', 'tin_number',
+            'sss_contribution_amount', 'philhealth_contribution_amount',
+            'pagibig_contribution_amount', 'tax_deduction_amount',
             'emergency_contact_name', 'emergency_contact_phone',
         ]
         widgets = {
