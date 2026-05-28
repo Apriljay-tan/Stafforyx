@@ -193,6 +193,7 @@
       color: var(--navy);
     }
     .avatar-btn:hover { background: #f1f5f9; }
+    .avatar-btn.dropdown-toggle::after { display: none; }
     .avatar-circle {
       width: 30px; height: 30px;
       border-radius: 50%;
@@ -208,6 +209,56 @@
       font-size: 0.8rem;
       font-weight: 500;
       color: var(--navy);
+    }
+    .profile-menu {
+      min-width: 260px;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      box-shadow: 0 14px 30px rgba(15, 23, 42, 0.12);
+      padding: 0.45rem 0;
+    }
+    .profile-meta {
+      padding: 0.55rem 0.95rem 0.35rem;
+    }
+    .profile-meta .label {
+      font-size: 0.68rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.1rem;
+    }
+    .profile-meta .value {
+      font-size: 0.84rem;
+      color: var(--navy);
+      font-weight: 600;
+      word-break: break-word;
+    }
+    .profile-menu .dropdown-item {
+      font-size: 0.84rem;
+      color: #334155;
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.5rem 0.95rem;
+      border-radius: 0;
+    }
+    .profile-menu .dropdown-item i {
+      width: 16px;
+      text-align: center;
+      color: #64748b;
+    }
+    .profile-menu .dropdown-item:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .profile-menu .dropdown-item:hover i {
+      color: var(--blue);
+    }
+    .profile-menu .logout-btn {
+      width: 100%;
+      border: 0;
+      background: transparent;
+      text-align: left;
     }
 
     /* ── Main Content ── */
@@ -330,9 +381,12 @@
           <i class="bi bi-people"></i> Employees
         </a>
       </li>
-      {% if request.user.is_superuser %}
+      {% if request.user.is_staff %}
       <li class="nav-item">
-        <a href="/admin/companies/company/" class="nav-link"><i class="bi bi-building"></i> Companies</a>
+        <a href="/admin/companies/company/"
+           class="nav-link {% if '/admin/companies/company/' in request.path %}active{% endif %}">
+          <i class="bi bi-building"></i> Companies
+        </a>
       </li>
       {% endif %}
     </ul>
@@ -363,7 +417,7 @@
       </li>
     </ul>
 
-    <div class="sidebar-section-label">Admin</div>
+    <div class="sidebar-section-label">Admin / Management</div>
     <ul class="nav flex-column sidebar-nav">
       <li class="nav-item">
         <a href="{% url 'documents:employee_document_list' %}"
@@ -383,53 +437,6 @@
           <i class="bi bi-bar-chart"></i> Reports
         </a>
       </li>
-      <li class="nav-item">
-        <a href="{% url 'licenses:license_status' %}"
-           class="nav-link {% if request.resolver_match.app_name == 'licenses' %}active{% endif %}">
-          <i class="bi bi-key"></i> License Status
-        </a>
-      </li>
-      {% if selected_company %}
-      <li class="nav-item">
-        <a href="{% url 'companies:payslip_settings' selected_company.pk %}"
-           class="nav-link {% if request.resolver_match.app_name == 'companies' %}active{% endif %}">
-          <i class="bi bi-gear"></i> Payslip Settings
-        </a>
-      </li>
-      {% endif %}
-      {% if request.user.is_superuser %}
-      <li class="nav-item">
-        <a href="/admin/" class="nav-link"><i class="bi bi-shield-lock"></i> Admin Panel</a>
-      </li>
-      {% endif %}
-    </ul>
-
-    <div class="sidebar-section-label">Account</div>
-    <ul class="nav flex-column sidebar-nav">
-      <li class="nav-item">
-        <a href="{% url 'accounts:user_list' %}"
-           class="nav-link {% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name != 'login' %}active{% endif %}">
-          <i class="bi bi-person-circle"></i> Users
-        </a>
-      </li>
-      <li class="nav-item">
-        <a href="{% url 'portal:dashboard' %}"
-           class="nav-link {% if request.resolver_match.app_name == 'portal' %}active{% endif %}">
-          <i class="bi bi-person-workspace"></i> Employee Portal
-        </a>
-      </li>
-      <li class="nav-item">
-        {% if request.user.is_authenticated %}
-          <form method="post" action="{% url 'accounts:logout' %}">
-            {% csrf_token %}
-            <button type="submit" class="nav-link border-0 w-100 text-start" style="background:transparent;">
-              <i class="bi bi-box-arrow-right"></i> Logout
-            </button>
-          </form>
-        {% else %}
-          <a href="{% url 'accounts:login' %}" class="nav-link"><i class="bi bi-box-arrow-in-right"></i> Login</a>
-        {% endif %}
-      </li>
     </ul>
 
     <div class="sidebar-footer">
@@ -443,15 +450,82 @@
   <header id="topbar">
     <span class="topbar-title">{% block page_title %}Dashboard{% endblock %}</span>
     <div class="topbar-actions">
-      <a href="#" class="avatar-btn">
-        <div class="avatar-circle">
-          {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
-        </div>
-        <span class="avatar-name">
-          {% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}
-        </span>
-        <i class="bi bi-chevron-down" style="font-size:0.65rem; color:#94a3b8;"></i>
-      </a>
+      <div class="dropdown">
+        <button class="avatar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+          <div class="avatar-circle">
+            {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
+          </div>
+          <span class="avatar-name">
+            {% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}
+          </span>
+          <i class="bi bi-chevron-down" style="font-size:0.65rem; color:#94a3b8;"></i>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end profile-menu">
+          {% if request.user.is_authenticated %}
+            <li class="profile-meta">
+              <div class="label">Signed in as</div>
+              <div class="value">{{ request.user.username }}</div>
+            </li>
+            <li><hr class="dropdown-divider my-1"></li>
+
+            <li>
+              <a class="dropdown-item" href="{% url 'portal:dashboard' %}">
+                <i class="bi bi-person-workspace"></i>Employee Portal
+              </a>
+            </li>
+
+            {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' %}
+              <li>
+                <a class="dropdown-item" href="{% url 'accounts:user_list' %}">
+                  <i class="bi bi-people"></i>Users
+                </a>
+              </li>
+            {% endif %}
+
+            {% if request.user.is_staff %}
+              <li>
+                <a class="dropdown-item" href="/admin/">
+                  <i class="bi bi-shield-lock"></i>Admin Panel
+                </a>
+              </li>
+            {% endif %}
+
+            {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' or request.user.stafforyx_profile.can_manage_license %}
+              <li>
+                <a class="dropdown-item" href="{% url 'licenses:license_status' %}">
+                  <i class="bi bi-key"></i>License Status
+                </a>
+              </li>
+            {% endif %}
+
+            {% if selected_company %}
+              {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' or request.user.stafforyx_profile.can_manage_settings %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'companies:payslip_settings' selected_company.pk %}">
+                    <i class="bi bi-gear"></i>Payslip Settings
+                  </a>
+                </li>
+              {% endif %}
+            {% endif %}
+
+            <li><hr class="dropdown-divider my-1"></li>
+            <li>
+              <form method="post" action="{% url 'accounts:logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="dropdown-item logout-btn">
+                  <i class="bi bi-box-arrow-right"></i>Logout
+                </button>
+              </form>
+            </li>
+          {% else %}
+            <li>
+              <a class="dropdown-item" href="{% url 'accounts:login' %}">
+                <i class="bi bi-box-arrow-in-right"></i>Login
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
     </div>
   </header>
 
