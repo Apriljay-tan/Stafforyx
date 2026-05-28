@@ -16,6 +16,9 @@
     <a href="{% url 'attendance:attendance_clock' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-clock me-1"></i>Time In / Time Out
     </a>
+    <a href="{% url 'attendance:portal_log_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-camera me-1"></i>Portal Logs
+    </a>
     {% if not license_read_only %}
       <a href="{% url 'attendance:attendance_add' %}" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-circle me-1"></i>Add Attendance

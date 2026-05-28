@@ -1,4 +1,7 @@
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
+
 from .models import (
     AttendanceLocation, AttendancePortalLog, AttendanceRecord,
     BiometricDevice, BiometricLog,
@@ -158,8 +161,8 @@ class AttendanceLocationAdmin(admin.ModelAdmin):
 @admin.register(AttendancePortalLog)
 class AttendancePortalLogAdmin(admin.ModelAdmin):
     list_display = (
-        'created_at', 'company', 'employee', 'action', 'status',
-        'ip_address', 'attendance_location',
+        'created_at', 'employee', 'company', 'attendance_location',
+        'action', 'status', 'ip_address', 'gps_coordinates', 'selfie_evidence',
     )
     list_filter = ('company', 'status', 'action', 'attendance_location')
     search_fields = (
@@ -169,7 +172,8 @@ class AttendancePortalLogAdmin(admin.ModelAdmin):
     readonly_fields = (
         'company', 'employee', 'attendance_location', 'attendance_record',
         'action', 'ip_address', 'user_agent', 'status', 'blocked_reason',
-        'gps_latitude', 'gps_longitude', 'gps_accuracy', 'selfie_image', 'created_at',
+        'gps_latitude', 'gps_longitude', 'gps_accuracy',
+        'gps_coordinates', 'selfie_evidence', 'selfie_image', 'created_at',
     )
     date_hierarchy = 'created_at'
     fieldsets = (
@@ -187,7 +191,10 @@ class AttendancePortalLogAdmin(admin.ModelAdmin):
         }),
         ('Verification Evidence', {
             'classes': ('collapse',),
-            'fields': ('gps_latitude', 'gps_longitude', 'gps_accuracy', 'selfie_image'),
+            'fields': (
+                'gps_latitude', 'gps_longitude', 'gps_accuracy',
+                'gps_coordinates', 'selfie_evidence', 'selfie_image',
+            ),
         }),
     )
 
@@ -196,3 +203,18 @@ class AttendancePortalLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    @admin.display(description='GPS')
+    def gps_coordinates(self, obj):
+        if obj.gps_latitude is None or obj.gps_longitude is None:
+            return '-'
+        if obj.gps_accuracy is None:
+            return f'{obj.gps_latitude}, {obj.gps_longitude}'
+        return f'{obj.gps_latitude}, {obj.gps_longitude} (±{obj.gps_accuracy}m)'
+
+    @admin.display(description='Selfie')
+    def selfie_evidence(self, obj):
+        if not obj.selfie_image:
+            return 'No selfie'
+        url = reverse('attendance:portal_log_selfie', args=[obj.pk])
+        return format_html('<a href="{}" target="_blank" rel="noopener">View selfie</a>', url)

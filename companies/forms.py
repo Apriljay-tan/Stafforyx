@@ -27,6 +27,7 @@ class CompanyPayslipSettingsForm(forms.ModelForm):
             'payslip_show_overtime_breakdown',
             'payslip_show_received_by',
             'payslip_footer_note',
+            'attendance_selfie_retention_days',
         ]
         widgets = {
             'payslip_company_address': forms.Textarea(attrs={'rows': 3}),

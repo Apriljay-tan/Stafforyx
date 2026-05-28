@@ -80,6 +80,19 @@
         {{ form.payslip_footer_note.errors }}
       </div>
 
+      <div class="col-12">
+        <hr class="my-1">
+        <h6 class="mb-2 mt-2" style="color:#0D1B2A;">
+          <i class="bi bi-camera me-1"></i>Attendance Evidence Retention
+        </h6>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.attendance_selfie_retention_days.label }}</label>
+        {{ form.attendance_selfie_retention_days }}
+        <div class="form-text">{{ form.attendance_selfie_retention_days.help_text }}</div>
+        {{ form.attendance_selfie_retention_days.errors }}
+      </div>
+
       <div class="col-12 d-flex justify-content-end">
         <button type="submit" class="btn btn-primary">
           <i class="bi bi-save me-1"></i>Save Settings

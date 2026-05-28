@@ -1,13 +1,17 @@
 import base64
 import binascii
 import io
+import mimetypes
+import os
 from datetime import date as _date, datetime as _datetime
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
-from django.http import JsonResponse
+from django.core.paginator import Paginator
+from django.db.models import Q
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from PIL import Image, UnidentifiedImageError
@@ -739,6 +743,94 @@ def employee_schedule_bulk(request):
 
 
 # ── Employee Attendance Portal (WiFi/IP-locked) ────────────────────────────────
+
+def _scoped_portal_logs_for_user(user):
+    return filter_queryset_by_user_companies(
+        AttendancePortalLog.objects.select_related(
+            'company', 'employee', 'employee__department',
+            'attendance_location', 'attendance_record',
+        ),
+        user,
+    )
+
+
+def portal_log_list(request):
+    selected_company = get_selected_company_from_request(request)
+    accessible_companies = get_accessible_companies(request.user)
+
+    logs = _scoped_portal_logs_for_user(request.user).order_by('-created_at')
+
+    if selected_company:
+        logs = logs.filter(company=selected_company)
+
+    company_filter = request.GET.get('company', '').strip()
+    if company_filter:
+        logs = logs.filter(company_id=company_filter)
+
+    action_filter = request.GET.get('action', '').strip()
+    valid_actions = {choice[0] for choice in AttendancePortalLog.ACTION_CHOICES}
+    if action_filter in valid_actions:
+        logs = logs.filter(action=action_filter)
+
+    selfie_filter = request.GET.get('selfie', '').strip().lower()
+    if selfie_filter == 'yes':
+        logs = logs.filter(selfie_image__isnull=False).exclude(selfie_image='')
+    elif selfie_filter == 'no':
+        logs = logs.filter(Q(selfie_image__isnull=True) | Q(selfie_image=''))
+
+    employee_filter = request.GET.get('employee', '').strip()
+    if employee_filter:
+        logs = logs.filter(employee_id=employee_filter)
+
+    paginator = Paginator(logs, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    employees = (
+        Employee.objects
+        .filter(id__in=logs.values_list('employee_id', flat=True))
+        .order_by('last_name', 'first_name')
+        .distinct()
+    )
+
+    return render(request, 'attendance/portal_log_list.html', {
+        'page_obj': page_obj,
+        'logs': page_obj.object_list,
+        'selected_company': selected_company,
+        'accessible_companies': accessible_companies,
+        'action_choices': AttendancePortalLog.ACTION_CHOICES,
+        'employee_filter': employee_filter,
+        'company_filter': company_filter,
+        'action_filter': action_filter,
+        'selfie_filter': selfie_filter,
+        'employees': employees,
+    })
+
+
+def portal_log_detail(request, pk):
+    log = get_object_or_404(_scoped_portal_logs_for_user(request.user), pk=pk)
+    return render(request, 'attendance/portal_log_detail.html', {
+        'log': log,
+    })
+
+
+def portal_log_selfie(request, pk):
+    log = get_object_or_404(_scoped_portal_logs_for_user(request.user), pk=pk)
+    if not log.selfie_image:
+        raise Http404('No selfie is stored for this attendance portal log.')
+
+    storage = log.selfie_image.storage
+    selfie_name = log.selfie_image.name
+    if not storage.exists(selfie_name):
+        raise Http404('Selfie file is no longer available.')
+
+    content_type, _ = mimetypes.guess_type(selfie_name)
+    return FileResponse(
+        storage.open(selfie_name, 'rb'),
+        content_type=content_type or 'application/octet-stream',
+        as_attachment=False,
+        filename=os.path.basename(selfie_name),
+    )
+
 
 def attendance_portal(request):
     """

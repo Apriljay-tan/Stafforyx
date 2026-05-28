@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -55,6 +56,14 @@ class Company(models.Model):
     )
     payslip_footer_note = models.TextField(
         blank=True, help_text='Optional note printed at the bottom of every payslip.',
+    )
+    attendance_selfie_retention_days = models.PositiveIntegerField(
+        default=30,
+        validators=[MinValueValidator(1)],
+        help_text=(
+            'Attendance selfie photos older than this number of days can be deleted by the '
+            'cleanup command. Attendance logs remain, but image files are removed.'
+        ),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

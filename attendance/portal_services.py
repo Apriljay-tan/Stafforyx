@@ -1,5 +1,5 @@
-"""
-WiFi/IP-Locked Attendance Portal helpers.
+﻿"""
+WiFi/IP-locked attendance portal helpers.
 
 These functions validate whether an employee's current public IP address
 matches any registered AttendanceLocation for their company.
@@ -8,8 +8,8 @@ Production note:
     If the app is behind a reverse proxy (nginx, Caddy, AWS ALB, etc.),
     the real client IP arrives in X-Forwarded-For, not REMOTE_ADDR.
     Set TRUSTED_PROXY = True in settings and configure your proxy to set
-    X-Forwarded-For correctly BEFORE enabling that path here.
-    Never trust X-Forwarded-For blindly on a public server — it can be spoofed.
+    X-Forwarded-For correctly before enabling that path here.
+    Never trust X-Forwarded-For blindly on a public server - it can be spoofed.
 """
 
 import ipaddress
@@ -22,24 +22,23 @@ def get_client_ip(request):
     Return the best-guess client IP address as a string.
 
     Safe for local development: REMOTE_ADDR is always used unless
-    settings.TRUSTED_PROXY is True, in which case the leftmost
-    non-private address in X-Forwarded-For is used.
+    settings.TRUSTED_PROXY is True, in which case proxy headers are used
+    in this order:
+      1) First IP in X-Forwarded-For
+      2) X-Real-IP
+      3) REMOTE_ADDR
     """
     if getattr(settings, 'TRUSTED_PROXY', False):
-        xff = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        xff = (request.META.get('HTTP_X_FORWARDED_FOR', '') or '').strip()
         if xff:
-            # X-Forwarded-For is a comma-separated list: client, proxy1, proxy2
-            for candidate in [ip.strip() for ip in xff.split(',')]:
-                try:
-                    addr = ipaddress.ip_address(candidate)
-                    if not addr.is_private:
-                        return str(addr)
-                except ValueError:
-                    continue
-            # All addresses were private (local dev through a proxy) — use first
             first = xff.split(',')[0].strip()
             if first:
                 return first
+
+        x_real_ip = (request.META.get('HTTP_X_REAL_IP', '') or '').strip()
+        if x_real_ip:
+            return x_real_ip
+
     return request.META.get('REMOTE_ADDR', '')
 
 
@@ -79,6 +78,7 @@ def find_matching_attendance_location(employee, ip_str):
     whose IP/CIDR matches ip_str, or None if no match is found.
     """
     from .models import AttendanceLocation
+
     locations = AttendanceLocation.objects.filter(
         company=employee.company,
         is_active=True,
@@ -95,9 +95,9 @@ def can_employee_clock_from_request(request, employee):
 
     Returns a dict:
         allowed  (bool)
-        ip       (str)   — detected client IP
-        location (AttendanceLocation or None) — matched location
-        reason   (str)   — human-readable explanation when blocked
+        ip       (str) - detected client IP
+        location (AttendanceLocation or None) - matched location
+        reason   (str) - human-readable explanation when blocked
     """
     ip = get_client_ip(request)
     location = find_matching_attendance_location(employee, ip)

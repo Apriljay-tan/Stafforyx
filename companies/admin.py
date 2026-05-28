@@ -22,6 +22,10 @@ class CompanyAdmin(admin.ModelAdmin):
                 'payslip_show_received_by', 'payslip_footer_note',
             ),
         }),
+        ('Attendance Settings', {
+            'classes': ('collapse',),
+            'fields': ('attendance_selfie_retention_days',),
+        }),
         ('Timestamps', {
             'classes': ('collapse',),
             'fields': ('created_at', 'updated_at'),

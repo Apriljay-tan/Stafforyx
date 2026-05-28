@@ -41,3 +41,7 @@ Build order next:
 3. Offline/Desktop Packaging
 4. Full Biometric Device Integration
 5. Polish UI/dashboard
+
+Maintenance note - attendance selfie cleanup:
+Recommended weekly cron (Sunday 2:00 AM server time):
+0 2 * * 0 cd /var/www/stafforyx && /var/www/stafforyx/venv/bin/python manage.py cleanup_attendance_selfies

@@ -1,0 +1,99 @@
+﻿{% extends 'base.html' %}
+{% block title %}Portal Log Detail{% endblock %}
+{% block page_title %}Portal Log Detail{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
+  <div class="page-header mb-0">
+    <h1>Portal Log Detail</h1>
+    <p>Attendance evidence record for {{ log.created_at|date:'M d, Y g:i A' }}.</p>
+  </div>
+  <div class="d-flex gap-2 flex-wrap align-items-center">
+    <a href="{% url 'attendance:portal_log_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Logs
+    </a>
+    {% if log.selfie_image %}
+      <a href="{% url 'attendance:portal_log_selfie' log.pk %}" target="_blank" rel="noopener" class="btn btn-primary btn-sm">
+        <i class="bi bi-image me-1"></i>View Selfie
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-camera me-1" style="color:#1565C0;"></i>Evidence Summary
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Employee</div>
+        <div class="fw-semibold">{% if log.employee %}{{ log.employee.full_name }} ({{ log.employee.employee_id }}){% else %}-{% endif %}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Company</div>
+        <div class="fw-semibold">{{ log.company.name|default:'-' }}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">Attendance Location</div>
+        <div class="fw-semibold">{{ log.attendance_location.name|default:'-' }}</div>
+      </div>
+
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Action</div>
+        <div>{{ log.get_action_display }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Status</div>
+        <div>{{ log.get_status_display }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Timestamp</div>
+        <div>{{ log.created_at|date:'M d, Y g:i A' }}</div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="text-muted small">Client IP</div>
+        <div><code>{{ log.ip_address|default:'-' }}</code></div>
+      </div>
+
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">GPS Latitude</div>
+        <div>{{ log.gps_latitude|default:'-' }}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">GPS Longitude</div>
+        <div>{{ log.gps_longitude|default:'-' }}</div>
+      </div>
+      <div class="col-12 col-md-4">
+        <div class="text-muted small">GPS Accuracy</div>
+        <div>{% if log.gps_accuracy is not None %}±{{ log.gps_accuracy }} m{% else %}-{% endif %}</div>
+      </div>
+
+      <div class="col-12">
+        <div class="text-muted small">Selfie Evidence</div>
+        {% if log.selfie_image %}
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <span class="badge text-bg-success">Captured</span>
+            <a href="{% url 'attendance:portal_log_selfie' log.pk %}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-image me-1"></i>View Selfie
+            </a>
+          </div>
+          <div class="mt-2 border rounded p-2" style="max-width:320px;background:#f8fafc;">
+            <img src="{% url 'attendance:portal_log_selfie' log.pk %}" alt="Attendance selfie evidence"
+                 class="img-fluid rounded" style="max-height:260px;object-fit:contain;">
+          </div>
+        {% else %}
+          <span class="text-muted">No selfie captured for this log.</span>
+        {% endif %}
+      </div>
+
+      {% if log.blocked_reason %}
+      <div class="col-12">
+        <div class="text-muted small">Blocked/Failure Reason</div>
+        <div class="alert alert-warning py-2 mb-0">{{ log.blocked_reason }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
