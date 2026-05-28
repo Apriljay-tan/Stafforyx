@@ -1,0 +1,65 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}File Incident Report{% endblock %}
+{% block page_title %}File Incident Report{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>File Incident Report</h1>
+  <p>Submit an incident for HR review and action.</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-exclamation-triangle me-1" style="color:#DC2626;"></i>Incident Details
+  </div>
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+      <div class="col-12">
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      </div>
+      {% endif %}
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.incident_date.label }}</label>
+        {{ form.incident_date }}
+        {{ form.incident_date.errors }}
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.incident_time.label }}</label>
+        {{ form.incident_time }}
+        {{ form.incident_time.errors }}
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.location.label }}</label>
+        {{ form.location }}
+        {{ form.location.errors }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ form.title.label }}</label>
+        {{ form.title }}
+        {{ form.title.errors }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ form.description.label }}</label>
+        {{ form.description }}
+        {{ form.description.errors }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ form.witnesses.label }}</label>
+        {{ form.witnesses }}
+        {{ form.witnesses.errors }}
+      </div>
+      <div class="col-12 d-flex justify-content-end gap-2">
+        <a href="{% url 'portal:incident_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-danger">
+          <i class="bi bi-send me-1"></i>Submit Report
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+

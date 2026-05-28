@@ -1,0 +1,59 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}My Incident Reports{% endblock %}
+{% block page_title %}My Incident Reports{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1>Incident Reports</h1>
+    <p>Review incidents you have submitted.</p>
+  </div>
+  <a href="{% url 'portal:incident_new' %}" class="btn btn-danger btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>File Report
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-exclamation-triangle me-1" style="color:#DC2626;"></i>Incident History</span>
+    <span class="badge bg-danger rounded-pill">{{ incidents.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Date</th>
+          <th>Title</th>
+          <th>Location</th>
+          <th>Status</th>
+          <th class="pe-3">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for incident in incidents %}
+        <tr>
+          <td class="ps-3">{{ incident.incident_date|date:"M d, Y" }}</td>
+          <td class="fw-semibold">{{ incident.title }}</td>
+          <td>{{ incident.location }}</td>
+          <td>
+            {% if incident.status == 'resolved' %}<span class="badge text-bg-success">Resolved</span>
+            {% elif incident.status == 'rejected' %}<span class="badge text-bg-danger">Rejected</span>
+            {% elif incident.status == 'under_review' %}<span class="badge text-bg-warning">Under Review</span>
+            {% else %}<span class="badge text-bg-secondary">Submitted</span>{% endif %}
+          </td>
+          <td class="pe-3 text-muted">{{ incident.description|truncatechars:90 }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="text-center py-5 text-muted">
+            No incident reports submitted yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+

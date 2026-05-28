@@ -2,17 +2,170 @@
 {% block title %}Payslip — {{ record.employee.full_name }}{% endblock %}
 {% block page_title %}Payslip{% endblock %}
 
+{% block extra_css %}
+<style>
+/* ── Payslip document styling ─────────────────────────────────────────────── */
+#payslip-doc {
+  font-family: 'Inter', Arial, sans-serif;
+  font-size: .8rem;
+  color: #1a1a2e;
+  max-width: 860px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #d0d7e3;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ps-header {
+  background: {{ company.payslip_accent_color|default:"#1565C0" }};
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.ps-company-name { font-size: 1.1rem; font-weight: 700; margin: 0 0 .2rem; }
+.ps-company-address { font-size: .75rem; opacity: .85; white-space: pre-line; max-width: 340px; }
+.ps-title-block { text-align: right; }
+.ps-title { font-size: 1.6rem; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; line-height: 1; }
+.ps-subtitle { font-size: .72rem; opacity: .8; margin-top: .3rem; }
+
+.ps-section-header {
+  background: {{ company.payslip_accent_color|default:"#1565C0" }}22;
+  border-top: 2px solid {{ company.payslip_accent_color|default:"#1565C0" }};
+  border-bottom: 1px solid #d0d7e3;
+  padding: .4rem 1rem;
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: {{ company.payslip_accent_color|default:"#1565C0" }};
+}
+
+.ps-info-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-bottom: 1px solid #e8edf5;
+}
+.ps-info-cell {
+  padding: .5rem 1rem;
+  border-right: 1px solid #e8edf5;
+}
+.ps-info-cell:last-child { border-right: none; }
+.ps-info-label { font-size: .68rem; text-transform: uppercase; letter-spacing: .5px; color: #64748b; }
+.ps-info-value { font-weight: 600; color: #0D1B2A; margin-top: .1rem; }
+
+.ps-rates-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 1px solid #e8edf5;
+}
+.ps-rate-cell {
+  flex: 1 1 160px;
+  padding: .45rem 1rem;
+  border-right: 1px solid #e8edf5;
+}
+.ps-rate-cell:last-child { border-right: none; }
+.ps-rate-label { font-size: .67rem; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+.ps-rate-value { font-weight: 700; color: #0D1B2A; font-size: .88rem; }
+
+.ps-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.ps-col { border-right: 1px solid #d0d7e3; }
+.ps-col:last-child { border-right: none; }
+
+.ps-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .8rem;
+}
+.ps-table td {
+  padding: .3rem .8rem;
+  border-bottom: 1px solid #f0f4f8;
+  vertical-align: middle;
+}
+.ps-table .label { color: #475569; }
+.ps-table .amount { text-align: right; font-weight: 500; white-space: nowrap; }
+.ps-table .subtotal td {
+  background: #f8fafc;
+  font-weight: 600;
+  border-top: 1px solid #d0d7e3;
+  border-bottom: 1px solid #d0d7e3;
+}
+.ps-table .dimrow td { color: #94a3b8; font-size: .75rem; font-style: italic; }
+
+.ps-net-block {
+  background: {{ company.payslip_accent_color|default:"#1565C0" }};
+  color: #fff;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.ps-net-label { font-size: .8rem; text-transform: uppercase; letter-spacing: 1.5px; opacity: .85; }
+.ps-net-amount { font-size: 1.8rem; font-weight: 800; }
+
+.ps-footer {
+  padding: .8rem 1.5rem;
+  border-top: 1px solid #e8edf5;
+  font-size: .75rem;
+  color: #64748b;
+}
+.ps-received-grid {
+  display: flex;
+  gap: 3rem;
+  padding: .8rem 1.5rem;
+  border-top: 2px dashed #d0d7e3;
+  font-size: .78rem;
+}
+.ps-sig-line {
+  flex: 1;
+  border-bottom: 1px solid #333;
+  min-height: 28px;
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: .15rem;
+}
+
+/* Print */
+@media print {
+  nav, #topbar, .d-flex.justify-content-between.align-items-center.mb-3,
+  .alert, .btn, nav[aria-label], .no-print { display: none !important; }
+  #main-content { margin: 0 !important; padding: 0 !important; }
+  .page-body { padding: 0 !important; }
+  #payslip-doc { max-width: 100% !important; border: none !important; border-radius: 0 !important; }
+  body { background: #fff !important; }
+  .ps-body { grid-template-columns: 1fr 1fr; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 
-<nav aria-label="breadcrumb" class="mb-3">
+<nav aria-label="breadcrumb" class="mb-3 no-print">
   <ol class="breadcrumb" style="font-size:.85rem;">
     <li class="breadcrumb-item"><a href="{% url 'payroll:payroll_record_list' %}" class="text-decoration-none">Payroll</a></li>
     <li class="breadcrumb-item active">Payslip</li>
   </ol>
 </nav>
 
-<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-  <div></div>
+<!-- Action buttons -->
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 no-print">
+  <div>
+    {% if record.status == 'paid' %}
+      <span class="badge text-bg-primary fs-6">Paid</span>
+    {% elif record.status == 'approved' %}
+      <span class="badge text-bg-success fs-6">Approved</span>
+    {% else %}
+      <span class="badge text-bg-secondary fs-6">Draft</span>
+    {% endif %}
+  </div>
   <div class="d-flex gap-2 flex-wrap">
     <button onclick="window.print()" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-printer me-1"></i>Print / Save PDF
@@ -27,6 +180,9 @@
         </button>
       </form>
     {% endif %}
+    <a href="{% url 'payroll:payroll_record_edit' record.pk %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
     <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-outline-secondary btn-sm">
       <i class="bi bi-arrow-left me-1"></i>Back
     </a>
@@ -34,258 +190,315 @@
 </div>
 
 {% if record.payslip_sent_at %}
-  <div class="alert alert-success py-2 mb-3" style="font-size:.82rem;">
+  <div class="alert alert-success py-2 mb-3 no-print" style="font-size:.82rem;">
     <i class="bi bi-check-circle me-1"></i>
     Last sent to <strong>{{ record.employee.email }}</strong> on {{ record.payslip_sent_at|date:"M d, Y g:i A" }}.
   </div>
 {% endif %}
 
-<!-- ── PAYSLIP DOCUMENT ────────────────────────────────────────────────────── -->
-<div class="card shadow-sm" id="payslip-doc" style="max-width:780px;margin:0 auto;">
-  <div class="card-body p-4 p-md-5">
+<!-- ── PAYSLIP DOCUMENT ─────────────────────────────────────────────────── -->
+<div id="payslip-doc">
 
-    <!-- Header -->
-    <div class="d-flex align-items-start justify-content-between mb-4 pb-3 border-bottom">
-      <div>
-        {% if company.logo %}
-          <img src="{{ company.logo.url }}" style="height:48px;object-fit:contain;" alt="{{ company.name }}">
-        {% else %}
-          <div class="fw-bold" style="font-size:1.2rem;color:#0D1B2A;">{{ company.name }}</div>
-        {% endif %}
-        <div class="text-muted" style="font-size:.8rem;">Payslip</div>
-      </div>
-      <div class="text-end">
-        <div class="fw-semibold" style="font-size:.95rem;">{{ record.payroll_period.name }}</div>
-        <div class="text-muted" style="font-size:.8rem;">
-          {{ record.payroll_period.start_date|date:"M d" }} – {{ record.payroll_period.end_date|date:"M d, Y" }}
-        </div>
-        {% if record.payroll_period.pay_date %}
-          <div class="text-muted" style="font-size:.8rem;">Pay Date: {{ record.payroll_period.pay_date|date:"M d, Y" }}</div>
-        {% endif %}
-        <div class="mt-1">
-          {% if record.status == 'paid' %}
-            <span class="badge text-bg-primary">Paid</span>
-          {% elif record.status == 'approved' %}
-            <span class="badge text-bg-success">Approved</span>
-          {% else %}
-            <span class="badge text-bg-secondary">Draft</span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <!-- Employee Info -->
-    <div class="row g-2 mb-4">
-      <div class="col-12 col-sm-6">
-        <div class="text-muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Employee</div>
-        <div class="fw-bold" style="font-size:1rem;color:#0D1B2A;">{{ record.employee.full_name }}</div>
-        <div class="text-muted" style="font-size:.82rem;">
-          {{ record.employee.employee_id }}
-          {% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
-          {% if record.employee.position %} &bull; {{ record.employee.position.title }}{% endif %}
-        </div>
-        {% if record.employee.email %}
-          <div class="text-muted" style="font-size:.8rem;">{{ record.employee.email }}</div>
-        {% endif %}
-      </div>
-      <div class="col-12 col-sm-6 text-sm-end">
-        <div class="text-muted" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.5px;">Daily Rate</div>
-        <div class="fw-semibold">&#8369;{{ record.daily_rate|floatformat:2 }}</div>
-      </div>
-    </div>
-
-    <!-- Attendance Summary -->
-    <div class="mb-4">
-      <div class="fw-semibold mb-2" style="font-size:.85rem;color:#1565C0;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
-        Attendance Summary
-      </div>
-      <div class="row g-2" style="font-size:.875rem;">
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Scheduled Days</div>
-            <div class="fw-bold" style="font-size:1.1rem;">{{ record.scheduled_days }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Present Days</div>
-            <div class="fw-bold text-success" style="font-size:1.1rem;">{{ record.present_days }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Paid Leave</div>
-            <div class="fw-bold" style="font-size:1.1rem;">{{ record.paid_leave_days|floatformat:0 }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Unpaid Leave</div>
-            <div class="fw-bold text-warning" style="font-size:1.1rem;">{{ record.unpaid_leave_days|floatformat:0 }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Absent Days</div>
-            <div class="fw-bold text-danger" style="font-size:1.1rem;">{{ record.absent_days|floatformat:0 }}</div>
-          </div>
-        </div>
-        <div class="col-6 col-sm-4">
-          <div class="rounded p-2 text-center" style="background:#f4f6fa;">
-            <div class="text-muted" style="font-size:.72rem;">Payable Days</div>
-            <div class="fw-bold text-primary" style="font-size:1.1rem;">{{ record.payable_days|floatformat:2 }}</div>
-          </div>
-        </div>
-      </div>
-      <!-- Time summary -->
-      {% if record.late_minutes or record.undertime_minutes or record.overtime_minutes %}
-      <div class="row g-2 mt-1" style="font-size:.875rem;">
-        {% if record.late_minutes %}
-        <div class="col-auto">
-          <span class="badge text-bg-warning">Late: {{ record.late_minutes }} min</span>
-        </div>
-        {% endif %}
-        {% if record.undertime_minutes %}
-        <div class="col-auto">
-          <span class="badge text-bg-warning">Undertime: {{ record.undertime_minutes }} min</span>
-        </div>
-        {% endif %}
-        {% if record.overtime_minutes %}
-        <div class="col-auto">
-          <span class="badge text-bg-success">Overtime: {{ record.overtime_minutes }} min</span>
-        </div>
-        {% endif %}
-      </div>
+  <!-- Header -->
+  <div class="ps-header">
+    <div>
+      {% if company.payslip_show_company_logo and company.logo %}
+        <img src="{{ company.logo.url }}" style="height:44px;object-fit:contain;filter:brightness(0) invert(1);margin-bottom:.4rem;" alt="{{ company.name }}">
+      {% endif %}
+      <p class="ps-company-name">{{ company.payslip_display_name }}</p>
+      {% if company.payslip_display_address %}
+        <p class="ps-company-address">{{ company.payslip_display_address }}</p>
       {% endif %}
     </div>
-
-    <!-- Earnings / Deductions side by side -->
-    <div class="row g-3 mb-4">
-
-      <!-- Earnings -->
-      <div class="col-12 col-sm-6">
-        <div class="fw-semibold mb-2" style="font-size:.85rem;color:#059669;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
-          Earnings
-        </div>
-        <table class="table table-sm mb-0" style="font-size:.875rem;">
-          <tbody>
-            <tr>
-              <td class="text-muted">Basic Pay <small class="text-muted">({{ record.payable_days|floatformat:2 }}d)</small></td>
-              <td class="text-end fw-semibold">&#8369;{{ record.basic_pay|floatformat:2 }}</td>
-            </tr>
-            {% if record.overtime_pay %}
-            <tr>
-              <td class="text-muted">Overtime Pay <small class="text-muted">({{ record.overtime_minutes }}min ×1.25)</small></td>
-              <td class="text-end fw-semibold">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.allowances %}
-            <tr>
-              <td class="text-muted">Allowances</td>
-              <td class="text-end fw-semibold">&#8369;{{ record.allowances|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% for adj in earning_adjs %}
-            <tr>
-              <td class="text-muted">{{ adj.name }}{% if adj.remarks %} <small class="text-muted">({{ adj.remarks }})</small>{% endif %}</td>
-              <td class="text-end fw-semibold text-success">+&#8369;{{ adj.amount|floatformat:2 }}</td>
-            </tr>
-            {% endfor %}
-            <tr class="fw-bold border-top">
-              <td>Gross Pay</td>
-              <td class="text-end">&#8369;{{ record.gross_pay|floatformat:2 }}</td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="ps-title-block">
+      <div class="ps-title">Payslip</div>
+      <div class="ps-subtitle">
+        {{ record.payroll_period.start_date|date:"M d" }} – {{ record.payroll_period.end_date|date:"M d, Y" }}
       </div>
-
-      <!-- Deductions -->
-      <div class="col-12 col-sm-6">
-        <div class="fw-semibold mb-2" style="font-size:.85rem;color:#DC2626;border-bottom:1px solid #dee2e6;padding-bottom:.3rem;">
-          Deductions
-        </div>
-        <table class="table table-sm mb-0" style="font-size:.875rem;">
-          <tbody>
-            {% if record.sss_deduction %}
-            <tr>
-              <td class="text-muted">SSS</td>
-              <td class="text-end">&#8369;{{ record.sss_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.philhealth_deduction %}
-            <tr>
-              <td class="text-muted">PhilHealth</td>
-              <td class="text-end">&#8369;{{ record.philhealth_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.pagibig_deduction %}
-            <tr>
-              <td class="text-muted">Pag-IBIG</td>
-              <td class="text-end">&#8369;{{ record.pagibig_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.tax_deduction %}
-            <tr>
-              <td class="text-muted">Withholding Tax</td>
-              <td class="text-end">&#8369;{{ record.tax_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.late_deduction %}
-            <tr>
-              <td class="text-muted">Late Deduction <small>({{ record.late_minutes }}min)</small></td>
-              <td class="text-end">&#8369;{{ record.late_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.undertime_deduction %}
-            <tr>
-              <td class="text-muted">Undertime Deduction <small>({{ record.undertime_minutes }}min)</small></td>
-              <td class="text-end">&#8369;{{ record.undertime_deduction|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% if record.other_deductions %}
-            <tr>
-              <td class="text-muted">Other Deductions</td>
-              <td class="text-end">&#8369;{{ record.other_deductions|floatformat:2 }}</td>
-            </tr>
-            {% endif %}
-            {% for adj in deduction_adjs %}
-            <tr>
-              <td class="text-muted">{{ adj.name }}{% if adj.remarks %} <small>({{ adj.remarks }})</small>{% endif %}</td>
-              <td class="text-end text-danger">&#8369;{{ adj.amount|floatformat:2 }}</td>
-            </tr>
-            {% endfor %}
-            <!-- Absence info (display only — already excluded from basic_pay) -->
-            {% if record.absent_days %}
-            <tr class="text-muted" style="font-size:.8rem;">
-              <td colspan="2" class="pt-2">
-                <i class="bi bi-info-circle me-1"></i>
-                {{ record.absent_days|floatformat:0 }} absent day(s) already excluded from basic pay.
-              </td>
-            </tr>
-            {% endif %}
-          </tbody>
-        </table>
-      </div>
+      {% if record.payroll_period.pay_date %}
+        <div class="ps-subtitle">Pay Date: {{ record.payroll_period.pay_date|date:"M d, Y" }}</div>
+      {% endif %}
     </div>
-
-    <!-- Net Pay -->
-    <div class="p-3 rounded text-center" style="background:#0D1B2A;color:#fff;">
-      <div class="text-muted" style="font-size:.8rem;letter-spacing:.5px;text-transform:uppercase;">Net Pay</div>
-      <div class="fw-bold" style="font-size:1.8rem;">&#8369;{{ record.net_pay|floatformat:2 }}</div>
-      <div style="font-size:.75rem;opacity:.7;">{{ record.payroll_period.name }}</div>
-    </div>
-
   </div>
-</div>
 
-{% endblock %}
+  <!-- Employee Info -->
+  <div class="ps-section-header"><i class="bi bi-person me-1"></i>Employee Information</div>
+  <div class="ps-info-grid">
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Employee Name</div>
+      <div class="ps-info-value">{{ record.employee.full_name }}</div>
+    </div>
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Employee ID</div>
+      <div class="ps-info-value" style="font-family:monospace;">{{ record.employee.employee_id }}</div>
+    </div>
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Payroll Period</div>
+      <div class="ps-info-value">{{ record.payroll_period.name }}</div>
+    </div>
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Department</div>
+      <div class="ps-info-value">{{ record.employee.department.name|default:"—" }}</div>
+    </div>
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Position</div>
+      <div class="ps-info-value">{{ record.employee.position.title|default:"—" }}</div>
+    </div>
+    <div class="ps-info-cell">
+      <div class="ps-info-label">Status</div>
+      <div class="ps-info-value">
+        {% if record.status == 'paid' %}<span style="color:#1565C0;font-weight:700;">PAID</span>
+        {% elif record.status == 'approved' %}<span style="color:#059669;font-weight:700;">APPROVED</span>
+        {% else %}<span style="color:#64748b;">DRAFT</span>{% endif %}
+      </div>
+    </div>
+  </div>
 
-{% block extra_js %}
-<style>
-@media print {
-  nav, .d-flex.justify-content-between, .alert, .btn, nav[aria-label] { display: none !important; }
-  #payslip-doc { box-shadow: none !important; max-width: 100% !important; }
-  body { background: #fff !important; }
-}
-</style>
+  <!-- Rate Information -->
+  {% if company.payslip_show_rates %}
+  <div class="ps-section-header"><i class="bi bi-calculator me-1"></i>Rate Information</div>
+  <div class="ps-rates-grid">
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Daily Rate</div>
+      <div class="ps-rate-value">&#8369;{{ record.daily_rate|floatformat:2 }}</div>
+    </div>
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Hourly Rate</div>
+      <div class="ps-rate-value">&#8369;{{ record.hourly_rate|floatformat:2 }}/hr</div>
+    </div>
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Regular O.T. Rate (×1.25)</div>
+      <div class="ps-rate-value">&#8369;{{ regular_ot_rate|floatformat:2 }}/hr</div>
+    </div>
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Rest Day / Sp. Holiday O.T. (×1.30)</div>
+      <div class="ps-rate-value">&#8369;{{ rest_day_ot_rate|floatformat:2 }}/hr</div>
+    </div>
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Regular Holiday O.T. (×2.60)</div>
+      <div class="ps-rate-value">&#8369;{{ holiday_ot_rate|floatformat:2 }}/hr</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Attendance Summary -->
+  {% if company.payslip_show_attendance_summary %}
+  <div class="ps-section-header"><i class="bi bi-calendar-check me-1"></i>Attendance Summary</div>
+  <div class="ps-info-grid" style="grid-template-columns:repeat(6,1fr);">
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Scheduled</div>
+      <div class="ps-info-value">{{ record.scheduled_days }}</div>
+    </div>
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Present</div>
+      <div class="ps-info-value" style="color:#059669;">{{ record.present_days }}</div>
+    </div>
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Paid Leave</div>
+      <div class="ps-info-value">{{ record.paid_leave_days|floatformat:0 }}</div>
+    </div>
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Unpaid Leave</div>
+      <div class="ps-info-value" style="color:#D97706;">{{ record.unpaid_leave_days|floatformat:0 }}</div>
+    </div>
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Absent</div>
+      <div class="ps-info-value" style="color:#DC2626;">{{ record.absent_days|floatformat:0 }}</div>
+    </div>
+    <div class="ps-info-cell" style="text-align:center;">
+      <div class="ps-info-label">Payable Days</div>
+      <div class="ps-info-value" style="color:{{ company.payslip_accent_color|default:'#1565C0' }};">{{ record.payable_days|floatformat:2 }}</div>
+    </div>
+  </div>
+  {% if record.late_minutes or record.undertime_minutes or record.overtime_minutes %}
+  <div style="padding:.35rem 1rem;background:#fffbeb;border-bottom:1px solid #e8edf5;font-size:.75rem;display:flex;gap:1.5rem;flex-wrap:wrap;">
+    {% if record.late_minutes %}<span><strong>Late:</strong> {{ record.late_minutes }} min</span>{% endif %}
+    {% if record.undertime_minutes %}<span><strong>Undertime:</strong> {{ record.undertime_minutes }} min</span>{% endif %}
+    {% if record.overtime_minutes %}<span><strong>Overtime:</strong> {{ record.overtime_minutes }} min</span>{% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <!-- Earnings & Deductions side by side -->
+  <div class="ps-section-header"><i class="bi bi-receipt me-1"></i>Pay Computation</div>
+  <div class="ps-body">
+
+    <!-- LEFT: Earnings -->
+    <div class="ps-col">
+      <div style="padding:.4rem .8rem;background:#f0fdf4;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#059669;border-bottom:1px solid #d0d7e3;">
+        <i class="bi bi-plus-circle me-1"></i>Earnings
+      </div>
+      <table class="ps-table">
+        <tbody>
+          <tr>
+            <td class="label">No. of Days (Payable)</td>
+            <td class="amount">{{ record.payable_days|floatformat:2 }} days</td>
+          </tr>
+          <tr>
+            <td class="label">No. of Absences</td>
+            <td class="amount">{{ record.absent_days|floatformat:0 }} days</td>
+          </tr>
+          {% if record.late_minutes %}
+          <tr>
+            <td class="label">Late</td>
+            <td class="amount">{{ record.late_minutes }} min</td>
+          </tr>
+          {% endif %}
+          {% if record.undertime_minutes %}
+          <tr>
+            <td class="label">Undertime</td>
+            <td class="amount">{{ record.undertime_minutes }} min</td>
+          </tr>
+          {% endif %}
+          <tr class="subtotal">
+            <td class="label">Basic Salary ({{ record.payable_days|floatformat:2 }}d × &#8369;{{ record.daily_rate|floatformat:2 }})</td>
+            <td class="amount">&#8369;{{ record.basic_pay|floatformat:2 }}</td>
+          </tr>
+          {% if company.payslip_show_overtime_breakdown %}
+          {% if record.overtime_minutes %}
+          <tr>
+            <td class="label">Regular O.T. Pay ({{ record.overtime_minutes }}min)</td>
+            <td class="amount">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% endif %}
+          <!-- Holiday pay placeholder -->
+          <tr class="dimrow">
+            <td class="label">Holiday Pay</td>
+            <td class="amount">—</td>
+          </tr>
+          {% for adj in earning_adjs %}
+          <tr>
+            <td class="label">{{ adj.name }}{% if adj.remarks %} <span style="color:#94a3b8;">({{ adj.remarks }})</span>{% endif %}</td>
+            <td class="amount" style="color:#059669;">+&#8369;{{ adj.amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+          {% if record.allowances %}
+          <tr>
+            <td class="label">Allowances</td>
+            <td class="amount">&#8369;{{ record.allowances|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          <tr style="background:#dcfce7;">
+            <td class="label" style="font-weight:700;font-size:.85rem;">GROSS PAY</td>
+            <td class="amount" style="font-weight:800;font-size:.95rem;color:#059669;">&#8369;{{ record.gross_pay|floatformat:2 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- RIGHT: Deductions -->
+    <div class="ps-col">
+      <div style="padding:.4rem .8rem;background:#fff1f2;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#DC2626;border-bottom:1px solid #d0d7e3;">
+        <i class="bi bi-dash-circle me-1"></i>Deductions
+      </div>
+      <table class="ps-table">
+        <tbody>
+          {% if record.sss_deduction %}
+          <tr>
+            <td class="label">SSS</td>
+            <td class="amount">&#8369;{{ record.sss_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.philhealth_deduction %}
+          <tr>
+            <td class="label">PhilHealth</td>
+            <td class="amount">&#8369;{{ record.philhealth_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.pagibig_deduction %}
+          <tr>
+            <td class="label">Pag-IBIG</td>
+            <td class="amount">&#8369;{{ record.pagibig_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.tax_deduction %}
+          <tr>
+            <td class="label">Withholding Tax</td>
+            <td class="amount">&#8369;{{ record.tax_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.late_deduction %}
+          <tr>
+            <td class="label">Late Deduction</td>
+            <td class="amount">&#8369;{{ record.late_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.undertime_deduction %}
+          <tr>
+            <td class="label">Undertime Deduction</td>
+            <td class="amount">&#8369;{{ record.undertime_deduction|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% for adj in deduction_adjs %}
+          <tr>
+            <td class="label">{{ adj.name }}{% if adj.remarks %} <span style="color:#94a3b8;">({{ adj.remarks }})</span>{% endif %}</td>
+            <td class="amount" style="color:#DC2626;">&#8369;{{ adj.amount|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+          {% if record.other_deductions %}
+          <tr>
+            <td class="label">Other Deductions</td>
+            <td class="amount">&#8369;{{ record.other_deductions|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          <!-- Absence display note (NOT deducted again) -->
+          {% if record.absent_days %}
+          <tr class="dimrow">
+            <td colspan="2">
+              <i class="bi bi-info-circle me-1"></i>
+              {{ record.absent_days|floatformat:0 }} absent day(s) already excluded from basic pay — not deducted again.
+            </td>
+          </tr>
+          {% endif %}
+          <!-- Total deductions spacer -->
+          <tr style="height:8px;"><td colspan="2"></td></tr>
+          <tr style="background:#fee2e2;">
+            <td class="label" style="font-weight:700;font-size:.85rem;">TOTAL DEDUCTIONS</td>
+            <td class="amount" style="font-weight:800;font-size:.95rem;color:#DC2626;">&#8369;{{ total_deductions|floatformat:2 }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Net Pay -->
+  <div class="ps-net-block">
+    <div>
+      <div class="ps-net-label">Net Pay</div>
+      <div style="font-size:.78rem;opacity:.75;">{{ record.payroll_period.name }}</div>
+    </div>
+    <div class="ps-net-amount">&#8369;{{ record.net_pay|floatformat:2 }}</div>
+  </div>
+
+  <!-- Received By -->
+  {% if company.payslip_show_received_by %}
+  <div class="ps-received-grid">
+    <div style="flex:2;">
+      <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:.5rem;">Received By (Employee Signature)</div>
+      <div class="ps-sig-line">{{ record.employee.full_name }}</div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">{{ record.employee.full_name }} / Date</div>
+    </div>
+    <div style="flex:1;">
+      <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:.5rem;">Prepared By</div>
+      <div class="ps-sig-line"></div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">HR/Payroll Officer</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Footer Note -->
+  {% if company.payslip_footer_note %}
+  <div class="ps-footer">
+    {{ company.payslip_footer_note }}
+  </div>
+  {% else %}
+  <div class="ps-footer">
+    This payslip is computer-generated by Stafforyx HR. Please keep this document for your records.
+    Contact HR if you have questions about your pay.
+  </div>
+  {% endif %}
+
+</div><!-- /#payslip-doc -->
+
 {% endblock %}

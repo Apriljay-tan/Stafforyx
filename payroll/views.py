@@ -234,6 +234,7 @@ def payroll_period_delete(request, pk):
 # ── Payslip ────────────────────────────────────────────────────────────────────
 
 def payslip_view(request, pk):
+    from decimal import Decimal
     record = get_object_or_404(
         PayrollRecord.objects.select_related(
             'company', 'payroll_period', 'employee',
@@ -247,11 +248,19 @@ def payslip_view(request, pk):
     earning_adjs = record.adjustments.filter(adjustment_type='earning')
     deduction_adjs = record.adjustments.filter(adjustment_type='deduction')
 
+    hourly_rate = record.hourly_rate or Decimal('0')
+    q2 = Decimal('0.01')
+    total_deductions = (record.gross_pay - record.net_pay).quantize(q2)
+
     return render(request, 'payroll/payslip.html', {
         'record': record,
         'earning_adjs': earning_adjs,
         'deduction_adjs': deduction_adjs,
         'company': record.company,
+        'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
+        'rest_day_ot_rate': (hourly_rate * Decimal('1.30')).quantize(q2),
+        'holiday_ot_rate': (hourly_rate * Decimal('2.60')).quantize(q2),
+        'total_deductions': total_deductions,
     })
 
 

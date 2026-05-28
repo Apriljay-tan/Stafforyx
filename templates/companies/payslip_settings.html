@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}Payslip Settings{% endblock %}
+{% block page_title %}Payslip Settings{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>Payslip Settings</h1>
+  <p>Company: <strong>{{ company.name }}</strong></p>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-gear me-1"></i>Company Payslip Configuration</span>
+    <a href="{% url 'payroll:payroll_record_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back to Payroll
+    </a>
+  </div>
+  <div class="card-body">
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">
+        {{ form.non_field_errors }}
+      </div>
+    {% endif %}
+
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">{{ form.payslip_company_display_name.label }}</label>
+        {{ form.payslip_company_display_name }}
+        <div class="form-text">{{ form.payslip_company_display_name.help_text }}</div>
+        {{ form.payslip_company_display_name.errors }}
+      </div>
+
+      <div class="col-12 col-md-6">
+        <label class="form-label">{{ form.payslip_template_style.label }}</label>
+        {{ form.payslip_template_style }}
+        {{ form.payslip_template_style.errors }}
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">{{ form.payslip_company_address.label }}</label>
+        {{ form.payslip_company_address }}
+        <div class="form-text">{{ form.payslip_company_address.help_text }}</div>
+        {{ form.payslip_company_address.errors }}
+      </div>
+
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.payslip_accent_color.label }}</label><br />
+        {{ form.payslip_accent_color }}
+        <div class="form-text">{{ form.payslip_accent_color.help_text }}</div>
+        {{ form.payslip_accent_color.errors }}
+      </div>
+
+      <div class="col-12 col-md-8">
+        <div class="row g-2">
+          <div class="col-12 col-md-6 form-check">
+            {{ form.payslip_show_company_logo }} <label class="form-check-label">{{ form.payslip_show_company_logo.label }}</label>
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.payslip_show_rates }} <label class="form-check-label">{{ form.payslip_show_rates.label }}</label>
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.payslip_show_attendance_summary }} <label class="form-check-label">{{ form.payslip_show_attendance_summary.label }}</label>
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.payslip_show_overtime_breakdown }} <label class="form-check-label">{{ form.payslip_show_overtime_breakdown.label }}</label>
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.payslip_show_received_by }} <label class="form-check-label">{{ form.payslip_show_received_by.label }}</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-12">
+        <label class="form-label">{{ form.payslip_footer_note.label }}</label>
+        {{ form.payslip_footer_note }}
+        <div class="form-text">{{ form.payslip_footer_note.help_text }}</div>
+        {{ form.payslip_footer_note.errors }}
+      </div>
+
+      <div class="col-12 d-flex justify-content-end">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-save me-1"></i>Save Settings
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

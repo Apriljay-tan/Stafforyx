@@ -1,0 +1,167 @@
+{% extends 'portal/base.html' %}
+{% block title %}My Portal — {{ employee.full_name }}{% endblock %}
+{% block page_title %}Employee Portal{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-3">
+  <h1>Welcome, {{ employee.first_name }}!</h1>
+  <p>{{ employee.employee_id }}{% if employee.department %} &bull; {{ employee.department.name }}{% endif %}{% if employee.position %} &bull; {{ employee.position.title }}{% endif %}</p>
+</div>
+
+<!-- Quick actions -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="{% url 'portal:payslip_list' %}" class="text-decoration-none">
+      <div class="stat-card text-center">
+        <div class="stat-icon mx-auto mb-2" style="background:#EEF2FF;color:#1565C0;"><i class="bi bi-receipt"></i></div>
+        <div class="stat-label">My Payslips</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'portal:leave_new' %}" class="text-decoration-none">
+      <div class="stat-card text-center">
+        <div class="stat-icon mx-auto mb-2" style="background:#F0FDF4;color:#059669;"><i class="bi bi-calendar2-plus"></i></div>
+        <div class="stat-label">File Leave</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'portal:time_clock' %}" class="text-decoration-none">
+      <div class="stat-card text-center">
+        <div class="stat-icon mx-auto mb-2" style="background:#FFF7ED;color:#D97706;"><i class="bi bi-fingerprint"></i></div>
+        <div class="stat-label">Time In / Out</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="{% url 'portal:incident_new' %}" class="text-decoration-none">
+      <div class="stat-card text-center">
+        <div class="stat-icon mx-auto mb-2" style="background:#FFF1F2;color:#DC2626;"><i class="bi bi-exclamation-triangle"></i></div>
+        <div class="stat-label">File Incident</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <!-- Recent Payslips -->
+  <div class="col-12 col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-receipt me-1" style="color:#1565C0;"></i>Recent Payslips</span>
+        <a href="{% url 'portal:payslip_list' %}" class="btn btn-outline-primary btn-sm py-0 px-2" style="font-size:.75rem;">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_payslips %}
+        <table class="table table-sm mb-0" style="font-size:.82rem;">
+          <tbody>
+            {% for ps in recent_payslips %}
+            <tr>
+              <td class="ps-3">
+                <div class="fw-semibold">{{ ps.payroll_period.name }}</div>
+                <div class="text-muted" style="font-size:.73rem;">{{ ps.payroll_period.start_date|date:"M d" }} – {{ ps.payroll_period.end_date|date:"M d, Y" }}</div>
+              </td>
+              <td class="text-end fw-semibold" style="color:#1565C0;">&#8369;{{ ps.net_pay|floatformat:2 }}</td>
+              <td class="text-end pe-3">
+                <a href="{% url 'portal:payslip_detail' ps.pk %}" class="btn btn-sm btn-outline-secondary py-0 px-2">View</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:.85rem;">No payslips yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Leaves -->
+  <div class="col-12 col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-calendar2-check me-1" style="color:#059669;"></i>Recent Leave Requests</span>
+        <a href="{% url 'portal:leave_list' %}" class="btn btn-outline-success btn-sm py-0 px-2" style="font-size:.75rem;">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_leaves %}
+        <table class="table table-sm mb-0" style="font-size:.82rem;">
+          <tbody>
+            {% for lr in recent_leaves %}
+            <tr>
+              <td class="ps-3">
+                <div class="fw-semibold">{{ lr.leave_type.name }}</div>
+                <div class="text-muted" style="font-size:.73rem;">{{ lr.start_date|date:"M d" }} – {{ lr.end_date|date:"M d, Y" }}</div>
+              </td>
+              <td>
+                {% if lr.status == 'approved' %}<span class="badge text-bg-success">Approved</span>
+                {% elif lr.status == 'rejected' %}<span class="badge text-bg-danger">Rejected</span>
+                {% elif lr.status == 'cancelled' %}<span class="badge text-bg-secondary">Cancelled</span>
+                {% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:.85rem;">No leave requests yet.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Attendance -->
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-clock-history me-1" style="color:#D97706;"></i>Recent Attendance</span>
+        <a href="{% url 'portal:attendance' %}" class="btn btn-outline-warning btn-sm py-0 px-2" style="font-size:.75rem;">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_attendance %}
+        <table class="table table-sm mb-0" style="font-size:.82rem;">
+          <tbody>
+            {% for att in recent_attendance %}
+            <tr>
+              <td class="ps-3 fw-semibold">{{ att.date|date:"M d, Y" }}</td>
+              <td>{{ att.time_in|default:"—" }} – {{ att.time_out|default:"—" }}</td>
+              <td>
+                {% if att.late_minutes %}<span class="badge text-bg-warning">Late {{ att.late_minutes }}min</span>{% endif %}
+                {% if att.overtime_minutes %}<span class="badge text-bg-success">OT {{ att.overtime_minutes }}min</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:.85rem;">No attendance records.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Open Incidents -->
+  <div class="col-12 col-md-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-exclamation-triangle me-1" style="color:#DC2626;"></i>Incident Reports</span>
+        <a href="{% url 'portal:incident_list' %}" class="btn btn-outline-danger btn-sm py-0 px-2" style="font-size:.75rem;">View All</a>
+      </div>
+      <div class="card-body text-center py-4">
+        {% if open_incidents %}
+          <div class="fw-bold" style="font-size:1.5rem;color:#DC2626;">{{ open_incidents }}</div>
+          <div class="text-muted" style="font-size:.82rem;">open incident report(s)</div>
+        {% else %}
+          <div class="text-muted" style="font-size:.85rem;">No open incident reports.</div>
+        {% endif %}
+        <a href="{% url 'portal:incident_new' %}" class="btn btn-outline-danger btn-sm mt-3">
+          <i class="bi bi-plus-lg me-1"></i>File New Report
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

@@ -14,6 +14,10 @@ class Company(models.Model):
         ('professional', 'Professional'),
         ('enterprise', 'Enterprise'),
     ]
+    PAYSLIP_STYLE_CHOICES = [
+        ('classic_excel', 'Classic Excel'),
+        ('modern', 'Modern'),
+    ]
 
     name = models.CharField(max_length=255)
     email = models.EmailField()
@@ -22,6 +26,37 @@ class Company(models.Model):
     logo = models.ImageField(upload_to='companies/logos/', blank=True, null=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='trial')
     subscription_plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='free')
+
+    # ── Payslip settings ─────────────────────────────────────────────────────
+    payslip_company_display_name = models.CharField(
+        max_length=200, blank=True,
+        help_text='Override company name shown on payslips. Leave blank to use company name.',
+    )
+    payslip_company_address = models.TextField(
+        blank=True,
+        help_text='Override address shown on payslips. Leave blank to use company address.',
+    )
+    payslip_template_style = models.CharField(
+        max_length=30, choices=PAYSLIP_STYLE_CHOICES, default='classic_excel',
+    )
+    payslip_accent_color = models.CharField(
+        max_length=7, default='#1565C0',
+        help_text='Hex color for payslip accent elements (e.g. #1565C0).',
+    )
+    payslip_show_company_logo = models.BooleanField(default=True)
+    payslip_show_rates = models.BooleanField(
+        default=True,
+        help_text='Show daily rate, hourly rate, and overtime rates section.',
+    )
+    payslip_show_attendance_summary = models.BooleanField(default=True)
+    payslip_show_overtime_breakdown = models.BooleanField(default=True)
+    payslip_show_received_by = models.BooleanField(
+        default=True, help_text='Show "Received by" signature line.',
+    )
+    payslip_footer_note = models.TextField(
+        blank=True, help_text='Optional note printed at the bottom of every payslip.',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -31,3 +66,11 @@ class Company(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def payslip_display_name(self):
+        return self.payslip_company_display_name or self.name
+
+    @property
+    def payslip_display_address(self):
+        return self.payslip_company_address or self.address

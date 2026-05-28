@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "reports",
     "dashboard",
     "licenses",
+    "portal",
 ]
 
 MIDDLEWARE = [

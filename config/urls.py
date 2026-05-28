@@ -13,6 +13,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', module_access_required('can_access_dashboard')(dashboard_home), name='dashboard_home'),
     path('accounts/', include('accounts.urls')),
+    path('companies/', include('companies.urls')),
     path('employees/', include('employees.urls')),
     path('attendance/', include('attendance.urls')),
     path('leaves/', include('leaves.urls')),
@@ -21,6 +22,7 @@ urlpatterns = [
     path('announcements/', include('announcements.urls')),
     path('reports/', include('reports.urls')),
     path('licenses/', include('licenses.urls')),
+    path('portal/', include('portal.urls')),
 ]
 
 if settings.DEBUG:

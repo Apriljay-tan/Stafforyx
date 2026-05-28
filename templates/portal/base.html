@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+
+{% block sidebar %}
+    <div class="sidebar-brand">
+      <a href="{% url 'portal:dashboard' %}" style="display:block;text-decoration:none;">
+        <img src="/media/companies/logos/logo_staffroryx.png"
+             alt="Stafforyx HR"
+             style="height:48px;width:auto;display:block;filter:brightness(0) invert(1);opacity:0.92;">
+      </a>
+      <div style="font-size:.68rem;color:#00BCD4;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;margin-top:.35rem;">
+        Employee Portal
+      </div>
+    </div>
+
+    <div class="sidebar-section-label">My Portal</div>
+    <ul class="nav flex-column sidebar-nav">
+      <li class="nav-item">
+        <a href="{% url 'portal:dashboard' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+          <i class="bi bi-speedometer2"></i> Dashboard
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:payslip_list' %}"
+           class="nav-link {% if 'payslip' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-receipt"></i> My Payslips
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:documents' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'documents' %}active{% endif %}">
+          <i class="bi bi-file-earmark-text"></i> My Documents
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:attendance' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'attendance' %}active{% endif %}">
+          <i class="bi bi-clock-history"></i> My Attendance
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-section-label">Requests</div>
+    <ul class="nav flex-column sidebar-nav">
+      <li class="nav-item">
+        <a href="{% url 'portal:leave_list' %}"
+           class="nav-link {% if 'leave' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-calendar2-check"></i> Leave Requests
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:incident_list' %}"
+           class="nav-link {% if 'incident' in request.resolver_match.url_name and 'manage' not in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-exclamation-triangle"></i> Incident Reports
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:time_clock' %}" class="nav-link">
+          <i class="bi bi-fingerprint"></i> Time In / Out
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-section-label">Navigation</div>
+    <ul class="nav flex-column sidebar-nav">
+      <li class="nav-item">
+        <a href="/" class="nav-link">
+          <i class="bi bi-grid"></i> Main HR System
+        </a>
+      </li>
+      <li class="nav-item">
+        {% if request.user.is_authenticated %}
+          <form method="post" action="{% url 'accounts:logout' %}">
+            {% csrf_token %}
+            <button type="submit" class="nav-link border-0 w-100 text-start" style="background:transparent;">
+              <i class="bi bi-box-arrow-right"></i> Logout
+            </button>
+          </form>
+        {% endif %}
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      Employee Portal<br />
+      Stafforyx HR &copy; {% now "Y" %}
+    </div>
+{% endblock sidebar %}

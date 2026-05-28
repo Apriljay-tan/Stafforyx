@@ -304,6 +304,7 @@
 
   <!-- ── SIDEBAR ── -->
   <nav id="sidebar">
+  {% block sidebar %}
     <div class="sidebar-brand">
       <a href="/" style="display:block;text-decoration:none;">
         <img src="/media/companies/logos/logo_staffroryx.png"
@@ -388,6 +389,14 @@
           <i class="bi bi-key"></i> License Status
         </a>
       </li>
+      {% if selected_company %}
+      <li class="nav-item">
+        <a href="{% url 'companies:payslip_settings' selected_company.pk %}"
+           class="nav-link {% if request.resolver_match.app_name == 'companies' %}active{% endif %}">
+          <i class="bi bi-gear"></i> Payslip Settings
+        </a>
+      </li>
+      {% endif %}
       {% if request.user.is_superuser %}
       <li class="nav-item">
         <a href="/admin/" class="nav-link"><i class="bi bi-shield-lock"></i> Admin Panel</a>
@@ -401,6 +410,12 @@
         <a href="{% url 'accounts:user_list' %}"
            class="nav-link {% if request.resolver_match.app_name == 'accounts' and request.resolver_match.url_name != 'login' %}active{% endif %}">
           <i class="bi bi-person-circle"></i> Users
+        </a>
+      </li>
+      <li class="nav-item">
+        <a href="{% url 'portal:dashboard' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'portal' %}active{% endif %}">
+          <i class="bi bi-person-workspace"></i> Employee Portal
         </a>
       </li>
       <li class="nav-item">
@@ -421,6 +436,7 @@
       Stafforyx HR &copy; {% now "Y" %}<br />
       by SYNTRIX PH
     </div>
+  {% endblock sidebar %}
   </nav>
 
   <!-- ── TOPBAR ── -->
