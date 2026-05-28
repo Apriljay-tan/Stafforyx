@@ -1,0 +1,37 @@
+﻿{% extends 'base.html' %}
+{% block title %}Confirm Portal Log Wipeout{% endblock %}
+{% block page_title %}Confirm Portal Log Wipeout{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-6">
+    <div class="card border-danger">
+      <div class="card-header bg-danger text-white">
+        <i class="bi bi-exclamation-triangle-fill me-1"></i>Confirm Company Portal Log Wipeout
+      </div>
+      <div class="card-body">
+        <p class="mb-2">You are about to delete <strong>{{ log_count }}</strong> attendance portal log(s) for:</p>
+        <p class="fw-semibold" style="font-size:1.05rem;color:#0D1B2A;">{{ company.name }}</p>
+
+        <div class="alert alert-warning py-2" role="alert">
+          This removes portal log rows and attached selfie files only.
+          Attendance records, payroll records, employees, and payslips are not deleted.
+        </div>
+
+        <form method="post" class="mt-3">
+          {% csrf_token %}
+          <label class="form-label fw-semibold">Type the company name to confirm:</label>
+          <input type="text" name="confirm_text" class="form-control" placeholder="{{ company.name }}" required>
+
+          <div class="d-flex justify-content-end gap-2 mt-3">
+            <a href="{% url 'attendance:portal_log_list' %}" class="btn btn-outline-secondary">Cancel</a>
+            <button type="submit" class="btn btn-danger">
+              <i class="bi bi-trash me-1"></i>Delete All Company Logs
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

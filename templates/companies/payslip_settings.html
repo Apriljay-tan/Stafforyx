@@ -92,6 +92,40 @@
         <div class="form-text">{{ form.attendance_selfie_retention_days.help_text }}</div>
         {{ form.attendance_selfie_retention_days.errors }}
       </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.attendance_portal_log_retention_days.label }}</label>
+        {{ form.attendance_portal_log_retention_days }}
+        <div class="form-text">{{ form.attendance_portal_log_retention_days.help_text }}</div>
+        {{ form.attendance_portal_log_retention_days.errors }}
+      </div>
+      <div class="col-12 col-md-8">
+        <div class="row g-2">
+          <div class="col-12 col-md-6 form-check">
+            {{ form.attendance_log_page_opened_events }}
+            <label class="form-check-label">{{ form.attendance_log_page_opened_events.label }}</label>
+            <div class="form-text">{{ form.attendance_log_page_opened_events.help_text }}</div>
+            {{ form.attendance_log_page_opened_events.errors }}
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.attendance_log_blocked_attempts }}
+            <label class="form-check-label">{{ form.attendance_log_blocked_attempts.label }}</label>
+            <div class="form-text">{{ form.attendance_log_blocked_attempts.help_text }}</div>
+            {{ form.attendance_log_blocked_attempts.errors }}
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.attendance_log_clock_actions }}
+            <label class="form-check-label">{{ form.attendance_log_clock_actions.label }}</label>
+            <div class="form-text">{{ form.attendance_log_clock_actions.help_text }}</div>
+            {{ form.attendance_log_clock_actions.errors }}
+          </div>
+          <div class="col-12 col-md-6 form-check">
+            {{ form.attendance_auto_delete_portal_logs }}
+            <label class="form-check-label">{{ form.attendance_auto_delete_portal_logs.label }}</label>
+            <div class="form-text">{{ form.attendance_auto_delete_portal_logs.help_text }}</div>
+            {{ form.attendance_auto_delete_portal_logs.errors }}
+          </div>
+        </div>
+      </div>
 
       <div class="col-12 d-flex justify-content-end">
         <button type="submit" class="btn btn-primary">

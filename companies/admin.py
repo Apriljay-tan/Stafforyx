@@ -24,7 +24,14 @@ class CompanyAdmin(admin.ModelAdmin):
         }),
         ('Attendance Settings', {
             'classes': ('collapse',),
-            'fields': ('attendance_selfie_retention_days',),
+            'fields': (
+                'attendance_selfie_retention_days',
+                'attendance_portal_log_retention_days',
+                'attendance_log_page_opened_events',
+                'attendance_log_blocked_attempts',
+                'attendance_log_clock_actions',
+                'attendance_auto_delete_portal_logs',
+            ),
         }),
         ('Timestamps', {
             'classes': ('collapse',),

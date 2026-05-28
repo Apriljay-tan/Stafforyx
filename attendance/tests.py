@@ -856,6 +856,8 @@ class AttendancePortalViewTests(TestCase):
 
     def setUp(self):
         self.company = _make_company()
+        self.company.attendance_log_page_opened_events = True
+        self.company.save(update_fields=['attendance_log_page_opened_events'])
         # All-week schedule so tests pass regardless of what day they run.
         self.schedule = _make_schedule(
             self.company,

@@ -5,6 +5,8 @@ import uuid
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 
 from companies.models import Company
 from employees.models import Employee
@@ -435,3 +437,15 @@ class AttendancePortalLog(models.Model):
     def __str__(self):
         emp = self.employee or 'unknown'
         return f'{emp} — {self.get_action_display()} @ {self.created_at:%Y-%m-%d %H:%M} ({self.get_status_display()})'
+
+@receiver(pre_delete, sender=AttendancePortalLog)
+def delete_portal_log_selfie_file(sender, instance, **kwargs):
+    """
+    Keep storage tidy: when a portal log row is deleted, remove its selfie file.
+    """
+    if instance.selfie_image:
+        try:
+            instance.selfie_image.delete(save=False)
+        except Exception:
+            # Never block log deletion due to storage backend issues.
+            pass

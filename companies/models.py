@@ -65,6 +65,27 @@ class Company(models.Model):
             'cleanup command. Attendance logs remain, but image files are removed.'
         ),
     )
+    attendance_portal_log_retention_days = models.PositiveIntegerField(
+        default=30,
+        validators=[MinValueValidator(1)],
+        help_text='Delete attendance portal logs older than this number of days during log cleanup.',
+    )
+    attendance_log_page_opened_events = models.BooleanField(
+        default=False,
+        help_text='Log each portal page visit/open event.',
+    )
+    attendance_log_blocked_attempts = models.BooleanField(
+        default=True,
+        help_text='Log blocked clock attempts (network, schedule, selfie/GPS requirement failures).',
+    )
+    attendance_log_clock_actions = models.BooleanField(
+        default=True,
+        help_text='Log time in/time out attempts and outcomes.',
+    )
+    attendance_auto_delete_portal_logs = models.BooleanField(
+        default=True,
+        help_text='Allow automatic cleanup command to delete old attendance portal logs.',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

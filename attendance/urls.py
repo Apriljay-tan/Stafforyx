@@ -45,6 +45,11 @@ urlpatterns = [
 
     # Attendance portal logs and protected selfie evidence
     path('portal-logs/', attendance_access(views.portal_log_list), name='portal_log_list'),
+    path(
+        'portal-logs/company/<int:company_id>/wipeout/',
+        attendance_access(views.portal_log_delete_all_company_confirm),
+        name='portal_log_delete_all_company_confirm',
+    ),
     path('portal-logs/<int:pk>/', attendance_access(views.portal_log_detail), name='portal_log_detail'),
     path('portal-logs/<int:pk>/selfie/', attendance_access(views.portal_log_selfie), name='portal_log_selfie'),
 

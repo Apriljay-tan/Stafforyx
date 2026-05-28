@@ -1,9 +1,9 @@
-import base64
+﻿import base64
 import binascii
 import io
 import mimetypes
 import os
-from datetime import date as _date, datetime as _datetime
+from datetime import date as _date, datetime as _datetime, timedelta as _timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
@@ -14,6 +14,8 @@ from django.db.models import Q
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
+from django.utils.dateparse import parse_date
 from PIL import Image, UnidentifiedImageError
 
 from accounts.company_access import (
@@ -22,6 +24,7 @@ from accounts.company_access import (
     get_selected_company_from_request,
     user_can_access_company,
 )
+from companies.models import Company
 from employees.models import Employee
 from leaves.models import LeaveRequest
 
@@ -38,7 +41,7 @@ from .schedule_services import resolve_expected_shift
 from .services import compute_attendance
 
 
-# ── helpers ───────────────────────────────────────────────────────────────────
+# â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 _DAY_FIELDS = [
     'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
@@ -129,9 +132,9 @@ def _potential_absences_today(company=None, accessible_companies_qs=None):
     not on approved leave.
 
     Schedule resolution order (mirrors resolve_expected_shift):
-      1. EmployeeDailySchedule for today → not rest day
-      2. Default WorkSchedule → today is a scheduled weekday
-      3. (No schedule → excluded)
+      1. EmployeeDailySchedule for today â†’ not rest day
+      2. Default WorkSchedule â†’ today is a scheduled weekday
+      3. (No schedule â†’ excluded)
 
     company: filter to one specific Company object.
     accessible_companies_qs: filter to a queryset of companies.
@@ -151,7 +154,7 @@ def _potential_absences_today(company=None, accessible_companies_qs=None):
         ds_filter['company__in'] = accessible_companies_qs
         ws_filter['company__in'] = accessible_companies_qs
 
-    # IDs with any daily schedule today (rest or not) — these override the work schedule
+    # IDs with any daily schedule today (rest or not) â€” these override the work schedule
     has_daily_ids = set(
         EmployeeDailySchedule.objects.filter(
             schedule_date=today,
@@ -195,7 +198,7 @@ def _potential_absences_today(company=None, accessible_companies_qs=None):
     )
 
 
-# ── Attendance CRUD ────────────────────────────────────────────────────────────
+# â”€â”€ Attendance CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def attendance_list(request):
     selected_company = get_selected_company_from_request(request)
@@ -224,7 +227,7 @@ def attendance_list(request):
     if status:
         records = records.filter(status=status)
 
-    # Employee dropdown — scoped to selected company or all accessible
+    # Employee dropdown â€” scoped to selected company or all accessible
     employees_qs = filter_queryset_by_user_companies(
         Employee.objects.all(), request.user
     )
@@ -232,7 +235,7 @@ def attendance_list(request):
         employees_qs = employees_qs.filter(company=selected_company)
     employees_qs = employees_qs.order_by('last_name', 'first_name')
 
-    # Potential absences — scoped to selected company or all accessible
+    # Potential absences â€” scoped to selected company or all accessible
     if selected_company:
         potential_absences = _potential_absences_today(company=selected_company)
     else:
@@ -308,7 +311,7 @@ def attendance_delete(request, pk):
     return render(request, 'attendance/attendance_confirm_delete.html', {'record': record})
 
 
-# ── Today's live attendance JSON (for polling) ────────────────────────────────
+# â”€â”€ Today's live attendance JSON (for polling) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def attendance_recent_json(request):
     today = _date.today()
@@ -344,7 +347,7 @@ def attendance_recent_json(request):
     return JsonResponse({'records': data, 'count': len(data), 'show_company': show_company})
 
 
-# ── Temporary phone/manual clock-in (dev/testing only) ────────────────────────
+# â”€â”€ Temporary phone/manual clock-in (dev/testing only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def attendance_clock(request):
     today = _date.today()
@@ -414,7 +417,7 @@ def attendance_clock(request):
     })
 
 
-# ── Work Schedule CRUD ─────────────────────────────────────────────────────────
+# â”€â”€ Work Schedule CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def schedule_list(request):
     schedules = (
@@ -460,7 +463,7 @@ def schedule_delete(request, pk):
     return render(request, 'attendance/schedule_confirm_delete.html', {'sched': sched})
 
 
-# ── Attendance Locations CRUD ──────────────────────────────────────────────────
+# â”€â”€ Attendance Locations CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def location_list(request):
     locations = (
@@ -516,7 +519,7 @@ def location_delete(request, pk):
     return render(request, 'attendance/location_confirm_delete.html', {'location': location})
 
 
-# ── Shift Templates CRUD ───────────────────────────────────────────────────────
+# â”€â”€ Shift Templates CRUD â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def shift_list(request):
     shifts = (
@@ -568,7 +571,7 @@ def shift_delete(request, pk):
     return render(request, 'attendance/shift_confirm_delete.html', {'shift': shift})
 
 
-# ── Employee Daily Schedules CRUD + Bulk Generator ────────────────────────────
+# â”€â”€ Employee Daily Schedules CRUD + Bulk Generator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def employee_schedule_list(request):
     accessible = get_accessible_companies(request.user)
@@ -674,7 +677,7 @@ def employee_schedule_delete(request, pk):
 
 
 def employee_schedule_bulk(request):
-    """Bulk roster generator — assign a shift to employees over a date range."""
+    """Bulk roster generator â€” assign a shift to employees over a date range."""
     import datetime as _dt
     accessible = get_accessible_companies(request.user)
     form = BulkRosterForm(request.POST or None, accessible_companies=accessible)
@@ -742,7 +745,26 @@ def employee_schedule_bulk(request):
     })
 
 
-# ── Employee Attendance Portal (WiFi/IP-locked) ────────────────────────────────
+# â”€â”€ Employee Attendance Portal (WiFi/IP-locked) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+def _get_company_portal_log_setting(company, field_name, default):
+    if company is None:
+        return default
+    value = getattr(company, field_name, default)
+    return default if value is None else value
+
+
+def _should_log_page_opened(company):
+    return bool(_get_company_portal_log_setting(company, 'attendance_log_page_opened_events', False))
+
+
+def _should_log_blocked_attempts(company):
+    return bool(_get_company_portal_log_setting(company, 'attendance_log_blocked_attempts', True))
+
+
+def _should_log_clock_actions(company):
+    return bool(_get_company_portal_log_setting(company, 'attendance_log_clock_actions', True))
+
 
 def _scoped_portal_logs_for_user(user):
     return filter_queryset_by_user_companies(
@@ -754,15 +776,31 @@ def _scoped_portal_logs_for_user(user):
     )
 
 
-def portal_log_list(request):
-    selected_company = get_selected_company_from_request(request)
-    accessible_companies = get_accessible_companies(request.user)
+def _delete_portal_log_queryset(queryset):
+    if queryset is None:
+        return 0
+    to_delete_ids = list(queryset.values_list('pk', flat=True))
+    if not to_delete_ids:
+        return 0
+    deleted_total, breakdown = queryset.delete()
+    return breakdown.get('attendance.AttendancePortalLog', 0) or min(deleted_total, len(to_delete_ids))
 
-    logs = _scoped_portal_logs_for_user(request.user).order_by('-created_at')
 
-    if selected_company:
-        logs = logs.filter(company=selected_company)
+def _resolve_cleanup_target_company(request):
+    company_id_raw = (request.POST.get('target_company_id') or '').strip()
+    if not company_id_raw:
+        return None
+    try:
+        company_id = int(company_id_raw)
+    except (TypeError, ValueError):
+        return None
+    company = get_object_or_404(Company, pk=company_id)
+    if not user_can_access_company(request.user, company):
+        raise PermissionDenied
+    return company
 
+
+def _apply_portal_log_filters(logs, request):
     company_filter = request.GET.get('company', '').strip()
     if company_filter:
         logs = logs.filter(company_id=company_filter)
@@ -782,6 +820,103 @@ def portal_log_list(request):
     if employee_filter:
         logs = logs.filter(employee_id=employee_filter)
 
+    date_from_filter = request.GET.get('date_from', '').strip()
+    parsed_date_from = parse_date(date_from_filter) if date_from_filter else None
+    if parsed_date_from is not None:
+        logs = logs.filter(created_at__date__gte=parsed_date_from)
+
+    date_to_filter = request.GET.get('date_to', '').strip()
+    parsed_date_to = parse_date(date_to_filter) if date_to_filter else None
+    if parsed_date_to is not None:
+        logs = logs.filter(created_at__date__lte=parsed_date_to)
+
+    return logs, {
+        'employee_filter': employee_filter,
+        'company_filter': company_filter,
+        'action_filter': action_filter,
+        'selfie_filter': selfie_filter,
+        'date_from_filter': date_from_filter,
+        'date_to_filter': date_to_filter,
+    }
+
+
+def portal_log_list(request):
+    selected_company = get_selected_company_from_request(request)
+    accessible_companies = get_accessible_companies(request.user)
+
+    base_logs = _scoped_portal_logs_for_user(request.user)
+
+    if request.method == 'POST':
+        bulk_action = (request.POST.get('bulk_action') or '').strip()
+
+        if bulk_action == 'delete_selected':
+            selected_ids = request.POST.getlist('selected_log_ids')
+            logs_to_delete = base_logs.filter(pk__in=selected_ids)
+            deleted_count = _delete_portal_log_queryset(logs_to_delete)
+            if deleted_count:
+                messages.success(request, f'Deleted {deleted_count} selected portal log(s).')
+            else:
+                messages.warning(request, 'No portal logs were selected for deletion.')
+
+        elif bulk_action == 'delete_page_opened_for_company':
+            target_company = _resolve_cleanup_target_company(request)
+            if target_company is None:
+                messages.error(request, 'Select a company before deleting page-opened logs.')
+            else:
+                logs_to_delete = base_logs.filter(company=target_company, action='page_open')
+                deleted_count = _delete_portal_log_queryset(logs_to_delete)
+                messages.success(
+                    request,
+                    f'Deleted {deleted_count} page-opened portal log(s) for {target_company.name}.',
+                )
+
+        elif bulk_action == 'delete_older_than_days':
+            raw_days = (request.POST.get('older_than_days') or '').strip()
+            try:
+                older_than_days = int(raw_days)
+            except (TypeError, ValueError):
+                older_than_days = 0
+
+            if older_than_days < 1:
+                messages.error(request, 'Days must be a whole number greater than or equal to 1.')
+            else:
+                cutoff = timezone.now() - _timedelta(days=older_than_days)
+                logs_to_delete = base_logs.filter(created_at__lt=cutoff)
+                target_company = _resolve_cleanup_target_company(request)
+                if target_company is not None:
+                    logs_to_delete = logs_to_delete.filter(company=target_company)
+
+                deleted_count = _delete_portal_log_queryset(logs_to_delete)
+                if target_company is not None:
+                    messages.success(
+                        request,
+                        f'Deleted {deleted_count} portal log(s) older than {older_than_days} day(s) for {target_company.name}.',
+                    )
+                else:
+                    messages.success(
+                        request,
+                        f'Deleted {deleted_count} portal log(s) older than {older_than_days} day(s).',
+                    )
+
+        elif bulk_action == 'delete_all_for_company':
+            target_company = _resolve_cleanup_target_company(request)
+            if target_company is None:
+                messages.error(request, 'Select a company before using wipeout.')
+            else:
+                return redirect('attendance:portal_log_delete_all_company_confirm', company_id=target_company.pk)
+
+        else:
+            messages.error(request, 'Unknown cleanup action requested.')
+
+        return redirect('attendance:portal_log_list')
+
+    logs = base_logs.order_by('-created_at')
+
+    if selected_company:
+        logs = logs.filter(company=selected_company)
+
+    logs, active_filters = _apply_portal_log_filters(logs, request)
+
     paginator = Paginator(logs, 50)
     page_obj = paginator.get_page(request.GET.get('page'))
 
@@ -798,11 +933,30 @@ def portal_log_list(request):
         'selected_company': selected_company,
         'accessible_companies': accessible_companies,
         'action_choices': AttendancePortalLog.ACTION_CHOICES,
-        'employee_filter': employee_filter,
-        'company_filter': company_filter,
-        'action_filter': action_filter,
-        'selfie_filter': selfie_filter,
         'employees': employees,
+        **active_filters,
+    })
+
+
+def portal_log_delete_all_company_confirm(request, company_id):
+    company = get_object_or_404(Company, pk=company_id)
+    if not user_can_access_company(request.user, company):
+        raise PermissionDenied
+
+    scoped_logs = _scoped_portal_logs_for_user(request.user).filter(company=company)
+    if request.method == 'POST':
+        confirm_text = (request.POST.get('confirm_text') or '').strip()
+        if confirm_text != company.name:
+            messages.error(request, 'Confirmation text does not match company name.')
+            return redirect('attendance:portal_log_delete_all_company_confirm', company_id=company.pk)
+
+        deleted_count = _delete_portal_log_queryset(scoped_logs)
+        messages.success(request, f'Wipeout complete: deleted {deleted_count} portal log(s) for {company.name}.')
+        return redirect('attendance:portal_log_list')
+
+    return render(request, 'attendance/portal_log_wipeout_confirm.html', {
+        'company': company,
+        'log_count': scoped_logs.count(),
     })
 
 
@@ -873,7 +1027,7 @@ def attendance_portal(request):
     matched_location = clock_check['location']
     ip_blocked_reason = clock_check['reason']
 
-    # Schedule check — resolve today's expected shift
+    # Schedule check â€” resolve today's expected shift
     shift_info = resolve_expected_shift(employee, today)
     schedule_allowed = shift_info['scheduled']
     schedule_blocked_reason = ''
@@ -900,18 +1054,22 @@ def attendance_portal(request):
     ).first()
 
     user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
+    log_page_opened = _should_log_page_opened(employee.company)
+    log_blocked_attempts = _should_log_blocked_attempts(employee.company)
+    log_clock_actions = _should_log_clock_actions(employee.company)
 
     # Log page open
-    AttendancePortalLog.objects.create(
-        company=employee.company,
-        employee=employee,
-        attendance_location=matched_location,
-        action='page_open',
-        ip_address=ip or None,
-        user_agent=user_agent,
-        status='allowed' if allowed else 'blocked',
-        blocked_reason='' if allowed else blocked_reason,
-    )
+    if log_page_opened:
+        AttendancePortalLog.objects.create(
+            company=employee.company,
+            employee=employee,
+            attendance_location=matched_location,
+            action='page_open',
+            ip_address=ip or None,
+            user_agent=user_agent,
+            status='allowed' if allowed else 'blocked',
+            blocked_reason='' if allowed else blocked_reason,
+        )
 
     if request.method == 'POST':
         action = request.POST.get('action')
@@ -934,21 +1092,21 @@ def attendance_portal(request):
                 selfie_error = str(exc)
 
         if not allowed:
-            # Re-log blocked action attempt
-            AttendancePortalLog.objects.create(
-                company=employee.company,
-                employee=employee,
-                attendance_location=matched_location,
-                action=action_key,
-                ip_address=ip or None,
-                user_agent=user_agent,
-                status='blocked',
-                blocked_reason=blocked_reason,
-                gps_latitude=gps_latitude,
-                gps_longitude=gps_longitude,
-                gps_accuracy=gps_accuracy,
-                selfie_image=selfie_image,
-            )
+            if log_blocked_attempts:
+                AttendancePortalLog.objects.create(
+                    company=employee.company,
+                    employee=employee,
+                    attendance_location=matched_location,
+                    action=action_key,
+                    ip_address=ip or None,
+                    user_agent=user_agent,
+                    status='blocked',
+                    blocked_reason=blocked_reason,
+                    gps_latitude=gps_latitude,
+                    gps_longitude=gps_longitude,
+                    gps_accuracy=gps_accuracy,
+                    selfie_image=selfie_image,
+                )
             messages.error(request, blocked_reason)
             return redirect('attendance:attendance_portal')
 
@@ -963,20 +1121,21 @@ def attendance_portal(request):
             )
 
         if verification_error:
-            AttendancePortalLog.objects.create(
-                company=employee.company,
-                employee=employee,
-                attendance_location=matched_location,
-                action=action_key,
-                ip_address=ip or None,
-                user_agent=user_agent,
-                status='blocked',
-                blocked_reason=verification_error,
-                gps_latitude=gps_latitude,
-                gps_longitude=gps_longitude,
-                gps_accuracy=gps_accuracy,
-                selfie_image=selfie_image,
-            )
+            if log_blocked_attempts:
+                AttendancePortalLog.objects.create(
+                    company=employee.company,
+                    employee=employee,
+                    attendance_location=matched_location,
+                    action=action_key,
+                    ip_address=ip or None,
+                    user_agent=user_agent,
+                    status='blocked',
+                    blocked_reason=verification_error,
+                    gps_latitude=gps_latitude,
+                    gps_longitude=gps_longitude,
+                    gps_accuracy=gps_accuracy,
+                    selfie_image=selfie_image,
+                )
             messages.error(request, verification_error)
             return redirect('attendance:attendance_portal')
 
@@ -1014,21 +1173,22 @@ def attendance_portal(request):
                 messages.success(request, f'Time out recorded at {now_time.strftime("%I:%M %p")}.')
 
         # Log the action result
-        AttendancePortalLog.objects.create(
-            company=employee.company,
-            employee=employee,
-            attendance_location=matched_location,
-            attendance_record=record,
-            action=action_key,
-            ip_address=ip or None,
-            user_agent=user_agent,
-            status='success' if record else 'failed',
-            blocked_reason='',
-            gps_latitude=gps_latitude,
-            gps_longitude=gps_longitude,
-            gps_accuracy=gps_accuracy,
-            selfie_image=selfie_image,
-        )
+        if log_clock_actions:
+            AttendancePortalLog.objects.create(
+                company=employee.company,
+                employee=employee,
+                attendance_location=matched_location,
+                attendance_record=record,
+                action=action_key,
+                ip_address=ip or None,
+                user_agent=user_agent,
+                status='success' if record else 'failed',
+                blocked_reason='',
+                gps_latitude=gps_latitude,
+                gps_longitude=gps_longitude,
+                gps_accuracy=gps_accuracy,
+                selfie_image=selfie_image,
+            )
         return redirect('attendance:attendance_portal')
 
     if not today_record or not today_record.time_in:
@@ -1054,3 +1214,4 @@ def attendance_portal(request):
         'require_gps': require_gps,
         'clock_state': clock_state,
     })
+

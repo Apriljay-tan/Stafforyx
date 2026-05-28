@@ -12,10 +12,11 @@ from django.utils import timezone
 from PIL import Image
 
 from accounts.models import UserCompanyAccess, UserProfile
-from attendance.models import AttendanceLocation, AttendancePortalLog
+from attendance.models import AttendanceLocation, AttendancePortalLog, AttendanceRecord, WorkSchedule
 from attendance.portal_services import get_client_ip
 from companies.models import Company
 from employees.models import Employee
+from payroll.models import PayrollPeriod, PayrollRecord
 
 
 def _make_selfie_file(filename='selfie.jpg'):
@@ -32,6 +33,22 @@ def _make_employee(company, employee_id, first_name='Emp', last_name='User'):
         last_name=last_name,
         date_hired=datetime.date(2024, 1, 1),
         status='active',
+    )
+
+
+def _make_schedule(company, name='All Week'):
+    return WorkSchedule.objects.create(
+        company=company,
+        name=name,
+        start_time=datetime.time(8, 0),
+        end_time=datetime.time(17, 0),
+        work_monday=True,
+        work_tuesday=True,
+        work_wednesday=True,
+        work_thursday=True,
+        work_friday=True,
+        work_saturday=True,
+        work_sunday=True,
     )
 
 
@@ -186,6 +203,107 @@ class AttendancePortalEvidenceAccessTests(TestCase):
         self.assertEqual(detail_without.status_code, 200)
         self.assertContains(detail_without, 'No selfie captured for this log.')
 
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_manual_delete_selected_removes_log_and_selfie_file(self, _mock):
+        selfie_name = self.log_with_selfie.selfie_image.name
+        self.assertTrue(self.log_with_selfie.selfie_image.storage.exists(selfie_name))
+
+        self.client.login(username='hr_a', password='pass')
+        response = self.client.post(
+            reverse('attendance:portal_log_list'),
+            {
+                'bulk_action': 'delete_selected',
+                'selected_log_ids': [str(self.log_with_selfie.pk)],
+            },
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(AttendancePortalLog.objects.filter(pk=self.log_with_selfie.pk).exists())
+        self.assertFalse(self.log_with_selfie.selfie_image.storage.exists(selfie_name))
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_unauthorized_user_cannot_wipe_logs(self, _mock):
+        self.client.login(username='employee_plain', password='pass')
+        response = self.client.post(
+            reverse('attendance:portal_log_list'),
+            {
+                'bulk_action': 'delete_all_for_company',
+                'target_company_id': str(self.company_a.pk),
+            },
+        )
+        self.assertIn(response.status_code, [302, 403])
+        self.assertTrue(AttendancePortalLog.objects.filter(pk=self.log_with_selfie.pk).exists())
+
+
+class AttendancePortalLoggingToggleTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Toggle Co', email='toggle@test.com')
+        self.schedule = _make_schedule(self.company, name='Toggle Shift')
+        self.employee = _make_employee(self.company, 'TGL001', 'Tina', 'Toggle')
+        self.employee.work_schedule = self.schedule
+        self.employee.save(update_fields=['work_schedule'])
+
+        self.location = AttendanceLocation.objects.create(
+            company=self.company,
+            name='Office Network',
+            ip_address='127.0.0.1',
+        )
+        self.user = User.objects.create_user('toggle_user', password='pass')
+        self.employee.user = self.user
+        self.employee.save(update_fields=['user'])
+        self.portal_url = reverse('attendance:attendance_portal')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_page_opened_logs_not_created_when_disabled(self, _mock):
+        self.company.attendance_log_page_opened_events = False
+        self.company.save(update_fields=['attendance_log_page_opened_events'])
+
+        self.client.login(username='toggle_user', password='pass')
+        response = self.client.get(self.portal_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            AttendancePortalLog.objects.filter(employee=self.employee, action='page_open').exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_in_logs_created_when_clock_actions_enabled(self, _mock):
+        self.company.attendance_log_clock_actions = True
+        self.company.save(update_fields=['attendance_log_clock_actions'])
+
+        self.client.login(username='toggle_user', password='pass')
+        response = self.client.post(self.portal_url, {'action': 'time_in'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            AttendancePortalLog.objects.filter(employee=self.employee, action='time_in').exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_time_out_logs_created_when_clock_actions_enabled(self, _mock):
+        self.company.attendance_log_clock_actions = True
+        self.company.save(update_fields=['attendance_log_clock_actions'])
+
+        self.client.login(username='toggle_user', password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'}, follow=True)
+        response = self.client.post(self.portal_url, {'action': 'time_out'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            AttendancePortalLog.objects.filter(employee=self.employee, action='time_out').exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_blocked_attempt_logs_created_when_enabled(self, _mock):
+        self.location.require_selfie = True
+        self.location.save(update_fields=['require_selfie'])
+        self.company.attendance_log_blocked_attempts = True
+        self.company.save(update_fields=['attendance_log_blocked_attempts'])
+
+        self.client.login(username='toggle_user', password='pass')
+        response = self.client.post(self.portal_url, {'action': 'time_in'}, follow=True)
+        self.assertEqual(response.status_code, 200)
+        blocked_log = AttendancePortalLog.objects.filter(employee=self.employee, status='blocked').first()
+        self.assertIsNotNone(blocked_log)
+        self.assertIn('selfie', blocked_log.blocked_reason.lower())
+
 
 class CleanupAttendanceSelfiesCommandTests(TestCase):
     def setUp(self):
@@ -287,3 +405,112 @@ class CleanupAttendanceSelfiesCommandTests(TestCase):
         log_b.refresh_from_db()
         self.assertFalse(bool(log_a.selfie_image))
         self.assertTrue(bool(log_b.selfie_image))
+
+
+class CleanupAttendancePortalLogsCommandTests(TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.override = override_settings(MEDIA_ROOT=self.temp_dir.name)
+        self.override.enable()
+        self.addCleanup(self.override.disable)
+        self.addCleanup(self.temp_dir.cleanup)
+
+        self.company_a = Company.objects.create(
+            name='Portal Cleanup A',
+            email='portal-a@test.com',
+            attendance_portal_log_retention_days=7,
+            attendance_auto_delete_portal_logs=True,
+        )
+        self.company_b = Company.objects.create(
+            name='Portal Cleanup B',
+            email='portal-b@test.com',
+            attendance_portal_log_retention_days=60,
+            attendance_auto_delete_portal_logs=True,
+        )
+
+        self.emp_a = _make_employee(self.company_a, 'PCA001', 'Portal', 'Alpha')
+        self.emp_b = _make_employee(self.company_b, 'PCB001', 'Portal', 'Beta')
+
+    def _make_log(self, company, employee, age_days, action='time_in'):
+        log = AttendancePortalLog.objects.create(
+            company=company,
+            employee=employee,
+            action=action,
+            status='success',
+            ip_address='127.0.0.1',
+        )
+        log.selfie_image.save(f'portal_cleanup_{log.pk}.jpg', _make_selfie_file(), save=True)
+        old_time = timezone.now() - datetime.timedelta(days=age_days)
+        AttendancePortalLog.objects.filter(pk=log.pk).update(created_at=old_time)
+        log.refresh_from_db()
+        return log
+
+    def test_dry_run_deletes_nothing(self):
+        log = self._make_log(self.company_a, self.emp_a, age_days=30)
+        selfie_name = log.selfie_image.name
+
+        call_command('cleanup_attendance_portal_logs', '--dry-run')
+
+        self.assertTrue(AttendancePortalLog.objects.filter(pk=log.pk).exists())
+        self.assertTrue(log.selfie_image.storage.exists(selfie_name))
+
+    def test_cleanup_deletes_only_matching_old_logs(self):
+        old_log = self._make_log(self.company_a, self.emp_a, age_days=30, action='time_in')
+        recent_log = self._make_log(self.company_a, self.emp_a, age_days=2, action='time_in')
+        old_selfie_name = old_log.selfie_image.name
+
+        call_command('cleanup_attendance_portal_logs')
+
+        self.assertFalse(AttendancePortalLog.objects.filter(pk=old_log.pk).exists())
+        self.assertFalse(old_log.selfie_image.storage.exists(old_selfie_name))
+        self.assertTrue(AttendancePortalLog.objects.filter(pk=recent_log.pk).exists())
+
+    def test_cleanup_respects_company_scope(self):
+        log_a = self._make_log(self.company_a, self.emp_a, age_days=30)
+        log_b = self._make_log(self.company_b, self.emp_b, age_days=30)
+
+        call_command('cleanup_attendance_portal_logs', '--company-id', str(self.company_a.pk), '--days', '1')
+
+        self.assertFalse(AttendancePortalLog.objects.filter(pk=log_a.pk).exists())
+        self.assertTrue(AttendancePortalLog.objects.filter(pk=log_b.pk).exists())
+
+    def test_cleanup_does_not_delete_attendance_or_payroll_records(self):
+        attendance_record = AttendanceRecord.objects.create(
+            company=self.company_a,
+            employee=self.emp_a,
+            date=datetime.date.today(),
+            time_in=datetime.time(8, 0),
+            status='present',
+            source='portal',
+        )
+        period = PayrollPeriod.objects.create(
+            company=self.company_a,
+            name='May 2026',
+            start_date=datetime.date(2026, 5, 1),
+            end_date=datetime.date(2026, 5, 15),
+            pay_date=datetime.date(2026, 5, 20),
+        )
+        payroll_record = PayrollRecord.objects.create(
+            company=self.company_a,
+            payroll_period=period,
+            employee=self.emp_a,
+        )
+
+        log = self._make_log(self.company_a, self.emp_a, age_days=30)
+        log.attendance_record = attendance_record
+        log.save(update_fields=['attendance_record'])
+
+        call_command('cleanup_attendance_portal_logs', '--days', '1')
+
+        self.assertFalse(AttendancePortalLog.objects.filter(pk=log.pk).exists())
+        self.assertTrue(AttendanceRecord.objects.filter(pk=attendance_record.pk).exists())
+        self.assertTrue(PayrollRecord.objects.filter(pk=payroll_record.pk).exists())
+
+    def test_cleanup_action_filter_and_page_open_only_option(self):
+        old_page_open = self._make_log(self.company_a, self.emp_a, age_days=30, action='page_open')
+        old_time_in = self._make_log(self.company_a, self.emp_a, age_days=30, action='time_in')
+
+        call_command('cleanup_attendance_portal_logs', '--days', '1', '--delete-page-opened-only')
+
+        self.assertFalse(AttendancePortalLog.objects.filter(pk=old_page_open.pk).exists())
+        self.assertTrue(AttendancePortalLog.objects.filter(pk=old_time_in.pk).exists())
