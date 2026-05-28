@@ -365,7 +365,7 @@
   {% block sidebar %}
     <div class="sidebar-brand">
       <a href="/" style="display:block;text-decoration:none;">
-        <img src="/media/companies/logos/logo_staffroryx.png"
+        <img src="/static/images/logo_stafforyx.png?v=9"
              alt="Stafforyx HR"
              style="height:48px;width:auto;display:block;filter:brightness(0) invert(1);opacity:0.92;">
       </a>
@@ -481,7 +481,7 @@
               </a>
             </li>
 
-            {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' %}
+            {% if is_super_admin_user %}
               <li>
                 <a class="dropdown-item" href="{% url 'accounts:user_list' %}">
                   <i class="bi bi-people"></i>Users
@@ -497,7 +497,7 @@
               </li>
             {% endif %}
 
-            {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' or request.user.stafforyx_profile.can_manage_license %}
+            {% if can_manage_license_user %}
               <li>
                 <a class="dropdown-item" href="{% url 'licenses:license_status' %}">
                   <i class="bi bi-key"></i>License Status
@@ -506,7 +506,7 @@
             {% endif %}
 
             {% if selected_company %}
-              {% if request.user.is_superuser or request.user.stafforyx_profile.role == 'super_admin' or request.user.stafforyx_profile.can_manage_settings %}
+              {% if can_manage_settings_user %}
                 <li>
                   <a class="dropdown-item" href="{% url 'companies:payslip_settings' selected_company.pk %}">
                     <i class="bi bi-gear"></i>Payslip Settings
