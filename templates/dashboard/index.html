@@ -3,6 +3,34 @@
 {% block title %}Dashboard{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
 
+{% block extra_css %}
+<style>
+  .quick-action-link {
+    display: flex;
+    align-items: center;
+    color: #334155;
+    background: #fff;
+    border: 1px solid #dbe3ec;
+    font-weight: 500;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+  }
+  .quick-action-link i { color: #1565C0; }
+  .quick-action-link:hover,
+  .quick-action-link:focus {
+    color: #0D1B2A;
+    background: #EFF6FF;
+    border-color: #93C5FD;
+  }
+  .quick-action-admin-wrap {
+    margin-top: .2rem;
+    padding-top: .55rem;
+    border-top: 1px solid #e8edf5;
+  }
+  .quick-action-link.quick-action-admin { color: #475569; }
+  .quick-action-link.quick-action-admin i { color: #64748B; }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <div class="page-header">
@@ -87,28 +115,30 @@
   <div class="col-12 col-lg-4">
     <div class="card h-100">
       <div class="card-header">
-        <i class="bi bi-lightning-charge me-1" style="color:#FFC107;"></i> Quick Actions
+        <i class="bi bi-lightning-charge me-1" style="color:#1565C0;"></i> Quick Actions
       </div>
       <div class="card-body p-3">
         <div class="d-grid gap-2">
-          <a href="{% url 'employees:employee_add' %}" class="btn btn-outline-primary btn-sm text-start">
+          <a href="{% url 'employees:employee_add' %}" class="btn btn-sm text-start quick-action-link">
             <i class="bi bi-person-plus me-2"></i>Add New Employee
           </a>
-          <a href="{% url 'attendance:attendance_add' %}" class="btn btn-outline-secondary btn-sm text-start">
+          <a href="{% url 'attendance:attendance_add' %}" class="btn btn-sm text-start quick-action-link">
             <i class="bi bi-clock me-2"></i>Log Attendance
           </a>
-          <a href="{% url 'leaves:leave_request_add' %}" class="btn btn-outline-warning btn-sm text-start">
+          <a href="{% url 'leaves:leave_request_add' %}" class="btn btn-sm text-start quick-action-link">
             <i class="bi bi-calendar2-plus me-2"></i>File a Leave
           </a>
-          <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-outline-success btn-sm text-start">
+          <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-sm text-start quick-action-link">
             <i class="bi bi-receipt me-2"></i>Add Payroll Record
           </a>
-          <a href="{% url 'announcements:announcement_add' %}" class="btn btn-outline-info btn-sm text-start">
+          <a href="{% url 'announcements:announcement_add' %}" class="btn btn-sm text-start quick-action-link">
             <i class="bi bi-megaphone me-2"></i>Post Announcement
           </a>
-          <a href="/admin/" class="btn btn-outline-dark btn-sm text-start">
-            <i class="bi bi-shield-lock me-2"></i>Admin Panel
-          </a>
+          <div class="quick-action-admin-wrap">
+            <a href="/admin/" class="btn btn-sm text-start quick-action-link quick-action-admin">
+              <i class="bi bi-shield-lock me-2"></i>Admin Panel
+            </a>
+          </div>
         </div>
       </div>
     </div>

@@ -4,7 +4,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from accounts.access import module_access_required
-from accounts.company_access import get_selected_company_from_request, user_can_access_company
+from accounts.company_access import (
+    get_accessible_companies, get_selected_company_from_request, user_can_access_company,
+)
 
 from .forms import CompanyHolidayPolicyForm, HolidayExceptionForm, HolidayForm
 from .models import Holiday, HolidayException
@@ -29,10 +31,16 @@ def _get_company_holiday(request, pk):
 
 @holiday_access
 def holiday_list(request):
-    company = _require_company(request)
+    company = get_selected_company_from_request(request)
     if company is None:
-        messages.info(request, "Select a company to manage holidays.")
-        return redirect("/")
+        # No company selected yet. Auto-select when there's exactly one
+        # accessible company; otherwise show an in-app company selector
+        # (instead of bouncing to the dashboard).
+        accessible = get_accessible_companies(request.user)
+        if accessible.count() == 1:
+            request.session["selected_company_id"] = accessible.first().pk
+            return redirect("holidays:holiday_list")
+        return render(request, "holidays/select_company.html", {"companies": accessible})
     holidays = Holiday.objects.filter(company=company)
     type_filter = request.GET.get("type", "")
     if type_filter:
@@ -56,7 +64,7 @@ def holiday_toggle(request, pk):
 def holiday_add(request):
     company = _require_company(request)
     if company is None:
-        return redirect("/")
+        return redirect("holidays:holiday_list")
     form = HolidayForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         holiday = form.save(commit=False)
@@ -127,7 +135,7 @@ def exception_delete(request, pk):
 def policy_edit(request):
     company = _require_company(request)
     if company is None:
-        return redirect("/")
+        return redirect("holidays:holiday_list")
     policy = get_or_create_policy(company)
     form = CompanyHolidayPolicyForm(request.POST or None, instance=policy)
     if request.method == "POST" and form.is_valid():

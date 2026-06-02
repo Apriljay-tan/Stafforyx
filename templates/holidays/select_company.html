@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Select Company — Holidays{% endblock %}
+{% block page_title %}Holidays{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-7 col-lg-5">
+    <div class="card">
+      <div class="card-body p-4">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <i class="bi bi-calendar-event" style="font-size:1.3rem;color:#1565C0;"></i>
+          <h5 class="mb-0">Select a company to manage holidays</h5>
+        </div>
+        <p class="text-muted" style="font-size:.9rem;">
+          Choose which company's holidays you want to view and configure.
+        </p>
+
+        {% if companies %}
+        <form method="post" action="{% url 'accounts:select_company' %}">
+          {% csrf_token %}
+          <input type="hidden" name="next" value="{% url 'holidays:holiday_list' %}">
+          <select name="company_id" class="form-select mb-3" required aria-label="Company">
+            <option value="" disabled selected>— Select company —</option>
+            {% for c in companies %}
+            <option value="{{ c.pk }}">{{ c.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-arrow-right-short"></i> Continue
+          </button>
+        </form>
+        {% else %}
+        <p class="text-muted mb-0">
+          You don't have access to any company. Please contact your administrator.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

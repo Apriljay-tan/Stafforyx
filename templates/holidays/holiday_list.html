@@ -15,6 +15,24 @@
   </div>
 </div>
 
+<div class="card mb-3" style="border-color:#1565C0;border-width:1px;">
+  <div class="card-body py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold small" style="color:#1565C0;white-space:nowrap;">
+      <i class="bi bi-building me-1"></i>Current company:
+    </span>
+    <form method="post" action="{% url 'accounts:select_company' %}" class="d-flex align-items-center gap-2 mb-0">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% url 'holidays:holiday_list' %}">
+      <select name="company_id" class="form-select form-select-sm" style="max-width:240px;min-width:180px;">
+        {% for accessible_company in accessible_companies %}
+          <option value="{{ accessible_company.pk }}" {% if company.pk == accessible_company.pk %}selected{% endif %}>{{ accessible_company.name }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm">Switch Company</button>
+    </form>
+  </div>
+</div>
+
 <form method="get" class="mb-3">
   <select name="type" class="form-select form-select-sm w-auto d-inline"
           onchange="this.form.submit()">

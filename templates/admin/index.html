@@ -15,6 +15,15 @@
   /* ── Dashboard layout ── */
   .stx-dash { padding: 0; }
 
+  /* Django caps the dashboard at 600px on wide screens (base.css:
+     .dashboard #content{width:600px}), which bunches the module grid on the
+     left with empty space on the right. Use the full width on desktop too —
+     Django already does this at <=1024px. The native .colMS float layout keeps
+     Recent Actions as a right rail and stacks it below on small screens
+     (handled by Django's responsive.css). Scoped to .dashboard so admin
+     list/add/edit pages are unaffected. */
+  body.dashboard #content { width: auto !important; }
+
   /* ── Welcome banner — always dark navy (brand hero) ── */
   .stx-welcome {
     display: flex; align-items: center; justify-content: space-between; gap: 1rem;
@@ -54,7 +63,7 @@
   /* ── App grid ── */
   .stx-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 1rem; margin-bottom: 1.5rem;
   }
 
