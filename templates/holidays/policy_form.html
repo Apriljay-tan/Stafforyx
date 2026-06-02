@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Holiday Pay Policy{% endblock %}
+{% block page_title %}Holiday Pay Policy — {{ company.name }}{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-primary">Save Policy</button>
+  <a href="{% url 'holidays:holiday_list' %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+</div></div>
+{% endblock %}

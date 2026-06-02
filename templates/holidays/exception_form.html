@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Add Exception{% endblock %}
+{% block page_title %}Add Exception — {{ holiday.name }}{% endblock %}
+{% block content %}
+<div class="card"><div class="card-body">
+<p class="text-muted">Set exactly one target: a department OR an employee.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button class="btn btn-primary">Save</button>
+  <a href="{% url 'holidays:holiday_detail' holiday.pk %}" class="btn btn-outline-secondary">Cancel</a>
+</form>
+</div></div>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block title %}Holidays{% endblock %}
+{% block page_title %}Holidays{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h5 class="mb-0">Holidays — {{ company.name }}</h5>
+    <small class="text-muted">Enable/disable, set paid/unpaid and pay multipliers.</small>
+  </div>
+  <div>
+    <a href="{% url 'holidays:policy_edit' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-gear"></i> Pay Policy</a>
+    <a href="{% url 'holidays:holiday_add' %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-plus-lg"></i> Add Holiday</a>
+  </div>
+</div>
+
+<form method="get" class="mb-3">
+  <select name="type" class="form-select form-select-sm w-auto d-inline"
+          onchange="this.form.submit()">
+    <option value="">All types</option>
+    <option value="regular" {% if type_filter == 'regular' %}selected{% endif %}>Regular</option>
+    <option value="special_non_working" {% if type_filter == 'special_non_working' %}selected{% endif %}>Special (Non-Working)</option>
+    <option value="special_working" {% if type_filter == 'special_working' %}selected{% endif %}>Special (Working)</option>
+    <option value="company" {% if type_filter == 'company' %}selected{% endif %}>Company</option>
+    <option value="local" {% if type_filter == 'local' %}selected{% endif %}>Local</option>
+  </select>
+</form>
+
+<div class="table-responsive">
+<table class="table table-sm align-middle">
+  <thead><tr>
+    <th>Date</th><th>Name</th><th>Type</th><th>Paid</th>
+    <th>No-work %</th><th>Worked ×</th><th>Status</th><th></th>
+  </tr></thead>
+  <tbody>
+  {% for h in holidays %}
+    <tr>
+      <td>{{ h.date|date:"M d, Y" }}</td>
+      <td><a href="{% url 'holidays:holiday_detail' h.pk %}">{{ h.name }}</a></td>
+      <td>{{ h.get_holiday_type_display }}</td>
+      <td>{% if h.is_paid %}<span class="badge bg-success">Paid</span>{% else %}<span class="badge bg-secondary">Unpaid</span>{% endif %}</td>
+      <td>{{ h.no_work_pay_pct }}%</td>
+      <td>{{ h.worked_multiplier }}×</td>
+      <td>{% if h.is_enabled %}<span class="badge bg-primary">Enabled</span>{% else %}<span class="badge bg-light text-dark border">Disabled</span>{% endif %}</td>
+      <td class="text-end">
+        <form method="post" action="{% url 'holidays:holiday_toggle' h.pk %}" class="d-inline">
+          {% csrf_token %}
+          <button class="btn btn-outline-secondary btn-sm">{% if h.is_enabled %}Disable{% else %}Enable{% endif %}</button>
+        </form>
+        <a href="{% url 'holidays:holiday_edit' h.pk %}" class="btn btn-outline-primary btn-sm">Edit</a>
+      </td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="8" class="text-center text-muted py-4">No holidays.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

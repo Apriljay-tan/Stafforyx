@@ -446,6 +446,12 @@
           <i class="bi bi-cash-stack"></i> Payroll
         </a>
       </li>
+      <li class="nav-item">
+        <a href="{% url 'holidays:holiday_list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'holidays' %}active{% endif %}">
+          <i class="bi bi-calendar-event"></i> Holidays
+        </a>
+      </li>
     </ul>
 
     <div class="sidebar-section-label">Admin / Management</div>
