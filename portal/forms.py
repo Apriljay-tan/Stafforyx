@@ -3,6 +3,7 @@ from decimal import Decimal
 from django import forms
 
 from leaves.models import LeaveRequest, LeaveType
+from overtime.models import OvertimeRequest
 
 from .models import IncidentReport
 
@@ -66,3 +67,24 @@ class PortalIncidentReportForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _bootstrap(self)
+
+
+class PortalOvertimeRequestForm(forms.ModelForm):
+    class Meta:
+        model = OvertimeRequest
+        fields = ['date', 'requested_hours', 'reason']
+        widgets = {
+            'date': forms.DateInput(attrs={'type': 'date'}),
+            'requested_hours': forms.NumberInput(attrs={'step': '0.25', 'min': '0.25'}),
+            'reason': forms.Textarea(attrs={'rows': 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        _bootstrap(self)
+
+    def clean_requested_hours(self):
+        hours = self.cleaned_data.get('requested_hours')
+        if hours is None or hours <= 0:
+            raise forms.ValidationError('Requested hours must be greater than zero.')
+        return hours
