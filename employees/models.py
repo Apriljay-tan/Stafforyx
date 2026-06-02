@@ -47,6 +47,10 @@ class Employee(models.Model):
         ('terminated', 'Terminated'),
         ('inactive', 'Inactive'),
     ]
+    PAY_BASIS_CHOICES = [
+        ('daily', 'Daily / Payable-days'),
+        ('monthly', 'Monthly (fixed salary includes holidays)'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employees')
     user = models.OneToOneField(
@@ -72,6 +76,11 @@ class Employee(models.Model):
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES, default='regular')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    pay_basis = models.CharField(
+        max_length=10, choices=PAY_BASIS_CHOICES, default='daily',
+        help_text='Daily: paid per payable day. Monthly: fixed salary already '
+                  'includes paid holidays (no-work holidays are not docked).',
+    )
     biometric_user_id = models.CharField(
         max_length=50,
         blank=True,
