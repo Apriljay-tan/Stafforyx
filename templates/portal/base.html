@@ -1,5 +1,41 @@
 {% extends 'base.html' %}
 
+{% block extra_css %}
+<style>
+  /* ── Employee Portal: iOS status-bar (safe-area) fix for the fixed topbar ──
+     Loaded ONLY on portal pages (admin/dashboard layout is untouched).
+     env(safe-area-inset-top) resolves to 0 on non-notched/desktop devices,
+     so this is a no-op there and only adds room under the iPhone status bar. */
+  #topbar {
+    height: auto;
+    min-height: calc(60px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  #main-content {
+    /* Match the taller topbar so content still starts just below it. */
+    padding-top: calc(60px + env(safe-area-inset-top, 0px));
+  }
+
+  /* Small screens: keep hamburger | title | profile button on one tidy row. */
+  @media (max-width: 768px) {
+    #topbar { padding-left: 1rem; padding-right: 1rem; gap: 0.6rem; }
+    .topbar-title {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;            /* allow the flex item to shrink and truncate */
+    }
+  }
+  /* Very narrow (iPhone SE ~375px): collapse profile to just the avatar so
+     it never overlaps the title or runs under the status-bar icons. */
+  @media (max-width: 480px) {
+    .avatar-btn .avatar-name,
+    .avatar-btn .bi-chevron-down { display: none; }
+    .avatar-btn { padding: 0.3rem; }
+  }
+</style>
+{% endblock extra_css %}
+
 {% block sidebar %}
     <div class="sidebar-brand">
       <a href="{% url 'portal:dashboard' %}" style="display:block;text-decoration:none;">
