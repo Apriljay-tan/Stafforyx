@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+
+{% block title %}Overtime Request{% endblock %}
+{% block page_title %}Overtime Request{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>Overtime Request</h1>
+  <p>{{ ot.employee.full_name }} — {{ ot.date|date:"M d, Y" }} ({{ ot.company.name }})</p>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Requested Hours</dt><dd class="col-sm-9">{{ ot.requested_hours }}h</dd>
+      <dt class="col-sm-3">Source</dt><dd class="col-sm-9">{{ ot.get_source_display }}</dd>
+      <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ ot.get_status_display }}</dd>
+      <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ ot.reason|default:"—" }}</dd>
+      {% if ot.reviewed_by %}
+      <dt class="col-sm-3">Reviewed By</dt><dd class="col-sm-9">{{ ot.reviewed_by }} @ {{ ot.reviewed_at|date:"M d, Y H:i" }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-check2-square me-1"></i>Review</div>
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12 col-md-4">
+        <label class="form-label">Approved Hours</label>
+        <input type="number" step="0.25" min="0" name="approved_hours"
+               value="{{ ot.approved_hours|default_if_none:ot.requested_hours }}"
+               class="form-control">
+        <small class="text-muted">Leave blank to approve the full requested hours.</small>
+      </div>
+      <div class="col-12">
+        <label class="form-label">Manager Note</label>
+        <textarea name="manager_note" rows="3" class="form-control">{{ ot.manager_note }}</textarea>
+      </div>
+      <div class="col-12 d-flex justify-content-end gap-2">
+        <a href="{% url 'overtime:manage_overtime' %}" class="btn btn-outline-secondary">Back</a>
+        <button type="submit" name="action" value="reject" class="btn btn-danger">
+          <i class="bi bi-x-lg me-1"></i>Reject
+        </button>
+        <button type="submit" name="action" value="approve" class="btn btn-success">
+          <i class="bi bi-check-lg me-1"></i>Approve
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

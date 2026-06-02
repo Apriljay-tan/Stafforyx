@@ -193,3 +193,75 @@ class PortalOvertimeViewTests(TestCase):
         })
         self.assertEqual(OvertimeRequest.objects.filter(employee=self.emp, date=_DATE).count(), 1)
         self.assertIn(resp.status_code, (200, 302))
+
+
+class ManageOvertimeAccessTests(TestCase):
+    def setUp(self):
+        self.company = _company()
+        self.other = Company.objects.create(name='Other Co')
+        self.emp = _employee(self.company, 'request_required')
+        self.req = OvertimeRequest.objects.create(
+            company=self.company, employee=self.emp, date=_DATE,
+            requested_hours=Decimal('2.00'), status='pending', source='employee',
+        )
+
+    def test_plain_employee_cannot_access_hr_pages(self):
+        user = User.objects.create_user('plain', password='pw')
+        self.client.force_login(user)
+        resp = self.client.get(reverse('overtime:manage_overtime'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_hr_sees_only_in_scope_companies(self):
+        from accounts.models import UserCompanyAccess, UserProfile
+        hr = User.objects.create_user('hr', password='pw')
+        profile, _ = UserProfile.objects.get_or_create(user=hr)
+        # role != 'employee' so EmployeePortalOnlyMiddleware lets them into HR pages.
+        profile.role = 'hr_admin'
+        profile.can_manage_employees = True
+        profile.save()
+        UserCompanyAccess.objects.create(user=hr, company=self.company, is_active=True)
+        self.client.force_login(hr)
+
+        # In-scope request visible.
+        resp = self.client.get(reverse('overtime:manage_overtime'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.emp.last_name)
+
+        # Out-of-scope request not visible.
+        other_emp = Employee.objects.create(
+            company=self.other, employee_id='X1', first_name='Out', last_name='Scope',
+            date_hired=datetime.date(2024, 1, 1), status='active',
+        )
+        OvertimeRequest.objects.create(
+            company=self.other, employee=other_emp, date=_DATE,
+            requested_hours=Decimal('1.00'), status='pending', source='employee',
+        )
+        resp = self.client.get(reverse('overtime:manage_overtime'))
+        self.assertNotContains(resp, 'Scope')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_superuser_can_approve_and_sets_review_fields(self, _mock_license):
+        su = User.objects.create_superuser('root', 'root@x.com', 'pw')
+        self.client.force_login(su)
+        resp = self.client.post(
+            reverse('overtime:manage_overtime_detail', args=[self.req.pk]),
+            {'action': 'approve', 'approved_hours': '1.50', 'manager_note': 'ok'},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'approved')
+        self.assertEqual(self.req.approved_hours, Decimal('1.50'))
+        self.assertEqual(self.req.reviewed_by, su)
+        self.assertIsNotNone(self.req.reviewed_at)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_approve_defaults_approved_hours_to_requested(self, _mock_license):
+        su = User.objects.create_superuser('root2', 'root2@x.com', 'pw')
+        self.client.force_login(su)
+        self.client.post(
+            reverse('overtime:manage_overtime_detail', args=[self.req.pk]),
+            {'action': 'approve', 'approved_hours': '', 'manager_note': ''},
+        )
+        self.req.refresh_from_db()
+        self.assertEqual(self.req.status, 'approved')
+        self.assertEqual(self.req.approved_hours, Decimal('2.00'))

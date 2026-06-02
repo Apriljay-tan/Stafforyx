@@ -27,6 +27,7 @@ urlpatterns = [
     path('licenses/', include('licenses.urls')),
     path('portal/', include('portal.urls')),
     path('holidays/', include('holidays.urls')),
+    path('overtime/', include('overtime.urls')),
 ]
 
 if settings.DEBUG:
