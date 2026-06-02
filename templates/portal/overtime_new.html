@@ -1,0 +1,46 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}Request Overtime{% endblock %}
+{% block page_title %}Request Overtime{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>Request Overtime</h1>
+  <p>Submit an overtime request for management approval.</p>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-clock-history me-1"></i>Overtime Details
+  </div>
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+      <div class="col-12"><div class="alert alert-danger">{{ form.non_field_errors }}</div></div>
+      {% endif %}
+      <div class="col-12 col-md-4">
+        <label class="form-label">{{ form.date.label }}</label>
+        {{ form.date }}
+        {{ form.date.errors }}
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">Requested Hours</label>
+        {{ form.requested_hours }}
+        {{ form.requested_hours.errors }}
+      </div>
+      <div class="col-12">
+        <label class="form-label">{{ form.reason.label }}</label>
+        {{ form.reason }}
+        {{ form.reason.errors }}
+      </div>
+      <div class="col-12 d-flex justify-content-end gap-2">
+        <a href="{% url 'portal:overtime_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-send me-1"></i>Submit Request
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

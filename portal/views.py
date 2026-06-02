@@ -1,3 +1,4 @@
+import datetime
 import mimetypes
 
 from django.contrib import messages
@@ -10,11 +11,13 @@ from django.shortcuts import get_object_or_404, redirect, render
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from announcements.models import Announcement
 from attendance.models import AttendanceRecord
+from attendance.schedule_services import resolve_expected_shift
 from documents.models import EmployeeDocument
 from leaves.models import LeaveRequest, LeaveType
+from overtime.models import OvertimeRequest
 from payroll.models import PayrollRecord
 
-from .forms import PortalIncidentReportForm, PortalLeaveRequestForm
+from .forms import PortalIncidentReportForm, PortalLeaveRequestForm, PortalOvertimeRequestForm
 from .models import IncidentReport
 
 
@@ -303,6 +306,70 @@ def portal_attendance(request):
 def portal_time_clock(request):
     """Redirect to the existing IP-validated attendance portal."""
     return redirect('attendance:attendance_portal')
+
+
+# ── Portal: Overtime ──────────────────────────────────────────────────────────
+
+@login_required
+def portal_overtime_list(request):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    today = datetime.date.today()
+    shift = resolve_expected_shift(employee, today)
+    requests = (
+        OvertimeRequest.objects
+        .filter(employee=employee)
+        .order_by('-date')
+    )
+    can_request = employee.overtime_policy != 'not_allowed'
+
+    return render(request, 'portal/overtime_list.html', {
+        'employee': employee,
+        'requests': requests,
+        'today': today,
+        'shift': shift,
+        'can_request': can_request,
+        'policy_display': employee.get_overtime_policy_display(),
+    })
+
+
+@login_required
+def portal_overtime_new(request):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    if employee.overtime_policy == 'not_allowed':
+        messages.error(request, 'Overtime requests are not allowed for your account.')
+        return redirect('portal:overtime_list')
+
+    if request.method == 'POST':
+        form = PortalOvertimeRequestForm(request.POST)
+        if form.is_valid():
+            date = form.cleaned_data['date']
+            if OvertimeRequest.objects.filter(employee=employee, date=date).exists():
+                messages.warning(
+                    request,
+                    'You already have an overtime request for that date.',
+                )
+                return redirect('portal:overtime_list')
+            ot = form.save(commit=False)
+            ot.employee = employee
+            ot.company = employee.company
+            ot.status = 'pending'
+            ot.source = 'employee'
+            ot.save()
+            messages.success(request, 'Overtime request submitted. Waiting for approval.')
+            return redirect('portal:overtime_list')
+    else:
+        form = PortalOvertimeRequestForm()
+
+    return render(request, 'portal/overtime_new.html', {
+        'employee': employee,
+        'form': form,
+    })
 
 
 # —— Portal: Announcements ———————————————————————————————————————————————————————————

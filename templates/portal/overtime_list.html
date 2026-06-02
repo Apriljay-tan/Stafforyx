@@ -1,0 +1,79 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}My Overtime{% endblock %}
+{% block page_title %}My Overtime{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div>
+    <h1>Overtime</h1>
+    <p>Today's schedule, your overtime policy, and request history.</p>
+  </div>
+  {% if can_request %}
+  <a href="{% url 'portal:overtime_new' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>Request Overtime
+  </a>
+  {% endif %}
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-calendar-day me-1"></i>Today — {{ today|date:"M d, Y" }}</div>
+  <div class="card-body">
+    <p class="mb-1">
+      <strong>Schedule:</strong>
+      {% if shift.scheduled %}
+        {% if employee.flexible_schedule_enabled %}
+          Flexible — {{ employee.required_daily_hours }} required hours
+          {% if employee.allowed_clock_in_from %}
+            (window {{ employee.allowed_clock_in_from|time:"g:i A" }}–{{ employee.allowed_clock_in_until|time:"g:i A" }})
+          {% endif %}
+        {% else %}
+          {{ shift.start_time|time:"g:i A" }} – {{ shift.end_time|time:"g:i A" }}
+        {% endif %}
+      {% elif shift.is_rest_day %}
+        Rest day
+      {% else %}
+        No schedule today
+      {% endif %}
+    </p>
+    <p class="mb-0"><strong>Overtime policy:</strong> {{ policy_display }}</p>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-clock-history me-1"></i>Request History</span>
+    <span class="badge bg-primary rounded-pill">{{ requests.count }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Date</th>
+          <th>Requested</th>
+          <th>Approved</th>
+          <th>Status</th>
+          <th class="pe-3">Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requests %}
+        <tr>
+          <td class="ps-3">{{ r.date|date:"M d, Y" }}</td>
+          <td>{{ r.requested_hours }}h</td>
+          <td>{% if r.approved_hours is not None %}{{ r.approved_hours }}h{% else %}—{% endif %}</td>
+          <td>
+            {% if r.status == 'approved' or r.status == 'auto_approved' %}<span class="badge text-bg-success">{{ r.get_status_display }}</span>
+            {% elif r.status == 'rejected' %}<span class="badge text-bg-danger">Rejected</span>
+            {% else %}<span class="badge text-bg-warning">Pending</span>{% endif %}
+          </td>
+          <td class="pe-3 text-muted">{{ r.reason|truncatechars:60 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center py-5 text-muted">No overtime requests yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

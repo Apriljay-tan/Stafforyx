@@ -1,8 +1,10 @@
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 
 from companies.models import Company
 from employees.models import Employee
@@ -148,3 +150,46 @@ class AutoCreateSignalTests(TestCase):
         req.refresh_from_db()
         self.assertEqual(req.status, 'approved')
         self.assertEqual(req.requested_hours, Decimal('2.00'))  # unchanged
+
+
+class PortalOvertimeViewTests(TestCase):
+    def setUp(self):
+        self.company = _company()
+        self.user = User.objects.create_user('emp1', password='pw')
+        self.emp = _employee(self.company, 'request_required')
+        self.emp.user = self.user
+        self.emp.save(update_fields=['user'])
+        self.client.force_login(self.user)
+
+    def test_list_page_loads(self):
+        resp = self.client.get(reverse('portal:overtime_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    # Write requests pass through the license middleware; patch it active
+    # (same pattern as attendance portal tests).
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_employee_can_submit_request(self, _mock_license):
+        resp = self.client.post(reverse('portal:overtime_new'), {
+            'date': _DATE.isoformat(),
+            'requested_hours': '2.00',
+            'reason': 'Project deadline',
+        })
+        self.assertEqual(resp.status_code, 302)
+        req = OvertimeRequest.objects.get(employee=self.emp, date=_DATE)
+        self.assertEqual(req.status, 'pending')
+        self.assertEqual(req.source, 'employee')
+        self.assertEqual(req.company, self.company)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_duplicate_date_is_rejected_gracefully(self, _mock_license):
+        OvertimeRequest.objects.create(
+            company=self.company, employee=self.emp, date=_DATE,
+            requested_hours=Decimal('1.00'), status='pending', source='employee',
+        )
+        resp = self.client.post(reverse('portal:overtime_new'), {
+            'date': _DATE.isoformat(),
+            'requested_hours': '2.00',
+            'reason': 'second attempt',
+        })
+        self.assertEqual(OvertimeRequest.objects.filter(employee=self.emp, date=_DATE).count(), 1)
+        self.assertIn(resp.status_code, (200, 302))

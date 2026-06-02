@@ -19,6 +19,8 @@ urlpatterns = [
     path('incidents/new/', views.portal_incident_new, name='incident_new'),
     path('attendance/', views.portal_attendance, name='attendance'),
     path('time-clock/', views.portal_time_clock, name='time_clock'),
+    path('overtime/', views.portal_overtime_list, name='overtime_list'),
+    path('overtime/new/', views.portal_overtime_new, name='overtime_new'),
     # HR management
     path('manage/incidents/', views.manage_incidents, name='manage_incidents'),
     path('manage/incidents/<int:pk>/', views.manage_incident_detail, name='manage_incident_detail'),
