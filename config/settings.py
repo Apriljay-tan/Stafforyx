@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     "licenses",
     "portal",
     "holidays",
+    "overtime",
 ]
 
 MIDDLEWARE = [
