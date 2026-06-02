@@ -17,6 +17,10 @@ def make_company(name="Acme"):
 class HolidayModelTests(TestCase):
     def setUp(self):
         self.company = make_company()
+        # Company creation auto-seeds holidays + a policy (see holidays.signals).
+        # Clear them so these tests exercise creation/uniqueness in isolation.
+        Holiday.objects.filter(company=self.company).delete()
+        CompanyHolidayPolicy.objects.filter(company=self.company).delete()
 
     def test_create_holiday_defaults(self):
         h = Holiday.objects.create(
