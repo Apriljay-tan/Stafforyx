@@ -51,6 +51,12 @@ class Employee(models.Model):
         ('daily', 'Daily / Payable-days'),
         ('monthly', 'Monthly (fixed salary includes holidays)'),
     ]
+    OVERTIME_POLICY_CHOICES = [
+        ('not_allowed',       'Not Allowed'),
+        ('automatic',         'Automatic'),
+        ('request_required',  'Request Required'),
+        ('management_review', 'Management Review'),
+    ]
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employees')
     user = models.OneToOneField(
@@ -116,6 +122,30 @@ class Employee(models.Model):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='employees',
+    )
+    overtime_policy = models.CharField(
+        max_length=20, choices=OVERTIME_POLICY_CHOICES, default='not_allowed',
+        help_text='Controls how this employee\'s overtime is paid by payroll.',
+    )
+    flexible_schedule_enabled = models.BooleanField(
+        default=False,
+        help_text='If on, attendance uses required daily hours instead of a fixed start/end.',
+    )
+    required_daily_hours = models.DecimalField(
+        max_digits=4, decimal_places=2, default=8.00,
+        help_text='Hours a flexible employee must complete per day.',
+    )
+    allowed_clock_in_from = models.TimeField(
+        null=True, blank=True,
+        help_text='Earliest allowed clock-in for flexible employees.',
+    )
+    allowed_clock_in_until = models.TimeField(
+        null=True, blank=True,
+        help_text='Latest allowed clock-in for flexible employees.',
+    )
+    default_break_minutes = models.PositiveIntegerField(
+        default=60,
+        help_text='Break minutes assumed for flexible computation when not recorded.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

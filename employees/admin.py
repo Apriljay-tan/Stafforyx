@@ -46,6 +46,14 @@ class EmployeeAdmin(admin.ModelAdmin):
                 'biometric_user_id',
             )
         }),
+        ('Overtime & Schedule', {
+            'fields': (
+                'work_schedule', 'overtime_policy',
+                'flexible_schedule_enabled', 'required_daily_hours',
+                'allowed_clock_in_from', 'allowed_clock_in_until',
+                'default_break_minutes',
+            )
+        }),
         ('Government IDs', {
             'fields': ('sss_number', 'philhealth_number', 'pagibig_number', 'tin_number'),
             'classes': ('collapse',),
