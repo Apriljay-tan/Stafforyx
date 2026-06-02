@@ -65,7 +65,7 @@ def _make_employee(company, schedule=None):
     return emp
 
 
-def _make_record(employee, date=None, time_in=None, time_out=None, break_minutes=0):
+def _make_record(employee, date=None, time_in=None, time_out=None, break_minutes=60):
     return AttendanceRecord.objects.create(
         company=employee.company,
         employee=employee,
@@ -1560,3 +1560,105 @@ class ScheduleCrossCompanyAccessTests(TestCase):
         self.client.login(username='plain_sched', password='pass')
         resp = self.client.get(reverse('attendance:shift_list'))
         self.assertIn(resp.status_code, [302, 403])
+
+
+class FlexibleScheduleAttendanceTests(TestCase):
+    """Flexible employees: no late from start; under/overtime vs required_daily_hours."""
+
+    def setUp(self):
+        self.company = _make_company()
+        # Mon-Fri schedule used only for workday/rest-day resolution.
+        self.schedule = _make_schedule(
+            self.company,
+            start_time=datetime.time(8, 0),
+            end_time=datetime.time(17, 0),
+        )
+
+    def _flex_employee(self, required_hours='8.00', break_minutes=60):
+        emp = _make_employee(self.company, self.schedule)
+        emp.flexible_schedule_enabled = True
+        emp.required_daily_hours = Decimal(required_hours)
+        emp.default_break_minutes = break_minutes
+        emp.save(update_fields=[
+            'flexible_schedule_enabled', 'required_daily_hours', 'default_break_minutes',
+        ])
+        return emp
+
+    def test_flexible_not_late_when_starting_later(self):
+        emp = self._flex_employee()
+        # Starts 10:00, works to 19:00, 60 min break = 8.0h worked.
+        rec = _make_record(
+            emp, time_in=datetime.time(10, 0), time_out=datetime.time(19, 0),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.late_minutes, 0)
+        self.assertEqual(rec.undertime_minutes, 0)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.computed_status, 'present')
+
+    def test_flexible_undertime_when_below_required(self):
+        emp = self._flex_employee()
+        # 09:00-15:00, 60 min break = 5.0h worked → 3h (180 min) undertime.
+        rec = _make_record(
+            emp, time_in=datetime.time(9, 0), time_out=datetime.time(15, 0),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.late_minutes, 0)
+        self.assertEqual(rec.undertime_minutes, 180)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.computed_status, 'undertime')
+
+    def test_flexible_overtime_when_above_required(self):
+        emp = self._flex_employee()
+        # 08:00-19:00, 60 min break = 10.0h worked → 2h (120 min) overtime.
+        rec = _make_record(
+            emp, time_in=datetime.time(8, 0), time_out=datetime.time(19, 0),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.overtime_minutes, 120)
+        self.assertEqual(rec.undertime_minutes, 0)
+        self.assertEqual(rec.computed_status, 'overtime')
+
+
+class FixedShiftRegressionTests(TestCase):
+    """Guards: fixed-shift behavior must be unchanged by the flexible branch."""
+
+    def setUp(self):
+        self.company = _make_company()
+        # 2 PM - 10 PM shift, grace 15, break 60.
+        self.schedule = _make_schedule(
+            self.company,
+            start_time=datetime.time(14, 0),
+            end_time=datetime.time(22, 0),
+        )
+
+    def test_fixed_shift_late_undertime_overtime(self):
+        emp = _make_employee(self.company, self.schedule)
+        self.assertFalse(emp.flexible_schedule_enabled)
+        # Clock in 14:30 (15 min late after grace), out 22:00.
+        rec = _make_record(
+            emp, time_in=datetime.time(14, 30), time_out=datetime.time(22, 0),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.late_minutes, 15)
+        # Expected = 8h shift - 1h break = 7h; worked 22:00-14:30-60 = 6.5h → 30 min undertime.
+        self.assertEqual(rec.undertime_minutes, 30)
+        self.assertEqual(rec.overtime_minutes, 0)
+        # Fixed-shift status precedence (UNCHANGED): undertime dominates late when
+        # both are present (see ComputeAttendanceTotalHoursTests.test_after_grace_late_minutes_counted).
+        self.assertEqual(rec.computed_status, 'undertime')
+
+    def test_fixed_shift_overtime(self):
+        emp = _make_employee(self.company, self.schedule)
+        # 14:00 - 23:30: worked 9.5h - 1h break = 8.5h; OT after 22:00 = 90 min.
+        rec = _make_record(
+            emp, time_in=datetime.time(14, 0), time_out=datetime.time(23, 30),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.overtime_minutes, 90)
+        self.assertEqual(rec.computed_status, 'overtime')

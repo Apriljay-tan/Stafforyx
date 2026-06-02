@@ -86,51 +86,84 @@ def compute_attendance(record):
         if not record.time_in:
             computed = 'absent'
         else:
-            sched_start_min = _to_min(shift['start_time'])
-            grace = shift['grace_minutes'] or 0
-            time_in_min = _to_min(record.time_in)
-            late_min = max(0, time_in_min - (sched_start_min + grace))
-
-            if not record.time_out:
-                computed = 'incomplete'
-            else:
-                time_out_min = _to_min(record.time_out)
-                sched_end_min = _to_min(shift['end_time'])
-                is_overnight = shift.get('is_overnight', False)
-
-                # Overnight: adjust both ends to be continuous minutes from midnight
-                if is_overnight:
-                    if sched_end_min <= sched_start_min:
-                        sched_end_min += 24 * 60
-                    if time_out_min <= time_in_min:
-                        time_out_min += 24 * 60
-
-                break_min = (
-                    record.break_minutes
-                    if record.break_minutes is not None
-                    else shift['break_minutes']
-                )
-                total_work_min = max(0, time_out_min - time_in_min - break_min)
-
-                # Expected minutes = scheduled span minus break
-                expected_min = max(0, sched_end_min - sched_start_min - shift['break_minutes'])
-                undertime_min = max(0, expected_min - total_work_min)
-
-                ot_start_min = sched_end_min + (shift['overtime_after_minutes'] or 0)
-                overtime_min = max(0, time_out_min - ot_start_min)
-
-                # Overtime cancels undertime
-                if overtime_min > 0:
-                    undertime_min = 0
-
-                if overtime_min > 0:
-                    computed = 'overtime'
-                elif undertime_min > 0:
-                    computed = 'undertime'
-                elif late_min > 0:
-                    computed = 'late'
+            employee = record.employee
+            if getattr(employee, 'flexible_schedule_enabled', False):
+                # ── Flexible schedule (additive, guarded) ─────────────────────
+                # Never late for starting later within the allowed window.
+                late_min = 0
+                if not record.time_out:
+                    computed = 'incomplete'
                 else:
-                    computed = 'present'
+                    time_in_min = _to_min(record.time_in)
+                    time_out_min = _to_min(record.time_out)
+                    if shift.get('is_overnight', False) and time_out_min <= time_in_min:
+                        time_out_min += 24 * 60
+                    break_min = (
+                        record.break_minutes
+                        if record.break_minutes is not None
+                        else (employee.default_break_minutes or 0)
+                    )
+                    total_work_min = max(0, time_out_min - time_in_min - break_min)
+                    required_min = int(
+                        (Decimal(str(employee.required_daily_hours or 0)) * _60)
+                        .to_integral_value(rounding=ROUND_HALF_UP)
+                    )
+                    undertime_min = max(0, required_min - total_work_min)
+                    overtime_min = max(0, total_work_min - required_min)
+                    if overtime_min > 0:
+                        undertime_min = 0
+                        computed = 'overtime'
+                    elif undertime_min > 0:
+                        computed = 'undertime'
+                    else:
+                        computed = 'present'
+            else:
+                # ── Fixed shift (UNCHANGED) ───────────────────────────────────
+                sched_start_min = _to_min(shift['start_time'])
+                grace = shift['grace_minutes'] or 0
+                time_in_min = _to_min(record.time_in)
+                late_min = max(0, time_in_min - (sched_start_min + grace))
+
+                if not record.time_out:
+                    computed = 'incomplete'
+                else:
+                    time_out_min = _to_min(record.time_out)
+                    sched_end_min = _to_min(shift['end_time'])
+                    is_overnight = shift.get('is_overnight', False)
+
+                    # Overnight: adjust both ends to be continuous minutes from midnight
+                    if is_overnight:
+                        if sched_end_min <= sched_start_min:
+                            sched_end_min += 24 * 60
+                        if time_out_min <= time_in_min:
+                            time_out_min += 24 * 60
+
+                    break_min = (
+                        record.break_minutes
+                        if record.break_minutes is not None
+                        else shift['break_minutes']
+                    )
+                    total_work_min = max(0, time_out_min - time_in_min - break_min)
+
+                    # Expected minutes = scheduled span minus break
+                    expected_min = max(0, sched_end_min - sched_start_min - shift['break_minutes'])
+                    undertime_min = max(0, expected_min - total_work_min)
+
+                    ot_start_min = sched_end_min + (shift['overtime_after_minutes'] or 0)
+                    overtime_min = max(0, time_out_min - ot_start_min)
+
+                    # Overtime cancels undertime
+                    if overtime_min > 0:
+                        undertime_min = 0
+
+                    if overtime_min > 0:
+                        computed = 'overtime'
+                    elif undertime_min > 0:
+                        computed = 'undertime'
+                    elif late_min > 0:
+                        computed = 'late'
+                    else:
+                        computed = 'present'
 
     record.late_minutes = late_min
     record.undertime_minutes = undertime_min
