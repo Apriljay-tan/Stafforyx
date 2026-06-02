@@ -29,6 +29,7 @@ from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
 from payroll.models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 from payroll.services import generate_payroll_for_period
+from overtime.models import OvertimeRequest
 
 
 # ── Shared helpers ─────────────────────────────────────────────────────────────
@@ -273,7 +274,11 @@ class OvertimePayTest(PayrollV2TestCase):
     """Overtime minutes add pay at hourly_rate * 1.25."""
 
     def test_overtime_pay(self):
-        # 120 min OT on Monday; present all 5 days
+        # 120 min OT on Monday; present all 5 days.
+        # Policy 'automatic' = detected OT is paid without a request (preserves
+        # this test's original intent now that payroll gates OT by policy).
+        self.emp.overtime_policy = 'automatic'
+        self.emp.save(update_fields=['overtime_policy'])
         self._clock_in(_MAY_19, overtime_min=120)
         for d in (_MAY_20, _MAY_21, _MAY_22, _MAY_23):
             self._clock_in(d)
@@ -420,3 +425,72 @@ class RegenerateSkipsLockedTest(PayrollV2TestCase):
         rec.refresh_from_db()
         self.assertEqual(updated, 1)
         self.assertEqual(rec.present_days, 2)
+
+
+# ── Test 13: Overtime gating by policy + approval ─────────────────────────────
+
+class PayrollOvertimeGatingTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Pay Co')
+        # Mon-Fri 8-17 schedule.
+        self.schedule = WorkSchedule.objects.create(
+            company=self.company, name='Std',
+            start_time=datetime.time(8, 0), end_time=datetime.time(17, 0),
+            grace_minutes=15, break_minutes=60, required_hours=Decimal('8.00'),
+        )
+        # Single-day period on a Monday.
+        self.day = datetime.date(2026, 5, 25)  # Monday
+        self.period = PayrollPeriod.objects.create(
+            company=self.company, name='May D1',
+            start_date=self.day, end_date=self.day,
+        )
+
+    def _emp(self, policy):
+        emp = Employee.objects.create(
+            company=self.company, employee_id=f'P-{policy}',
+            first_name='Pay', last_name='Roll',
+            date_hired=datetime.date(2024, 1, 1), status='active',
+            basic_salary=Decimal('26000.00'),  # daily_rate=1000, hourly=125
+            overtime_policy=policy,
+        )
+        emp.work_schedule = self.schedule
+        emp.save(update_fields=['work_schedule'])
+        return emp
+
+    def _attendance(self, emp, overtime_minutes=120):
+        return AttendanceRecord.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            time_in=datetime.time(8, 0), time_out=datetime.time(19, 0),
+            overtime_minutes=overtime_minutes, status='present',
+        )
+
+    def _record(self, emp):
+        generate_payroll_for_period(self.period)
+        return PayrollRecord.objects.get(payroll_period=self.period, employee=emp)
+
+    def test_automatic_overtime_is_paid(self):
+        emp = self._emp('automatic')
+        self._attendance(emp, 120)
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 120)
+        # 2h * 125 * 1.25 = 312.50
+        self.assertEqual(rec.overtime_pay, Decimal('312.50'))
+
+    def test_request_required_not_paid_until_approved(self):
+        emp = self._emp('request_required')
+        self._attendance(emp, 120)
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_pay, Decimal('0.00'))
+
+    def test_request_required_paid_after_approval(self):
+        emp = self._emp('request_required')
+        self._attendance(emp, 120)
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('2.00'), approved_hours=Decimal('2.00'),
+            status='approved', source='employee',
+        )
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 120)
+        self.assertEqual(rec.overtime_pay, Decimal('312.50'))

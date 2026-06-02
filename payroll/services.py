@@ -45,6 +45,7 @@ from holidays.services import build_exception_index, build_holiday_index, resolv
 from leaves.models import LeaveRequest
 
 from .models import PayrollRecord
+from overtime.services import build_overtime_approval_index, payable_overtime_minutes
 
 _DAILY_DIVISOR = Decimal('26')
 _HOURS_PER_DAY = Decimal('8')
@@ -158,7 +159,7 @@ def _build_attendance_map(employees, start_date, end_date):
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
-                           att_by_date, holiday_resolver):
+                           att_by_date, holiday_resolver, approval_index):
     """
     Compute all payroll components for one employee.
 
@@ -200,7 +201,9 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             present_dates.add(date)
             late_min += att.late_minutes or 0
             undertime_min += att.undertime_minutes or 0
-            overtime_min += att.overtime_minutes or 0
+            overtime_min += payable_overtime_minutes(
+                emp, date, att.overtime_minutes or 0, approval_index
+            )
         else:
             absent_dates.add(date)
 
@@ -224,7 +227,9 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             # Worked-day late/UT/OT still apply.
             late_min += att.late_minutes or 0
             undertime_min += att.undertime_minutes or 0
-            overtime_min += att.overtime_minutes or 0
+            overtime_min += payable_overtime_minutes(
+                emp, date, att.overtime_minutes or 0, approval_index
+            )
         elif is_scheduled:
             # No-work holiday on a scheduled day.
             effective_paid = is_monthly or holiday['is_paid']
@@ -326,6 +331,9 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
     scheduled_sets = _build_scheduled_sets(emp_list, start_date, end_date)
     paid_map, unpaid_map = _build_leave_maps(emp_list, start_date, end_date, scheduled_sets)
     att_map = _build_attendance_map(emp_list, start_date, end_date)
+    approval_index = build_overtime_approval_index(
+        period.company, emp_list, start_date, end_date
+    )
 
     # Holiday resolution (bulk-loaded once per period).
     holiday_index = build_holiday_index(period.company, start_date, end_date)
@@ -352,6 +360,7 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
             unpaid_map.get(emp.pk, set()),
             att_map.get(emp.pk, {}),
             _holiday_resolver,
+            approval_index,
         )
 
         record = existing.get(emp.pk)
