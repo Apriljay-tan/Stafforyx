@@ -362,11 +362,12 @@
           </tr>
           {% endif %}
           {% endif %}
-          <!-- Holiday pay placeholder -->
-          <tr class="dimrow">
-            <td class="label">Holiday Pay</td>
-            <td class="amount">—</td>
+          {% if record.holiday_pay %}
+          <tr>
+            <td class="label">Holiday Pay{% if record.holiday_worked_days %} ({{ record.holiday_worked_days }} worked){% endif %}</td>
+            <td class="amount">&#8369;{{ record.holiday_pay|floatformat:2 }}</td>
           </tr>
+          {% endif %}
           {% for adj in earning_adjs %}
           <tr>
             <td class="label">{{ adj.name }}{% if adj.remarks %} <span style="color:#94a3b8;">({{ adj.remarks }})</span>{% endif %}</td>

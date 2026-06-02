@@ -51,6 +51,12 @@
       <td style="padding:4px 0;text-align:right;">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
     </tr>
     {% endif %}
+    {% if record.holiday_pay %}
+    <tr>
+      <td style="padding:4px 0;">Holiday Pay{% if record.holiday_worked_days %} ({{ record.holiday_worked_days }} worked){% endif %}</td>
+      <td style="padding:4px 0;text-align:right;">&#8369;{{ record.holiday_pay|floatformat:2 }}</td>
+    </tr>
+    {% endif %}
     {% if record.allowances %}
     <tr>
       <td style="padding:4px 0;">Allowances</td>
