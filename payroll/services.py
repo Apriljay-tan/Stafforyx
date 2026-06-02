@@ -41,6 +41,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from attendance.models import AttendanceRecord, EmployeeDailySchedule
 from employees.models import Employee
+from holidays.services import build_exception_index, build_holiday_index, resolve_holiday
 from leaves.models import LeaveRequest
 
 from .models import PayrollRecord
@@ -157,14 +158,19 @@ def _build_attendance_map(employees, start_date, end_date):
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
-                           att_by_date):
+                           att_by_date, holiday_resolver):
     """
     Compute all payroll components for one employee.
+
+    `holiday_resolver(emp, date)` returns effective holiday params dict or None.
+    Holiday dates are handled in a dedicated pass and excluded from the normal
+    present/absent classification so base pay is not double-counted.
     Returns a flat dict of field values ready to save to PayrollRecord.
     """
     salary = Decimal(str(emp.basic_salary or 0))
     daily_rate = (salary / _DAILY_DIVISOR).quantize(_Q4, rounding=ROUND_HALF_UP)
     hourly_rate = (daily_rate / _HOURS_PER_DAY).quantize(_Q4, rounding=ROUND_HALF_UP)
+    is_monthly = getattr(emp, 'pay_basis', 'daily') == 'monthly'
 
     present_dates = set()
     absent_dates = set()
@@ -172,9 +178,21 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     undertime_min = 0
     overtime_min = 0
 
+    holiday_pay = Decimal('0')
+    holiday_days = 0
+    holiday_worked_days = 0
+
+    # Dates to evaluate for holidays: scheduled days plus any attended day.
+    holiday_candidate_dates = set(scheduled_dates) | set(att_by_date.keys())
+
     for date in scheduled_dates:
         # Leave-covered → do not count toward present/absent
         if date in paid_leave_dates or date in unpaid_leave_dates:
+            continue
+
+        holiday = holiday_resolver(emp, date)
+        if holiday is not None:
+            # Handled in the holiday pass below; skip normal classification.
             continue
 
         att = att_by_date.get(date)
@@ -185,6 +203,38 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             overtime_min += att.overtime_minutes or 0
         else:
             absent_dates.add(date)
+
+    # ── Holiday pass ──────────────────────────────────────────────────────────
+    for date in holiday_candidate_dates:
+        # Leave-covered holidays are paid via leave, not here.
+        if date in paid_leave_dates or date in unpaid_leave_dates:
+            continue
+        holiday = holiday_resolver(emp, date)
+        if holiday is None:
+            continue
+
+        att = att_by_date.get(date)
+        worked = bool(att and att.time_in is not None)
+        is_scheduled = date in scheduled_dates
+
+        if worked:
+            holiday_days += 1
+            holiday_worked_days += 1
+            holiday_pay += daily_rate * Decimal(str(holiday['worked_multiplier']))
+            # Worked-day late/UT/OT still apply.
+            late_min += att.late_minutes or 0
+            undertime_min += att.undertime_minutes or 0
+            overtime_min += att.overtime_minutes or 0
+        elif is_scheduled:
+            # No-work holiday on a scheduled day.
+            effective_paid = is_monthly or holiday['is_paid']
+            if effective_paid:
+                holiday_days += 1
+                pct = Decimal(str(holiday['no_work_pay_pct']))
+                holiday_pay += daily_rate * pct / Decimal('100')
+        # else: rest-day, not worked → no pay.
+
+    holiday_pay = holiday_pay.quantize(_Q2, rounding=ROUND_HALF_UP)
 
     scheduled_days = len(scheduled_dates)
     present_days = len(present_dates)
@@ -212,7 +262,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     pagibig_ded = Decimal(str(emp.pagibig_contribution_amount or 0)).quantize(_Q2)
     tax_ded = Decimal(str(emp.tax_deduction_amount or 0)).quantize(_Q2)
 
-    gross_pay = (basic_pay + ot_pay).quantize(_Q2)
+    gross_pay = (basic_pay + ot_pay + holiday_pay).quantize(_Q2)
     total_ded = sss_ded + philhealth_ded + pagibig_ded + tax_ded + late_ded + undertime_ded
     net_pay = (gross_pay - total_ded).quantize(_Q2)
 
@@ -230,6 +280,9 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
         hourly_rate=hourly_rate,
         basic_pay=basic_pay,
         overtime_pay=ot_pay,
+        holiday_pay=holiday_pay,
+        holiday_days=holiday_days,
+        holiday_worked_days=holiday_worked_days,
         gross_pay=gross_pay,
         late_deduction=late_ded,
         undertime_deduction=undertime_ded,
@@ -274,6 +327,13 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
     paid_map, unpaid_map = _build_leave_maps(emp_list, start_date, end_date, scheduled_sets)
     att_map = _build_attendance_map(emp_list, start_date, end_date)
 
+    # Holiday resolution (bulk-loaded once per period).
+    holiday_index = build_holiday_index(period.company, start_date, end_date)
+    exception_index = build_exception_index(period.company)
+
+    def _holiday_resolver(emp, date):
+        return resolve_holiday(period.company, emp, date, holiday_index, exception_index)
+
     # Load existing records for efficient lookup
     existing = {
         r.employee_id: r
@@ -291,6 +351,7 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
             paid_map.get(emp.pk, set()),
             unpaid_map.get(emp.pk, set()),
             att_map.get(emp.pk, {}),
+            _holiday_resolver,
         )
 
         record = existing.get(emp.pk)
