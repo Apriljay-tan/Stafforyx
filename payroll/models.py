@@ -67,6 +67,9 @@ class PayrollRecord(models.Model):
     basic_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     overtime_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    holiday_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    holiday_days = models.PositiveIntegerField(default=0)
+    holiday_worked_days = models.PositiveIntegerField(default=0)
     gross_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
     # ── Deductions ────────────────────────────────────────────────────────────
@@ -111,6 +114,7 @@ class PayrollRecord(models.Model):
         self.gross_pay = (
             (self.basic_pay or zero) +
             (self.overtime_pay or zero) +
+            (self.holiday_pay or zero) +
             (self.allowances or zero) +
             earning_adj
         ).quantize(Decimal('0.01'))
