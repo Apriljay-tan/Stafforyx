@@ -22,9 +22,15 @@
           Please contact your HR Admin or Super Admin to request access.
         </p>
 
+        {% if is_employee_only %}
+        <a href="{% url 'portal:dashboard' %}" class="btn btn-primary">
+          <i class="bi bi-arrow-left me-1"></i>Back to Employee Portal
+        </a>
+        {% else %}
         <a href="{% url 'dashboard_home' %}" class="btn btn-primary">
           <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
         </a>
+        {% endif %}
 
         <div class="mt-4 pt-3 border-top">
           <small class="text-muted">

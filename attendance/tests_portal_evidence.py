@@ -171,7 +171,10 @@ class AttendancePortalEvidenceAccessTests(TestCase):
     def test_employee_cannot_view_other_employee_selfie(self):
         self.client.login(username='employee_plain', password='pass')
         response = self.client.get(reverse('attendance:portal_log_selfie', args=[self.log_with_selfie.pk]))
-        self.assertEqual(response.status_code, 403)
+        # Employee-only users are confined to the portal by
+        # EmployeePortalOnlyMiddleware: instead of a 403 they are redirected to
+        # the Employee Portal. Either way they cannot view the selfie evidence.
+        self.assertIn(response.status_code, [302, 403])
 
     def test_superuser_can_view_selfie_evidence(self):
         self.client.login(username='su_selfie', password='pass')

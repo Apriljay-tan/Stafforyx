@@ -24,6 +24,24 @@ def has_module_access(user, permission_name):
     return bool(getattr(profile, permission_name, False))
 
 
+def is_employee_only_user(user):
+    """True for portal-only employees who must never reach management pages.
+
+    Such a user is authenticated, is not a superuser, has a Stafforyx profile,
+    and that profile's role is ``employee``. These users are confined to the
+    Employee Portal and are redirected there instead of being shown an Access
+    Restricted (403) page.
+    """
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    if user.is_superuser:
+        return False
+    profile = getattr(user, 'stafforyx_profile', None)
+    if profile is None:
+        return False
+    return profile.role == 'employee'
+
+
 def module_access_required(permission_name):
     def decorator(view_func):
         @login_required

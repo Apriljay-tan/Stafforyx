@@ -12,7 +12,13 @@ from .models import UserProfile
 
 
 def permission_denied_view(request, exception=None):
-    return render(request, '403.html', status=403)
+    from .access import is_employee_only_user
+    return render(
+        request,
+        '403.html',
+        {'is_employee_only': is_employee_only_user(request.user)},
+        status=403,
+    )
 
 
 @login_required
