@@ -5,7 +5,7 @@ from django.test import SimpleTestCase
 from holidays.constants import (
     TYPE_REGULAR, TYPE_SPECIAL_NON_WORKING, HOLIDAY_TYPE_VALUES,
 )
-from holidays.holiday_data import DEFAULT_PH_HOLIDAYS, holidays_for_year
+from holidays.holiday_data import holidays_for_year
 
 
 class HolidayDataTests(SimpleTestCase):
