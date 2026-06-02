@@ -91,3 +91,60 @@ class PayableOvertimeHelperTests(TestCase):
         idx = self._index([emp])
         # approved_hours None → fall back to requested 1.0h = 60 min.
         self.assertEqual(payable_overtime_minutes(emp, _DATE, 120, idx), 60)
+
+
+class AutoCreateSignalTests(TestCase):
+    def setUp(self):
+        self.company = _company()
+
+    def _attendance_record(self, emp, overtime_minutes):
+        from attendance.models import AttendanceRecord
+        return AttendanceRecord.objects.create(
+            company=self.company, employee=emp, date=_DATE,
+            time_in=datetime.time(14, 0), time_out=datetime.time(23, 0),
+            overtime_minutes=overtime_minutes, status='present',
+        )
+
+    def test_management_review_detected_ot_creates_pending(self):
+        emp = _employee(self.company, 'management_review')
+        self._attendance_record(emp, 120)
+        req = OvertimeRequest.objects.get(employee=emp, date=_DATE)
+        self.assertEqual(req.status, 'pending')
+        self.assertEqual(req.source, 'detected')
+        self.assertEqual(req.requested_hours, Decimal('2.00'))
+
+    def test_no_request_when_zero_overtime(self):
+        emp = _employee(self.company, 'management_review')
+        self._attendance_record(emp, 0)
+        self.assertFalse(OvertimeRequest.objects.filter(employee=emp, date=_DATE).exists())
+
+    def test_no_request_for_non_management_review_policy(self):
+        for policy in ['not_allowed', 'automatic', 'request_required']:
+            emp = _employee(self.company, policy)
+            self._attendance_record(emp, 120)
+            self.assertFalse(
+                OvertimeRequest.objects.filter(employee=emp, date=_DATE).exists(),
+                f'unexpected request created for policy={policy}',
+            )
+
+    def test_idempotent_updates_pending_requested_hours(self):
+        emp = _employee(self.company, 'management_review')
+        rec = self._attendance_record(emp, 120)
+        rec.overtime_minutes = 180
+        rec.save(update_fields=['overtime_minutes'])
+        reqs = OvertimeRequest.objects.filter(employee=emp, date=_DATE)
+        self.assertEqual(reqs.count(), 1)
+        self.assertEqual(reqs.first().requested_hours, Decimal('3.00'))
+
+    def test_does_not_override_reviewed_request(self):
+        emp = _employee(self.company, 'management_review')
+        rec = self._attendance_record(emp, 120)
+        req = OvertimeRequest.objects.get(employee=emp, date=_DATE)
+        req.status = 'approved'
+        req.approved_hours = Decimal('2.00')
+        req.save(update_fields=['status', 'approved_hours'])
+        rec.overtime_minutes = 240
+        rec.save(update_fields=['overtime_minutes'])
+        req.refresh_from_db()
+        self.assertEqual(req.status, 'approved')
+        self.assertEqual(req.requested_hours, Decimal('2.00'))  # unchanged
