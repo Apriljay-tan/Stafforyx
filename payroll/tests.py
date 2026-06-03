@@ -126,6 +126,54 @@ class FullAttendanceTest(PayrollV2TestCase):
         self.assertEqual(rec.status, 'draft')
 
 
+# ── Attendance status is respected (manual present / half day / on leave) ───────
+
+class AttendanceStatusTest(PayrollV2TestCase):
+    """
+    Payroll must honour the AttendanceRecord.status field, not just time_in.
+    A record manually marked 'present' (no clock-in) still counts; 'half_day'
+    pays 0.5; explicit 'absent' is docked; 'on_leave' is neither paid nor docked.
+    """
+
+    def _record_with(self, date, status, time_in=None):
+        AttendanceRecord.objects.create(
+            company=self.company, employee=self.emp, date=date,
+            status=status, time_in=time_in,
+        )
+
+    def test_manual_present_without_clock_in_counts(self):
+        # Mon marked Present but with no time_in — must NOT be treated as absent.
+        self._record_with(_MAY_19, 'present')
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.present_days, 1)
+        self.assertEqual(rec.payable_days, Decimal('1'))
+        self.assertEqual(rec.absent_days, Decimal('4'))
+        self.assertEqual(rec.basic_pay, Decimal('1000.00'))
+
+    def test_half_day_pays_half(self):
+        self._record_with(_MAY_19, 'half_day', time_in=datetime.time(8, 0))
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.payable_days, Decimal('0.5'))
+        self.assertEqual(rec.basic_pay, Decimal('500.00'))
+
+    def test_explicit_absent_is_docked(self):
+        self._record_with(_MAY_19, 'absent', time_in=datetime.time(8, 0))
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.present_days, 0)
+        self.assertEqual(rec.absent_days, Decimal('5'))
+
+    def test_on_leave_status_not_counted_as_absent(self):
+        # On-leave day (no LeaveRequest) is neutral: not paid here, not docked as absent.
+        self._record_with(_MAY_19, 'on_leave')
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.absent_days, Decimal('4'))
+        self.assertEqual(rec.present_days, 0)
+
+
 # ── Test 2: Partial attendance ─────────────────────────────────────────────────
 
 class PartialAttendanceTest(PayrollV2TestCase):

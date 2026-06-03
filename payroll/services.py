@@ -156,6 +156,43 @@ def _build_attendance_map(employees, start_date, end_date):
     return result
 
 
+# ── Attendance status interpretation ───────────────────────────────────────────
+
+# Statuses on AttendanceRecord that explicitly mean "not at work that day".
+_ABSENT_STATUSES = {'absent'}
+_LEAVE_STATUSES = {'on_leave'}
+_HALF_DAY_STATUSES = {'half_day'}
+
+
+def _attendance_state(att):
+    """
+    Interpret an AttendanceRecord against the employee's scheduled working day.
+
+    Returns a tuple ``(state, weight)`` where state is one of:
+      'present' — counts toward payable days (weight = 1 full / 0.5 half day)
+      'absent'  — counts toward absences
+      'neutral' — neither (e.g. status 'on_leave'); pay handled via leave, not docked
+
+    The attendance ``status`` field is authoritative: a record manually marked
+    'Present'/'Late' counts even without a clock-in time, and an explicit
+    'Absent'/'On Leave' is respected even if a stray time_in exists.
+    """
+    if att is None:
+        return 'absent', None
+    status = att.status or 'present'
+    if status in _ABSENT_STATUSES:
+        return 'absent', None
+    if status in _LEAVE_STATUSES:
+        return 'neutral', None
+    if status in _HALF_DAY_STATUSES:
+        return 'present', Decimal('0.5')
+    # 'present', 'late', or any other working status — also accept a bare clock-in.
+    if status in ('present', 'late') or att.time_in is not None:
+        return 'present', Decimal('1')
+    # Record exists but signals neither presence nor a recognised status → absent.
+    return 'absent', None
+
+
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
@@ -175,6 +212,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
 
     present_dates = set()
     absent_dates = set()
+    present_weight = Decimal('0')   # full day = 1, half day = 0.5
     late_min = 0
     undertime_min = 0
     overtime_min = 0
@@ -197,15 +235,18 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             continue
 
         att = att_by_date.get(date)
-        if att and att.time_in is not None:
+        state, weight = _attendance_state(att)
+        if state == 'present':
             present_dates.add(date)
+            present_weight += weight
             late_min += att.late_minutes or 0
             undertime_min += att.undertime_minutes or 0
             overtime_min += payable_overtime_minutes(
                 emp, date, att.overtime_minutes or 0, approval_index
             )
-        else:
+        elif state == 'absent':
             absent_dates.add(date)
+        # 'neutral' (e.g. on_leave without a leave request) → neither paid nor docked
 
     # ── Holiday pass ──────────────────────────────────────────────────────────
     for date in holiday_candidate_dates:
@@ -217,7 +258,8 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             continue
 
         att = att_by_date.get(date)
-        worked = bool(att and att.time_in is not None)
+        state, _weight = _attendance_state(att)
+        worked = (state == 'present')
         is_scheduled = date in scheduled_dates
 
         if worked:
@@ -246,7 +288,8 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     paid_leave_days = Decimal(len(paid_leave_dates))
     unpaid_leave_days = Decimal(len(unpaid_leave_dates))
     absent_days = Decimal(len(absent_dates))
-    payable_days = Decimal(present_days) + paid_leave_days
+    # payable uses the fractional present weight so half-days are paid as 0.5
+    payable_days = present_weight + paid_leave_days
 
     basic_pay = (daily_rate * payable_days).quantize(_Q2, rounding=ROUND_HALF_UP)
     absence_ded = (daily_rate * absent_days).quantize(_Q2, rounding=ROUND_HALF_UP)

@@ -203,7 +203,7 @@
   <div class="ps-header">
     <div>
       {% if company.payslip_show_company_logo and company.logo %}
-        <img src="{{ company.logo.url }}" style="height:44px;object-fit:contain;filter:brightness(0) invert(1);margin-bottom:.4rem;" alt="{{ company.name }}">
+        <img src="{{ company.logo.url }}" style="height:44px;width:auto;object-fit:contain;background:#fff;padding:4px 8px;border-radius:6px;margin-bottom:.4rem;" alt="{{ company.name }}">
       {% endif %}
       <p class="ps-company-name">{{ company.payslip_display_name }}</p>
       {% if company.payslip_display_address %}
