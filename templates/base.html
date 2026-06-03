@@ -9,6 +9,7 @@
   <meta name="apple-mobile-web-app-title" content="Stafforyx" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="{% static 'images/pwa/icon-192.png' %}" />
   <link rel="apple-touch-icon" href="{% static 'images/pwa/apple-touch-icon.png' %}" />
   <title>{% block title %}Stafforyx HR{% endblock %} | by SYNTRIX PH</title>
 
@@ -389,9 +390,9 @@
   {% block sidebar %}
     <div class="sidebar-brand">
       <a href="/" style="display:block;text-decoration:none;">
-        <img src="/static/images/logo_stafforyx.png?v=9"
+        <img src="/static/images/logo_stafforyx.png?v=10"
              alt="Stafforyx HR"
-             style="height:48px;width:auto;display:block;filter:brightness(0) invert(1);opacity:0.92;">
+             style="height:48px;width:auto;display:block;border-radius:10px;">
       </a>
     </div>
 

@@ -42,7 +42,7 @@ def manifest_webmanifest(_request):
 @require_GET
 def service_worker(_request):
     service_worker_js = """
-const CACHE_NAME = "stafforyx-pwa-v1";
+const CACHE_NAME = "stafforyx-pwa-v2";
 const OFFLINE_URL = "/static/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
