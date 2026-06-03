@@ -403,6 +403,22 @@ def portal_announcement_detail(request, pk):
     })
 
 
+@login_required
+def portal_notifications_seen(request):
+    """Mark the notification bell as read (called when the popup opens)."""
+    from django.http import JsonResponse
+    from django.utils import timezone
+    from announcements.models import AnnouncementSeen
+
+    employee = _get_portal_employee(request)
+    if employee is not None and request.method == 'POST':
+        AnnouncementSeen.objects.update_or_create(
+            employee=employee, defaults={'last_seen_at': timezone.now()},
+        )
+        return JsonResponse({'ok': True})
+    return JsonResponse({'ok': False}, status=400)
+
+
 # ── HR: Manage Incidents ──────────────────────────────────────────────────────
 
 @login_required

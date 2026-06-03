@@ -61,7 +61,7 @@ def announcement_detail(request, pk):
 
 
 def announcement_add(request):
-    form = AnnouncementForm(request.POST or None)
+    form = AnnouncementForm(request.POST or None, request.FILES or None)
     if request.method == 'POST' and form.is_valid():
         announcement = form.save(commit=False)
         if request.user.is_authenticated:
@@ -82,7 +82,7 @@ def announcement_edit(request, pk):
     )
     if not user_can_access_company(request.user, announcement.company):
         raise PermissionDenied
-    form = AnnouncementForm(request.POST or None, instance=announcement)
+    form = AnnouncementForm(request.POST or None, request.FILES or None, instance=announcement)
     if request.method == 'POST' and form.is_valid():
         form.save()
         messages.success(request, 'Announcement updated successfully.')

@@ -2,6 +2,37 @@
 {% block title %}{{ action }} Announcement{% endblock %}
 {% block page_title %}{{ action }} Announcement{% endblock %}
 
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+<style>
+  /* ── Quill composer, styled to match Stafforyx ── */
+  .stx-editor-wrap { border: 1px solid var(--in-bd, #e2e8f0); border-radius: 10px; overflow: hidden; background: #fff; }
+  .stx-editor-wrap .ql-toolbar.ql-snow {
+    border: none; border-bottom: 1px solid #eef2f7;
+    background: #f8fafc; padding: 8px 10px;
+  }
+  .stx-editor-wrap .ql-container.ql-snow { border: none; font-family: 'Inter', sans-serif; font-size: .95rem; }
+  .stx-editor-wrap .ql-editor { min-height: 260px; color: #1a1a2e; line-height: 1.6; }
+  .stx-editor-wrap .ql-editor.ql-blank::before { color: #94a3b8; font-style: normal; }
+  .ql-snow .ql-stroke { stroke: #475569; }
+  .ql-snow .ql-fill { fill: #475569; }
+  .ql-snow .ql-picker { color: #475569; }
+  .ql-snow.ql-toolbar button:hover .ql-stroke,
+  .ql-snow .ql-toolbar button.ql-active .ql-stroke { stroke: #1565C0; }
+  .ql-snow.ql-toolbar button:hover .ql-fill,
+  .ql-snow .ql-toolbar button.ql-active .ql-fill { fill: #1565C0; }
+  .ql-snow .ql-toolbar button.ql-active,
+  .ql-snow .ql-picker-label.ql-active { color: #1565C0; }
+
+  /* attachment dropzone-ish */
+  .stx-attach {
+    border: 1.5px dashed #cbd6e4; border-radius: 10px; padding: 14px 16px;
+    background: #fbfdff; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .stx-attach .bi { font-size: 1.4rem; color: #1565C0; }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <nav aria-label="breadcrumb" class="mb-3">
@@ -23,12 +54,12 @@
 <div class="page-header mb-3">
   <h1>{{ action }} Announcement</h1>
   <p>
-    {% if action == 'Add' %}Create a new company announcement or memo.
+    {% if action == 'Add' %}Compose a memo with rich formatting, or attach a PDF/Word file.
     {% else %}Update this announcement or memo.{% endif %}
   </p>
 </div>
 
-<form method="post" novalidate>
+<form method="post" enctype="multipart/form-data" id="announcement-form" novalidate>
   {% csrf_token %}
 
   {% if form.non_field_errors %}
@@ -59,11 +90,69 @@
           {{ form.title }}
           {% if form.title.errors %}<div class="text-danger small mt-1">{{ form.title.errors.as_text }}</div>{% endif %}
         </div>
+
         <div class="col-12">
-          <label class="form-label fw-semibold small">{{ form.content.label }}</label>
-          {{ form.content }}
+          <label class="form-label fw-semibold small">Message</label>
+          <div class="stx-editor-wrap">
+            <div id="stx-quill-toolbar">
+              <span class="ql-formats">
+                <select class="ql-header">
+                  <option value="1"></option><option value="2"></option>
+                  <option value="3"></option><option selected></option>
+                </select>
+                <select class="ql-font"></select>
+                <select class="ql-size"></select>
+              </span>
+              <span class="ql-formats">
+                <button class="ql-bold"></button><button class="ql-italic"></button>
+                <button class="ql-underline"></button><button class="ql-strike"></button>
+              </span>
+              <span class="ql-formats">
+                <select class="ql-color"></select><select class="ql-background"></select>
+              </span>
+              <span class="ql-formats">
+                <button class="ql-list" value="ordered"></button>
+                <button class="ql-list" value="bullet"></button>
+                <button class="ql-indent" value="-1"></button>
+                <button class="ql-indent" value="+1"></button>
+              </span>
+              <span class="ql-formats">
+                <select class="ql-align"></select>
+              </span>
+              <span class="ql-formats">
+                <button class="ql-blockquote"></button><button class="ql-code-block"></button>
+                <button class="ql-link"></button>
+              </span>
+              <span class="ql-formats">
+                <button class="ql-clean"></button>
+              </span>
+            </div>
+            <div id="stx-quill-editor"></div>
+          </div>
+          <!-- Django textarea (hidden; receives Quill HTML on submit) -->
+          <div style="display:none;">{{ form.content }}</div>
           {% if form.content.errors %}<div class="text-danger small mt-1">{{ form.content.errors.as_text }}</div>{% endif %}
+          <div class="form-text">Format like a document — headings, bold, colours, lists, links.</div>
         </div>
+
+        <div class="col-12">
+          <label class="form-label fw-semibold small">
+            Attachment <span class="fw-normal text-muted">(optional — PDF or Word)</span>
+          </label>
+          <div class="stx-attach">
+            <i class="bi bi-paperclip"></i>
+            <div style="flex:1;min-width:200px;">
+              {{ form.attachment }}
+              {% if announcement.attachment %}
+                <div class="small text-muted mt-1">
+                  Current: <a href="{{ announcement.attachment.url }}" target="_blank">{{ announcement.attachment_name }}</a>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          {% if form.attachment.errors %}<div class="text-danger small mt-1">{{ form.attachment.errors.as_text }}</div>{% endif %}
+        </div>
+
         <div class="col-12">
           <div class="form-check">
             {{ form.is_active }}
@@ -90,4 +179,37 @@
   </div>
 </form>
 
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+(function () {
+  var textarea = document.getElementById('id_content');
+  if (!textarea || typeof Quill === 'undefined') return;
+
+  // Register a small, sensible font whitelist.
+  var Font = Quill.import('formats/font');
+  Font.whitelist = ['sans-serif', 'serif', 'monospace'];
+  Quill.register(Font, true);
+
+  var quill = new Quill('#stx-quill-editor', {
+    theme: 'snow',
+    placeholder: 'Write your announcement…',
+    modules: { toolbar: '#stx-quill-toolbar' },
+  });
+
+  // Load existing content (edit mode).
+  var initial = textarea.value;
+  if (initial && initial.trim()) {
+    quill.clipboard.dangerouslyPasteHTML(initial);
+  }
+
+  // Sync Quill HTML into the hidden textarea on submit.
+  document.getElementById('announcement-form').addEventListener('submit', function () {
+    var html = quill.root.innerHTML;
+    textarea.value = (quill.getText().trim().length === 0 && !quill.root.querySelector('img')) ? '' : html;
+  });
+})();
+</script>
 {% endblock %}

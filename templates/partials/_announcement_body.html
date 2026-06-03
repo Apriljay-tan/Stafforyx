@@ -1,0 +1,48 @@
+{% comment %}
+Renders an announcement's sanitised rich HTML body + optional attachment.
+Expects `announcement` in context. Include where the body should appear.
+{% endcomment %}
+<style>
+  .stx-rich { font-size: .95rem; line-height: 1.7; color: #1a1a2e; word-wrap: break-word; }
+  .stx-rich p { margin: 0 0 .6rem; }
+  .stx-rich h1, .stx-rich h2, .stx-rich h3 { color: #0D1B2A; margin: .7rem 0 .4rem; font-weight: 700; line-height: 1.3; }
+  .stx-rich a { color: #1565C0; text-decoration: underline; }
+  .stx-rich strong, .stx-rich b { font-weight: 700; }
+  .stx-rich blockquote { border-left: 3px solid #cbd6e4; margin: .6rem 0; padding: .35rem .95rem; color: #475569; background: #f8fafc; border-radius: 0 6px 6px 0; }
+  .stx-rich pre, .stx-rich .ql-code-block-container { background: #0d1b2a; color: #e2e8f0; padding: .75rem .95rem; border-radius: 8px; overflow: auto; font-family: Menlo, Consolas, monospace; font-size: .85rem; }
+  .stx-rich ul, .stx-rich ol { padding-left: 1.5rem; margin: .3rem 0 .7rem; }
+  .stx-rich img { max-width: 100%; height: auto; border-radius: 8px; }
+  /* Quill class → style mappings so formatting renders without Quill's CSS */
+  .stx-rich .ql-align-center { text-align: center; }
+  .stx-rich .ql-align-right  { text-align: right; }
+  .stx-rich .ql-align-justify{ text-align: justify; }
+  .stx-rich .ql-size-small { font-size: .75em; }
+  .stx-rich .ql-size-large { font-size: 1.5em; }
+  .stx-rich .ql-size-huge  { font-size: 2.5em; }
+  .stx-rich .ql-font-serif     { font-family: Georgia, 'Times New Roman', serif; }
+  .stx-rich .ql-font-monospace { font-family: Menlo, Consolas, monospace; }
+  .stx-rich .ql-indent-1 { padding-left: 3em; } .stx-rich .ql-indent-2 { padding-left: 6em; }
+  .stx-rich .ql-indent-3 { padding-left: 9em; } .stx-rich .ql-indent-4 { padding-left: 12em; }
+  .stx-rich .ql-indent-5 { padding-left: 15em; } .stx-rich .ql-indent-6 { padding-left: 18em; }
+  .stx-attach-link {
+    display: inline-flex; align-items: center; gap: 11px; margin-top: 1rem;
+    border: 1px solid #e2e8f0; border-radius: 10px; padding: .7rem 1rem;
+    background: #fbfdff; text-decoration: none; transition: border-color .15s, box-shadow .15s;
+  }
+  .stx-attach-link:hover { border-color: rgba(21,101,192,.4); box-shadow: 0 4px 14px rgba(13,27,42,.08); }
+  .stx-attach-link .bi { font-size: 1.6rem; color: #1565C0; }
+</style>
+
+{% if announcement.content %}
+  <div class="stx-rich">{{ announcement.content|safe }}</div>
+{% endif %}
+
+{% if announcement.attachment %}
+  <a href="{{ announcement.attachment.url }}" target="_blank" rel="noopener" class="stx-attach-link">
+    <i class="bi bi-file-earmark-arrow-down"></i>
+    <span>
+      <span class="fw-semibold d-block" style="color:#0D1B2A;">{{ announcement.attachment_name }}</span>
+      <span class="small text-muted">Tap to open / download</span>
+    </span>
+  </a>
+{% endif %}

@@ -25,7 +25,7 @@
           <small class="text-muted">{{ announcement.created_at|date:"M d, Y" }}</small>
         </div>
         <p class="mb-1 text-muted" style="font-size:.86rem;">
-          {{ announcement.content|truncatechars:180 }}
+          {% if announcement.attachment %}<i class="bi bi-paperclip"></i> {% endif %}{{ announcement.content|striptags|truncatechars:180 }}
         </p>
         <small class="text-muted">
           {% if announcement.target_department %}

@@ -506,6 +506,7 @@
     </button>
     <span class="topbar-title">{% block page_title %}Dashboard{% endblock %}</span>
     <div class="topbar-actions">
+      {% block topbar_actions_pre %}{% endblock %}
       <div class="dropdown">
         <button class="avatar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
           <div class="avatar-circle">

@@ -33,8 +33,79 @@
     .avatar-btn .bi-chevron-down { display: none; }
     .avatar-btn { padding: 0.3rem; }
   }
+
+  /* ── Notification bell ── */
+  .notif-btn { position: relative; }
+  .notif-btn .notif-count {
+    position: absolute; top: -4px; right: -4px; min-width: 17px; height: 17px;
+    padding: 0 4px; border-radius: 9px; background: #e11d48; color: #fff;
+    font-size: 0.62rem; font-weight: 700; line-height: 17px; text-align: center;
+    border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .notif-menu {
+    width: 340px; max-width: 92vw; padding: 0; border: 1px solid #e2e8f0;
+    border-radius: 12px; box-shadow: 0 16px 40px rgba(15,23,42,.16); overflow: hidden;
+  }
+  .notif-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .7rem .95rem; background: #0D1B2A; color: #fff;
+  }
+  .notif-head .t { font-size: .82rem; font-weight: 700; letter-spacing: .3px; }
+  .notif-head .c { font-size: .66rem; color: #00BCD4; text-transform: uppercase; letter-spacing: .8px; }
+  .notif-list { max-height: 60vh; overflow-y: auto; }
+  .notif-item {
+    display: block; padding: .7rem .95rem; border-bottom: 1px solid #f0f4f8;
+    text-decoration: none; color: #1a1a2e; transition: background .12s;
+  }
+  .notif-item:hover { background: #f4f6fa; color: #1a1a2e; }
+  .notif-item.is-unread { background: rgba(21,101,192,.05); }
+  .notif-item .it-top { display: flex; align-items: center; gap: 6px; }
+  .notif-item .it-dot { width: 7px; height: 7px; border-radius: 50%; background: #1565C0; flex-shrink: 0; }
+  .notif-item .it-title { font-size: .82rem; font-weight: 600; color: #0D1B2A; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notif-item .it-time { font-size: .66rem; color: #94a3b8; flex-shrink: 0; }
+  .notif-item .it-preview { font-size: .76rem; color: #64748b; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .notif-empty { padding: 1.6rem .95rem; text-align: center; color: #94a3b8; font-size: .82rem; }
+  .notif-foot { padding: .6rem .95rem; text-align: center; background: #f8fafc; }
+  .notif-foot a { font-size: .78rem; font-weight: 600; color: #1565C0; text-decoration: none; }
 </style>
 {% endblock extra_css %}
+
+{% block topbar_actions_pre %}
+<div class="dropdown" id="notif-dd">
+  <button class="topbar-icon-btn notif-btn" type="button" data-bs-toggle="dropdown"
+          data-bs-auto-close="true" aria-expanded="false" aria-label="Notifications" title="Notifications">
+    <i class="bi bi-bell"></i>
+    {% if portal_notif_unread %}<span class="notif-count" id="notif-count">{{ portal_notif_unread }}</span>{% endif %}
+  </button>
+  <div class="dropdown-menu dropdown-menu-end notif-menu">
+    <div class="notif-head">
+      <span class="t">Notifications</span>
+      <span class="c">Announcements</span>
+    </div>
+    <div class="notif-list">
+      {% for a in portal_notif_items %}
+        <a class="notif-item {% if forloop.counter <= portal_notif_unread %}is-unread{% endif %}"
+           href="{% url 'portal:announcement_detail' a.pk %}">
+          <div class="it-top">
+            {% if forloop.counter <= portal_notif_unread %}<span class="it-dot"></span>{% endif %}
+            <span class="it-title">{{ a.title }}</span>
+            <span class="it-time">{{ a.created_at|date:"M d" }}</span>
+          </div>
+          <div class="it-preview">
+            {% if a.attachment %}<i class="bi bi-paperclip"></i> {% endif %}{{ a.content|striptags|truncatechars:90 }}
+          </div>
+        </a>
+      {% empty %}
+        <div class="notif-empty"><i class="bi bi-bell-slash d-block mb-1" style="font-size:1.3rem;"></i>No announcements yet.</div>
+      {% endfor %}
+    </div>
+    <div class="notif-foot">
+      <a href="{% url 'portal:announcements' %}">View all announcements</a>
+    </div>
+  </div>
+  <form id="notif-seen-form" style="display:none;">{% csrf_token %}</form>
+</div>
+{% endblock topbar_actions_pre %}
 
 {% block sidebar %}
     <div class="sidebar-brand">
@@ -117,3 +188,28 @@
       Stafforyx HR &copy; {% now "Y" %}
     </div>
 {% endblock sidebar %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var dd = document.getElementById('notif-dd');
+  if (!dd) return;
+  var btn = dd.querySelector('[data-bs-toggle="dropdown"]');
+  if (!btn) return;
+  btn.addEventListener('show.bs.dropdown', function () {
+    var tokenInput = document.querySelector('#notif-seen-form [name=csrfmiddlewaretoken]');
+    var token = tokenInput ? tokenInput.value : '';
+    fetch("{% url 'portal:notifications_seen' %}", {
+      method: 'POST',
+      headers: { 'X-CSRFToken': token },
+      credentials: 'same-origin',
+    }).then(function () {
+      var count = document.getElementById('notif-count');
+      if (count) count.remove();
+      dd.querySelectorAll('.notif-item.is-unread').forEach(function (el) { el.classList.remove('is-unread'); });
+      dd.querySelectorAll('.it-dot').forEach(function (el) { el.remove(); });
+    }).catch(function () {});
+  });
+})();
+</script>
+{% endblock extra_js %}

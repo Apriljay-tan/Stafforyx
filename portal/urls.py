@@ -13,6 +13,7 @@ urlpatterns = [
     path('documents/<int:pk>/download/', views.portal_document_download, name='document_download'),
     path('announcements/', views.portal_announcements, name='announcements'),
     path('announcements/<int:pk>/', views.portal_announcement_detail, name='announcement_detail'),
+    path('notifications/seen/', views.portal_notifications_seen, name='notifications_seen'),
     path('leaves/', views.portal_leave_list, name='leave_list'),
     path('leaves/new/', views.portal_leave_new, name='leave_new'),
     path('incidents/', views.portal_incident_list, name='incident_list'),

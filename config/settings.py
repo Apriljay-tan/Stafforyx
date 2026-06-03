@@ -88,6 +88,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "licenses.context_processors.license_banner",
                 "accounts.context_processors.company_context",
+                "portal.context_processors.portal_notifications",
             ],
         },
     },

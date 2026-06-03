@@ -96,7 +96,9 @@
                  class="fw-semibold text-decoration-none" style="color:#0D1B2A;">
                 {{ announcement.title }}
               </a>
-              <div class="text-muted" style="font-size:.73rem;">{{ announcement.content|truncatechars:80 }}</div>
+              <div class="text-muted" style="font-size:.73rem;">
+                {% if announcement.attachment %}<i class="bi bi-paperclip"></i> {% endif %}{{ announcement.content|striptags|truncatechars:80 }}
+              </div>
             </td>
             <td class="text-muted">{{ announcement.company.name }}</td>
             <td>
