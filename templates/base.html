@@ -561,11 +561,17 @@
               </li>
             {% endif %}
 
-            {% if selected_company %}
-              {% if can_manage_settings_user %}
+            {% if can_manage_settings_user or stafforyx_profile.can_manage_payroll %}
+              {% if selected_company %}
                 <li>
                   <a class="dropdown-item" href="{% url 'companies:payslip_settings' selected_company.pk %}">
-                    <i class="bi bi-gear"></i>Payslip Settings
+                    <i class="bi bi-receipt"></i>Payslip Settings
+                  </a>
+                </li>
+              {% elif accessible_companies.first %}
+                <li>
+                  <a class="dropdown-item" href="{% url 'companies:payslip_settings' accessible_companies.first.pk %}">
+                    <i class="bi bi-receipt"></i>Payslip Settings
                   </a>
                 </li>
               {% endif %}
