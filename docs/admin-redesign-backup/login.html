@@ -1,0 +1,206 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% trans 'Log in' %} | Stafforyx HR Admin</title>
+  <meta name="theme-color" content="#0f172a">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="{% static 'images/pwa/icon-192.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'images/pwa/apple-touch-icon.png' %}">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #0D1B2A;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      background-image:
+        radial-gradient(circle at 15% 50%, rgba(21,101,192,0.18) 0%, transparent 50%),
+        radial-gradient(circle at 85% 20%, rgba(0,188,212,0.12) 0%, transparent 40%);
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 400px;
+    }
+
+    .login-card {
+      background: #162436;
+      border: 1px solid #1E3050;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.45);
+    }
+
+    .brand {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+    .brand-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #00BCD4;
+      margin-right: 7px;
+      vertical-align: middle;
+      position: relative;
+      top: -1px;
+    }
+    .brand-name {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.3px;
+    }
+    .brand-sub {
+      font-size: 0.68rem;
+      color: #00BCD4;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      font-weight: 500;
+      margin-top: 5px;
+    }
+    .brand-label {
+      font-size: 0.72rem;
+      color: #4a6080;
+      margin-top: 6px;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1px solid #1E3050;
+      margin: 0 0 1.5rem;
+    }
+
+    .errornote {
+      background: rgba(220,38,38,0.12);
+      border: 1px solid rgba(220,38,38,0.35);
+      border-radius: 8px;
+      color: #fca5a5;
+      font-size: 0.82rem;
+      padding: 10px 14px;
+      margin-bottom: 1.25rem;
+      line-height: 1.5;
+    }
+
+    .form-group { margin-bottom: 1rem; }
+
+    label {
+      display: block;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #8aa0b8;
+      text-transform: uppercase;
+      letter-spacing: 0.9px;
+      margin-bottom: 6px;
+    }
+
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 10px 13px;
+      background: #0D1B2A;
+      border: 1px solid #1E3050;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input[type="text"]::placeholder,
+    input[type="password"]::placeholder { color: #4a6080; }
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #1565C0;
+      box-shadow: 0 0 0 3px rgba(21,101,192,0.2);
+    }
+
+    input[type="submit"] {
+      width: 100%;
+      padding: 11px;
+      background: #1565C0;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1.5rem;
+      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.3px;
+    }
+    input[type="submit"]:hover { background: #00BCD4; color: #0D1B2A; }
+
+    .back-link {
+      display: block;
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: #4a6080;
+    }
+    .back-link a { color: #00BCD4; text-decoration: none; }
+    .back-link a:hover { color: #FFC107; }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.7rem;
+      color: #2a4060;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+
+      <div class="brand">
+        <img src="/static/images/logo_stafforyx_horizontal.png?v=1"
+             alt="Stafforyx HR"
+             style="display:block;margin:0 auto 10px;height:90px;max-width:280px;width:auto;">
+        <div class="brand-sub">by SYNTRIX PH</div>
+        <div class="brand-label">Admin Panel</div>
+      </div>
+
+      <hr class="divider">
+
+      {% if form.errors %}
+        <p class="errornote">{% trans "Please enter the correct username and password for a staff account. Note that both fields may be case-sensitive." %}</p>
+      {% endif %}
+      {% if error_message %}
+        <p class="errornote">{{ error_message }}</p>
+      {% endif %}
+
+      <form action="{{ app_path }}" method="post" id="login-form">
+        {% csrf_token %}
+        <div class="form-group">
+          <label for="id_username">{% trans 'Username' %}</label>
+          <input type="text" name="username" id="id_username" autocomplete="username" autofocus required>
+        </div>
+        <div class="form-group">
+          <label for="id_password">{% trans 'Password' %}</label>
+          <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+        </div>
+        <input type="hidden" name="next" value="{{ next }}">
+        <input type="submit" value="{% trans 'Log in' %}">
+      </form>
+
+      <p class="back-link"><a href="/">← Back to Stafforyx HR</a></p>
+
+    </div>
+    <div class="footer-note">Stafforyx HR &copy; {% now "Y" %} &nbsp;·&nbsp; SYNTRIX PH</div>
+  </div>
+</body>
+</html>
