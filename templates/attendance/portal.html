@@ -2,6 +2,25 @@
 {% block title %}Attendance Portal{% endblock %}
 {% block page_title %}Attendance Portal{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* ── Attendance Portal: iOS status-bar (safe-area) fix ──
+     This page is used on phones (PWA), so the fixed topbar must clear the
+     status bar/notch. env(safe-area-inset-top) = 0 on desktop, and the extra
+     padding is scoped to small screens, so the desktop layout is unchanged. */
+  @media (max-width: 768px) {
+    #topbar {
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      min-height: calc(64px + env(safe-area-inset-top, 0px));
+      height: auto;
+    }
+    #main-content {
+      padding-top: calc(64px + env(safe-area-inset-top, 0px));
+    }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-12 col-sm-10 col-md-7 col-lg-5">

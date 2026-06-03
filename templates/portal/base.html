@@ -16,9 +16,20 @@
     padding-top: calc(60px + env(safe-area-inset-top, 0px));
   }
 
-  /* Small screens: keep hamburger | title | profile button on one tidy row. */
+  /* Small screens: keep hamburger | title | profile button on one tidy row,
+     and push the whole header clear of the iPhone status bar / notch. */
   @media (max-width: 768px) {
-    #topbar { padding-left: 1rem; padding-right: 1rem; gap: 0.6rem; }
+    #topbar {
+      padding-left: 1rem;
+      padding-right: 1rem;
+      gap: 0.6rem;
+      /* breathing room (12px) PLUS the device safe-area inset */
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      min-height: calc(64px + env(safe-area-inset-top, 0px));
+    }
+    #main-content {
+      padding-top: calc(64px + env(safe-area-inset-top, 0px));
+    }
     .topbar-title {
       white-space: nowrap;
       overflow: hidden;
