@@ -77,6 +77,42 @@ class GetAccessibleCompaniesTests(TestCase):
         self.assertEqual(qs.count(), 0)
 
 
+class FilterCompanyQuerysetTests(TestCase):
+    """
+    filter_queryset_by_user_companies must accept a Company queryset itself
+    (used to build company pickers) without raising a FieldError.
+    Regression: scoped admins previously got a 500 on /payroll/.
+    """
+
+    def setUp(self):
+        self.company_a = _make_company('Company A')
+        self.company_b = _make_company('Company B')
+        self.superuser = _make_user('su_filter', is_superuser=True)
+        self.scoped = _make_user('scoped_admin')
+        UserProfile.objects.create(
+            user=self.scoped, role='hr_admin', is_active_stafforyx=True,
+            can_manage_payroll=True, company=self.company_a,
+        )
+        _grant_access(self.scoped, self.company_a, role='hr_admin')
+
+    def test_company_queryset_scoped_to_accessible(self):
+        from companies.models import Company
+        qs = filter_queryset_by_user_companies(Company.objects.all(), self.scoped)
+        self.assertIn(self.company_a, qs)
+        self.assertNotIn(self.company_b, qs)
+
+    def test_company_queryset_superuser_sees_all(self):
+        from companies.models import Company
+        qs = filter_queryset_by_user_companies(Company.objects.all(), self.superuser)
+        self.assertEqual(qs.count(), 2)
+
+    def test_scoped_admin_can_open_payroll_list(self):
+        from django.urls import reverse
+        self.client.force_login(self.scoped)
+        response = self.client.get(reverse('payroll:payroll_record_list'))
+        self.assertEqual(response.status_code, 200)
+
+
 class UserCanAccessCompanyTests(TestCase):
     def setUp(self):
         self.company_a = _make_company('Company A')

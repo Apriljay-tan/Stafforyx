@@ -79,6 +79,10 @@ def filter_queryset_by_user_companies(queryset, user, company_field='company'):
     """
     Restrict *queryset* to rows whose `company_field` FK is in the user's
     accessible companies.  Superusers get the queryset unfiltered.
+
+    When *queryset* is of the Company model itself, it is filtered by primary
+    key instead of by a (non-existent) ``company`` field — this lets callers
+    pass ``Company.objects.all()`` safely to build a company picker.
     """
     if not user.is_authenticated:
         return queryset.none()
@@ -91,6 +95,8 @@ def filter_queryset_by_user_companies(queryset, user, company_field='company'):
         return queryset
 
     accessible = get_accessible_companies(user)
+    if queryset.model is Company:
+        return queryset.filter(pk__in=accessible)
     return queryset.filter(**{f'{company_field}__in': accessible})
 
 
