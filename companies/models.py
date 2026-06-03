@@ -54,6 +54,18 @@ class Company(models.Model):
     payslip_show_received_by = models.BooleanField(
         default=True, help_text='Show "Received by" signature line.',
     )
+    payslip_prepared_by_name = models.CharField(
+        max_length=150, blank=True,
+        help_text='Name auto-filled into the "Prepared By" area of every payslip.',
+    )
+    payslip_prepared_by_title = models.CharField(
+        max_length=100, blank=True, default='HR/Payroll Officer',
+        help_text='Title shown under the preparer name (e.g. HR/Payroll Officer).',
+    )
+    payslip_prepared_by_signature = models.ImageField(
+        upload_to='companies/signatures/', blank=True, null=True,
+        help_text='Uploaded or drawn signature shown above the Prepared By line.',
+    )
     payslip_footer_note = models.TextField(
         blank=True, help_text='Optional note printed at the bottom of every payslip.',
     )

@@ -126,6 +126,51 @@ class FullAttendanceTest(PayrollV2TestCase):
         self.assertEqual(rec.status, 'draft')
 
 
+# ── Daily-rate vs monthly basic salary ──────────────────────────────────────────
+
+class DailyRateTest(PayrollV2TestCase):
+    """
+    Daily-paid employees use their explicit daily_rate; monthly employees keep
+    the basic_salary / 26 behaviour (daily_rate ignored).
+    """
+
+    def test_daily_employee_uses_daily_rate(self):
+        self.emp.pay_basis = 'daily'
+        self.emp.daily_rate = Decimal('600.00')
+        self.emp.save(update_fields=['pay_basis', 'daily_rate'])
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.daily_rate, Decimal('600.0000'))
+        self.assertEqual(rec.present_days, 5)
+        self.assertEqual(rec.basic_pay, Decimal('3000.00'))   # 600 × 5
+
+    def test_monthly_employee_ignores_daily_rate(self):
+        self.emp.pay_basis = 'monthly'
+        self.emp.daily_rate = Decimal('600.00')   # must be ignored for monthly
+        self.emp.save(update_fields=['pay_basis', 'daily_rate'])
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.daily_rate, _DAILY)               # 26000 / 26 = 1000
+        self.assertEqual(rec.basic_pay, Decimal('5000.00'))
+
+    def test_daily_employee_blank_rate_falls_back_to_basic(self):
+        self.emp.pay_basis = 'daily'
+        self.emp.daily_rate = None
+        self.emp.save(update_fields=['pay_basis', 'daily_rate'])
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.daily_rate, _DAILY)               # falls back to 26000 / 26
+
+
 # ── Attendance status is respected (manual present / half day / on leave) ───────
 
 class AttendanceStatusTest(PayrollV2TestCase):

@@ -100,6 +100,9 @@
           <th>Name</th>
           <th>Department</th>
           <th>Position</th>
+          <th>Pay Basis</th>
+          <th class="text-end">Basic Salary</th>
+          <th class="text-end">Daily Rate</th>
           <th>Type</th>
           <th>Status</th>
           <th class="text-end pe-3">Actions</th>
@@ -131,6 +134,27 @@
           </td>
           <td class="text-muted">{{ emp.department.name|default:"—" }}</td>
           <td class="text-muted">{{ emp.position.title|default:"—" }}</td>
+          <td>
+            {% if emp.pay_basis == 'daily' %}
+              <span class="badge text-bg-info">Daily</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Monthly</span>
+            {% endif %}
+          </td>
+          <td class="text-end text-muted">
+            {% if emp.basic_salary %}&#8369;{{ emp.basic_salary|floatformat:2 }}{% else %}—{% endif %}
+          </td>
+          <td class="text-end">
+            {% if emp.pay_basis == 'daily' and emp.daily_rate %}
+              <span class="fw-semibold">&#8369;{{ emp.daily_rate|floatformat:2 }}</span>
+              <span class="text-muted" style="font-size:.72rem;">/ day</span>
+            {% elif emp.effective_daily_rate %}
+              <span class="text-muted">&#8369;{{ emp.effective_daily_rate|floatformat:2 }}</span>
+              <span class="text-muted" style="font-size:.7rem;">/ day · computed</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
           <td>
             {% if emp.employment_type == 'regular' %}
               <span class="badge text-bg-primary">Regular</span>
@@ -174,7 +198,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="text-center py-5">
+          <td colspan="11" class="text-center py-5">
             <i class="bi bi-people fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
             <span class="text-muted">No employees found.</span>
             {% if not q and not status_filter and not dept_filter and not license_read_only %}

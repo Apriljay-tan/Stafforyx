@@ -82,6 +82,12 @@ class Employee(models.Model):
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES, default='regular')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    daily_rate = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text='Daily pay rate for daily-paid employees. Monthly employees '
+                  'use basic salary; daily employees use daily rate. Leave blank '
+                  'to compute from basic salary (÷ 26).',
+    )
     pay_basis = models.CharField(
         max_length=10, choices=PAY_BASIS_CHOICES, default='daily',
         help_text='Daily: paid per payable day. Monthly: fixed salary already '
@@ -161,3 +167,20 @@ class Employee(models.Model):
     def full_name(self):
         parts = [self.first_name, self.middle_name, self.last_name]
         return ' '.join(p for p in parts if p)
+
+    @property
+    def effective_daily_rate(self):
+        """
+        Daily pay rate used for display and payroll.
+
+        Daily-paid employees use their explicit ``daily_rate``; everyone else
+        (and daily employees who left it blank) falls back to the computed
+        ``basic_salary / 26``. Returns ``None`` when there is nothing to show.
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+        if self.pay_basis == 'daily' and self.daily_rate:
+            return Decimal(self.daily_rate)
+        salary = Decimal(self.basic_salary or 0)
+        if salary <= 0:
+            return None
+        return (salary / Decimal('26')).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)

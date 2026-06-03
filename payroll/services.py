@@ -193,6 +193,22 @@ def _attendance_state(att):
     return 'absent', None
 
 
+# ── Daily-rate resolution ──────────────────────────────────────────────────────
+
+def _resolve_daily_rate(emp):
+    """
+    Daily rate used by payroll.
+
+    Daily-paid employees with an explicit ``daily_rate`` use it directly; monthly
+    employees (and daily employees who left it blank) keep the existing
+    ``basic_salary / 26`` behaviour. Quantized to 4 places like before.
+    """
+    if getattr(emp, 'pay_basis', 'daily') == 'daily' and getattr(emp, 'daily_rate', None):
+        return Decimal(str(emp.daily_rate)).quantize(_Q4, rounding=ROUND_HALF_UP)
+    salary = Decimal(str(emp.basic_salary or 0))
+    return (salary / _DAILY_DIVISOR).quantize(_Q4, rounding=ROUND_HALF_UP)
+
+
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
@@ -205,8 +221,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     present/absent classification so base pay is not double-counted.
     Returns a flat dict of field values ready to save to PayrollRecord.
     """
-    salary = Decimal(str(emp.basic_salary or 0))
-    daily_rate = (salary / _DAILY_DIVISOR).quantize(_Q4, rounding=ROUND_HALF_UP)
+    daily_rate = _resolve_daily_rate(emp)
     hourly_rate = (daily_rate / _HOURS_PER_DAY).quantize(_Q4, rounding=ROUND_HALF_UP)
     is_monthly = getattr(emp, 'pay_basis', 'daily') == 'monthly'
 

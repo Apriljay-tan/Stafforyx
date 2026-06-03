@@ -43,7 +43,7 @@ class EmployeeForm(forms.ModelForm):
             'first_name', 'middle_name', 'last_name',
             'email', 'phone', 'address',
             'date_hired', 'department', 'position',
-            'employment_type', 'status', 'basic_salary',
+            'employment_type', 'status', 'pay_basis', 'basic_salary', 'daily_rate',
             'work_schedule',
             'biometric_user_id',
             'sss_number', 'philhealth_number', 'pagibig_number', 'tin_number',

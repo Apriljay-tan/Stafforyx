@@ -26,6 +26,9 @@ class CompanyPayslipSettingsForm(forms.ModelForm):
             'payslip_show_attendance_summary',
             'payslip_show_overtime_breakdown',
             'payslip_show_received_by',
+            'payslip_prepared_by_name',
+            'payslip_prepared_by_title',
+            'payslip_prepared_by_signature',
             'payslip_footer_note',
             'attendance_selfie_retention_days',
             'attendance_portal_log_retention_days',
@@ -38,6 +41,7 @@ class CompanyPayslipSettingsForm(forms.ModelForm):
             'payslip_company_address': forms.Textarea(attrs={'rows': 3}),
             'payslip_footer_note': forms.Textarea(attrs={'rows': 3}),
             'payslip_accent_color': forms.TextInput(attrs={'type': 'color', 'style': 'width:80px;height:36px;padding:2px 4px;'}),
+            'payslip_prepared_by_signature': forms.ClearableFileInput(attrs={'accept': 'image/*'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -45,3 +49,4 @@ class CompanyPayslipSettingsForm(forms.ModelForm):
         _bootstrap(self)
         # color input needs its own class, not form-control-sm
         self.fields['payslip_accent_color'].widget.attrs['class'] = 'form-control form-control-color'
+        self.fields['payslip_prepared_by_signature'].required = False

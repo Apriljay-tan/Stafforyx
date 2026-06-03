@@ -149,7 +149,14 @@
           <label class="form-label fw-semibold small">{{ form.status.label }}</label>
           {{ form.status }}
         </div>
-        <div class="col-12 col-md-5">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.pay_basis.label }}</label>
+          {{ form.pay_basis }}
+          {% if form.pay_basis.errors %}
+            <div class="text-danger small mt-1">{{ form.pay_basis.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
           <label class="form-label fw-semibold small">
             {{ form.basic_salary.label }} <span class="fw-normal text-muted">(&#8369;)</span>
           </label>
@@ -157,6 +164,23 @@
           {% if form.basic_salary.errors %}
             <div class="text-danger small mt-1">{{ form.basic_salary.errors.as_text }}</div>
           {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            {{ form.daily_rate.label }} <span class="fw-normal text-muted">(&#8369; / day)</span>
+          </label>
+          {{ form.daily_rate }}
+          {% if form.daily_rate.errors %}
+            <div class="text-danger small mt-1">{{ form.daily_rate.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <div class="text-muted small">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>Monthly</strong> employees use <strong>Basic Salary</strong>.
+            <strong>Daily</strong> employees use <strong>Daily Rate</strong>
+            (leave Daily Rate blank to compute it from Basic Salary ÷ 26).
+          </div>
         </div>
         <div class="col-12 col-md-5">
           <label class="form-label fw-semibold small">

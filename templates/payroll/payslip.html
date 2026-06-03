@@ -203,7 +203,7 @@
   <div class="ps-header">
     <div>
       {% if company.payslip_show_company_logo and company.logo %}
-        <img src="{{ company.logo.url }}" style="height:44px;width:auto;object-fit:contain;background:#fff;padding:4px 8px;border-radius:6px;margin-bottom:.4rem;" alt="{{ company.name }}">
+        <img src="{{ company.logo.url }}" style="height:44px;width:auto;object-fit:contain;margin-bottom:.4rem;" alt="{{ company.name }}">
       {% endif %}
       <p class="ps-company-name">{{ company.payslip_display_name }}</p>
       {% if company.payslip_display_address %}
@@ -262,14 +262,19 @@
       <div class="ps-rate-label">Daily Rate</div>
       <div class="ps-rate-value">&#8369;{{ record.daily_rate|floatformat:2 }}</div>
     </div>
+    {% if record.hourly_rate %}
     <div class="ps-rate-cell">
       <div class="ps-rate-label">Hourly Rate</div>
       <div class="ps-rate-value">&#8369;{{ record.hourly_rate|floatformat:2 }}/hr</div>
     </div>
+    {% endif %}
+    {% if record.overtime_pay or record.overtime_minutes %}
     <div class="ps-rate-cell">
       <div class="ps-rate-label">Regular O.T. Rate (×1.25)</div>
       <div class="ps-rate-value">&#8369;{{ regular_ot_rate|floatformat:2 }}/hr</div>
     </div>
+    {% endif %}
+    {% if record.holiday_pay or record.holiday_worked_days %}
     <div class="ps-rate-cell">
       <div class="ps-rate-label">Rest Day / Sp. Holiday O.T. (×1.30)</div>
       <div class="ps-rate-value">&#8369;{{ rest_day_ot_rate|floatformat:2 }}/hr</div>
@@ -278,6 +283,7 @@
       <div class="ps-rate-label">Regular Holiday O.T. (×2.60)</div>
       <div class="ps-rate-value">&#8369;{{ holiday_ot_rate|floatformat:2 }}/hr</div>
     </div>
+    {% endif %}
   </div>
   {% endif %}
 
@@ -355,7 +361,7 @@
             <td class="amount">&#8369;{{ record.basic_pay|floatformat:2 }}</td>
           </tr>
           {% if company.payslip_show_overtime_breakdown %}
-          {% if record.overtime_minutes %}
+          {% if record.overtime_pay %}
           <tr>
             <td class="label">Regular O.T. Pay ({{ record.overtime_minutes }}min)</td>
             <td class="amount">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
@@ -478,12 +484,18 @@
     <div style="flex:2;">
       <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:.5rem;">Received By (Employee Signature)</div>
       <div class="ps-sig-line">{{ record.employee.full_name }}</div>
-      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">{{ record.employee.full_name }} / Date</div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">{{ record.employee.position.title|default:"Employee" }}</div>
     </div>
     <div style="flex:1;">
       <div style="font-size:.72rem;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:.5rem;">Prepared By</div>
-      <div class="ps-sig-line"></div>
-      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">HR/Payroll Officer</div>
+      <div class="ps-sig-line" style="position:relative;">
+        {% if company.payslip_prepared_by_name %}<span style="position:relative;z-index:1;">{{ company.payslip_prepared_by_name }}</span>{% endif %}
+        {% if company.payslip_prepared_by_signature %}
+          <img src="{{ company.payslip_prepared_by_signature.url }}" alt="Signature"
+               style="position:absolute;left:0;bottom:4px;max-height:46px;max-width:100%;object-fit:contain;z-index:2;">
+        {% endif %}
+      </div>
+      <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem;">{{ company.payslip_prepared_by_title|default:"HR/Payroll Officer" }}</div>
     </div>
   </div>
   {% endif %}
