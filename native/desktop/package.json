@@ -1,0 +1,48 @@
+{
+  "name": "stafforyx-desktop",
+  "version": "1.0.0",
+  "description": "Desktop wrapper for Stafforyx HR.",
+  "main": "main.js",
+  "author": "SYNTRIX PH",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "^37.4.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.poxelgraphic.stafforyx",
+    "productName": "Stafforyx HR",
+    "artifactName": "Stafforyx-HR-Setup-${version}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "assets/icon.ico"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Stafforyx HR"
+    }
+  }
+}

@@ -381,6 +381,18 @@
     }
   </style>
 
+  {% if sidebar_color %}
+  <!-- Per-user sidebar theme (set in Appearance → Theme) -->
+  <style>
+    :root {
+      --navy:       {{ sidebar_color }};
+      --navy-mid:   color-mix(in srgb, {{ sidebar_color }} 88%, #ffffff 12%);
+      --navy-light: color-mix(in srgb, {{ sidebar_color }} 80%, #ffffff 20%);
+      {% if sidebar_accent %}--blue: {{ sidebar_accent }};{% endif %}
+    }
+  </style>
+  {% endif %}
+
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -515,6 +527,12 @@
             <li>
               <a class="dropdown-item" href="{% url 'portal:dashboard' %}">
                 <i class="bi bi-person-workspace"></i>Employee Portal
+              </a>
+            </li>
+
+            <li>
+              <a class="dropdown-item" href="{% url 'accounts:theme' %}">
+                <i class="bi bi-palette2"></i>Theme
               </a>
             </li>
 

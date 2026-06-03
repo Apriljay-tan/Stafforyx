@@ -1,0 +1,55 @@
+﻿<h2>Where should “Change Theme” live?</h2>
+<p class="subtitle">Personal per-admin colors for the normal dashboard sidebar and Django Admin header/sidebar.</p>
+
+<div class="cards">
+  <div class="card" data-choice="profile-menu" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:180px;display:grid;grid-template-columns:80px 1fr;background:#f4f6fa;border-radius:12px;overflow:hidden;border:1px solid #d8e1ec;">
+        <div style="background:#0D1B2A;color:#8aa0b8;padding:12px;font-size:10px;line-height:2.2;">
+          <div style="color:#fff;font-weight:800;margin-bottom:14px;">Stafforyx</div>
+          Dashboard<br>Employees<br>Payroll<br>Holidays
+        </div>
+        <div style="padding:12px;position:relative;">
+          <div style="height:22px;background:#fff;border:1px solid #e5eaf1;border-radius:6px;margin-bottom:16px;"></div>
+          <div style="position:absolute;right:12px;top:34px;width:116px;background:#fff;border:1px solid #dbe3ed;border-radius:10px;box-shadow:0 12px 25px rgba(15,23,42,.14);padding:8px;font-size:10px;line-height:2.2;">
+            Profile<br>Admin Panel<br><b style="color:#1565C0;">Change Theme</b><br>Logout
+          </div>
+          <div style="height:44px;background:#fff;border-radius:10px;margin:28px 132px 10px 0;"></div>
+          <div style="height:58px;background:#fff;border-radius:10px;margin-right:132px;"></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Dropdown Link → Theme Page</h3>
+      <p>Add “Change Theme” in the admin profile dropdown. It opens a clean settings page with color pickers and presets.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="inline-panel" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="height:180px;display:grid;grid-template-columns:80px 1fr;background:#f4f6fa;border-radius:12px;overflow:hidden;border:1px solid #d8e1ec;">
+        <div style="background:#3b0764;color:#e9d5ff;padding:12px;font-size:10px;line-height:2.2;">
+          <div style="color:#fff;font-weight:800;margin-bottom:14px;">Stafforyx</div>
+          Dashboard<br>Employees<br>Payroll<br>Holidays
+        </div>
+        <div style="padding:12px;">
+          <div style="height:22px;background:#fff;border:1px solid #e5eaf1;border-radius:6px;margin-bottom:16px;"></div>
+          <div style="background:#fff;border:1px solid #dbe3ed;border-radius:12px;padding:12px;width:220px;box-shadow:0 8px 18px rgba(15,23,42,.08);">
+            <div style="font-weight:800;margin-bottom:8px;">Theme</div>
+            <div style="display:flex;gap:6px;margin-bottom:8px;"><span style="width:26px;height:26px;background:#0D1B2A;border-radius:50%;"></span><span style="width:26px;height:26px;background:#3b0764;border-radius:50%;"></span><span style="width:26px;height:26px;background:#064e3b;border-radius:50%;"></span></div>
+            <div style="height:24px;background:#1565C0;color:#fff;border-radius:6px;text-align:center;font-size:10px;line-height:24px;">Save</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Inline Dropdown Panel</h3>
+      <p>Put color controls directly inside the profile dropdown. Fast, but cramped and easier to break on mobile.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>My recommendation</h3>
+  <p>Use <b>Dropdown Link → Theme Page</b>. It keeps the current menu clean, gives room for color pickers, preview, reset button, and future options without crowding the dashboard.</p>
+</div>

@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Stafforyx · Theme Studio — prototype</title>
+
+<!-- Bootstrap Icons (same as the app) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
+<!-- Display + body type. Body stays Inter to match the live app shell. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+  /* ──────────────────────────────────────────────────────────────
+     PROTOTYPE ONLY — design starting point for the Theme feature.
+     Two CSS vars drive everything the user can change:
+       --sb        sidebar base color (what they pick)
+       --sb-accent active-item color (auto-derived, can be overridden)
+     The preview on the right is a faithful clone of templates/base.html
+     so what you see here is what the real app will look like.
+     ────────────────────────────────────────────────────────────── */
+  :root {
+    /* defaults mirror the live app */
+    --sb:        #0D1B2A;
+    --sb-accent: #1565C0;
+    --cyan:      #00BCD4;
+
+    --ink:       #0D1B2A;
+    --paper:     #F4F6FA;
+    --line:      #e2e8f0;
+    --muted:     #64748b;
+    --radius:    14px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(1200px 600px at 110% -10%, rgba(0,188,212,.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(21,101,192,.10), transparent 55%),
+      var(--paper);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .studio {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 3vw, 2.75rem);
+  }
+
+  /* ── Header ── */
+  .studio-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.75rem;
+    flex-wrap: wrap;
+  }
+  .eyebrow {
+    font-size: .68rem;
+    font-weight: 600;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--sb-accent);
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    transition: color .3s ease;
+  }
+  .eyebrow .pulse {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 0 0 rgba(0,188,212,.6);
+    animation: pulse 2.4s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(0,188,212,.5); }
+    70%  { box-shadow: 0 0 0 9px rgba(0,188,212,0); }
+    100% { box-shadow: 0 0 0 0 rgba(0,188,212,0); }
+  }
+  .studio-head h1 {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: clamp(1.6rem, 3.4vw, 2.3rem);
+    letter-spacing: -.02em;
+    margin: .35rem 0 .15rem;
+    color: var(--ink);
+  }
+  .studio-head p { margin: 0; color: var(--muted); font-size: .9rem; max-width: 46ch; }
+
+  .badge-soft {
+    font-size: .72rem; font-weight: 600;
+    color: var(--sb-accent);
+    background: color-mix(in srgb, var(--sb-accent) 12%, white);
+    border: 1px solid color-mix(in srgb, var(--sb-accent) 25%, white);
+    padding: .35rem .7rem;
+    border-radius: 999px;
+    white-space: nowrap;
+    transition: all .3s ease;
+  }
+
+  /* ── Layout: controls | preview ── */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    align-items: start;
+  }
+  @media (max-width: 940px) { .grid { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: 0 1px 3px rgba(13,27,42,.04), 0 12px 32px rgba(13,27,42,.05);
+  }
+  .panel-pad { padding: 1.4rem 1.5rem; }
+  .panel + .panel { margin-top: 1.5rem; }
+
+  .panel-title {
+    font-family: 'Sora', sans-serif;
+    font-size: .82rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: .55rem;
+    margin: 0 0 .25rem;
+  }
+  .panel-title i { color: var(--sb-accent); transition: color .3s ease; }
+  .panel-sub { font-size: .82rem; color: var(--muted); margin: 0 0 1.1rem; }
+
+  /* ── Preset swatches ── */
+  .presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: .8rem;
+  }
+  .preset {
+    cursor: pointer;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: .55rem;
+    background: #fff;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+    text-align: left;
+    position: relative;
+  }
+  .preset:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(13,27,42,.10); }
+  .preset.is-active { border-color: var(--sb-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-accent) 35%, transparent); }
+  .preset.is-active::after {
+    content: "\F26E"; /* bi-check-lg */
+    font-family: "bootstrap-icons";
+    position: absolute; top: 8px; right: 9px;
+    width: 20px; height: 20px;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: var(--sb-accent);
+    color: #fff; font-size: .7rem;
+  }
+  .preset .chip {
+    height: 46px; border-radius: 8px; margin-bottom: .5rem;
+    display: flex; align-items: flex-end; gap: 4px; padding: 6px;
+    position: relative; overflow: hidden;
+  }
+  .preset .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .preset .name { font-size: .78rem; font-weight: 600; color: var(--ink); }
+  .preset .hex  { font-size: .68rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* ── Custom picker ── */
+  .custom-row {
+    display: flex; align-items: center; gap: .9rem;
+    flex-wrap: wrap;
+  }
+  .swatch-input {
+    position: relative; width: 60px; height: 60px;
+    border-radius: 14px; overflow: hidden;
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 0 4px #fff;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .swatch-input input[type="color"] {
+    position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px);
+    border: 0; padding: 0; cursor: pointer; background: transparent;
+  }
+  .hex-field {
+    display: flex; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: .55rem .75rem; gap: .4rem; background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .hex-field:focus-within { border-color: var(--sb-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-accent) 18%, transparent); }
+  .hex-field span { color: var(--muted); font-weight: 600; font-size: .9rem; }
+  .hex-field input {
+    border: 0; outline: 0; font-family: 'Sora', sans-serif;
+    font-size: .95rem; font-weight: 600; letter-spacing: .04em;
+    width: 7ch; text-transform: uppercase; color: var(--ink);
+  }
+  .contrast-pill {
+    font-size: .72rem; font-weight: 600; padding: .3rem .65rem;
+    border-radius: 999px; display: inline-flex; align-items: center; gap: .35rem;
+  }
+  .contrast-pill.ok   { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
+  .contrast-pill.warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
+
+  .actions { display: flex; gap: .7rem; margin-top: 1.4rem; flex-wrap: wrap; }
+  .btn {
+    font-family: 'Sora', sans-serif; font-size: .84rem; font-weight: 600;
+    border-radius: 10px; padding: .65rem 1.25rem; cursor: pointer;
+    border: 1px solid transparent; transition: transform .12s ease, filter .15s ease;
+    display: inline-flex; align-items: center; gap: .5rem;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary { background: var(--sb-accent); color: #fff; box-shadow: 0 8px 18px color-mix(in srgb, var(--sb-accent) 35%, transparent); }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-ghost { background: #fff; border-color: var(--line); color: var(--ink); }
+  .btn-ghost:hover { background: var(--paper); }
+
+  /* ════════════════════════════════════════════════════
+     LIVE PREVIEW — faithful clone of the real sidebar
+     ════════════════════════════════════════════════════ */
+  .preview-wrap { position: sticky; top: 1.5rem; }
+  .device {
+    border-radius: 18px; overflow: hidden;
+    border: 1px solid var(--line);
+    box-shadow: 0 20px 50px rgba(13,27,42,.16);
+    background: #fff;
+  }
+  .device-bar {
+    height: 34px; background: #0D1B2A;
+    display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  }
+  .device-bar .tl { width: 9px; height: 9px; border-radius: 50%; }
+  .device-bar small { margin-left: auto; color: #61748c; font-size: .62rem; letter-spacing: .5px; }
+
+  .mini-app { display: flex; height: 430px; background: var(--paper); }
+
+  .mini-sidebar {
+    width: 152px; flex-shrink: 0;
+    background: var(--sb);
+    display: flex; flex-direction: column;
+    transition: background .35s ease;
+    overflow: hidden;
+  }
+  .mini-brand {
+    padding: 12px 12px 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--sb) 75%, #fff 25%);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .mini-brand .mark {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--cyan), var(--sb-accent));
+    display: grid; place-items: center; color: #fff; font-size: .7rem;
+  }
+  .mini-brand b { color: #fff; font-size: .78rem; font-weight: 700; letter-spacing: .3px; }
+
+  .mini-label {
+    padding: 11px 12px 4px; font-size: .54rem; font-weight: 700;
+    letter-spacing: 1.2px; text-transform: uppercase;
+    color: color-mix(in srgb, var(--sb) 35%, #8aa0b8 65%);
+  }
+  .mini-link {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 12px; font-size: .68rem;
+    color: color-mix(in srgb, var(--sb) 18%, #cdd9e6 82%);
+    transition: background .2s ease, color .2s ease;
+  }
+  .mini-link i { font-size: .8rem; width: 14px; text-align: center; }
+  .mini-link.active {
+    background: var(--sb-accent); color: #fff; font-weight: 600;
+  }
+  .mini-link.active i { color: var(--cyan); }
+
+  .mini-main { flex: 1; display: flex; flex-direction: column; }
+  .mini-topbar {
+    height: 38px; background: #fff; border-bottom: 1px solid #e7edf4;
+    display: flex; align-items: center; padding: 0 12px;
+  }
+  .mini-topbar .t { font-size: .72rem; font-weight: 600; color: #0D1B2A; }
+  .mini-topbar .av {
+    margin-left: auto; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--sb-accent); color: #fff; font-size: .6rem; font-weight: 700;
+    display: grid; place-items: center; transition: background .3s ease;
+  }
+  .mini-body { padding: 14px; display: grid; gap: 10px; }
+  .mini-cardrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .mini-stat {
+    background: #fff; border: 1px solid #e8edf5; border-radius: 10px; padding: 10px;
+  }
+  .mini-stat .n { font-size: 1.1rem; font-weight: 700; color: #0D1B2A; font-family: 'Sora',sans-serif; }
+  .mini-stat .l { font-size: .56rem; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+  .mini-stat .bar { height: 4px; border-radius: 4px; margin-top: 8px; background: color-mix(in srgb, var(--sb-accent) 22%, #eef2f7); }
+  .mini-stat .bar > i { display: block; height: 100%; width: 62%; border-radius: 4px; background: var(--sb-accent); transition: background .3s ease; }
+  .mini-wide {
+    background: #fff; border: 1px solid #e8edf5; border-radius: 10px; padding: 11px;
+  }
+  .mini-wide .h { font-size: .62rem; font-weight: 600; color: #0D1B2A; margin-bottom: 8px; }
+  .mini-wide .ln { height: 6px; border-radius: 4px; background: #eef2f7; margin-bottom: 6px; }
+  .mini-wide .ln.s { width: 70%; }
+
+  .preview-caption {
+    text-align: center; font-size: .74rem; color: var(--muted);
+    margin-top: .85rem;
+  }
+  .preview-caption b { color: var(--ink); font-family: 'Sora',sans-serif; }
+
+  .note {
+    margin-top: 1.25rem; font-size: .76rem; color: var(--muted);
+    background: #fff; border: 1px dashed var(--line); border-radius: 12px;
+    padding: .9rem 1rem; display: flex; gap: .6rem; align-items: flex-start;
+  }
+  .note i { color: var(--sb-accent); margin-top: 1px; }
+</style>
+</head>
+<body>
+<div class="studio">
+
+  <div class="studio-head">
+    <div>
+      <span class="eyebrow"><span class="pulse"></span> Appearance · Theme Studio</span>
+      <h1>Make the sidebar yours.</h1>
+      <p>Pick a curated theme or dial in any color you like. Changes preview instantly on the right — save to apply across your account.</p>
+    </div>
+    <span class="badge-soft" id="savedAs">Saved as: Midnight Navy</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- ── CONTROLS ── -->
+    <div>
+      <div class="panel panel-pad">
+        <h2 class="panel-title"><i class="bi bi-palette2"></i> Preset themes</h2>
+        <p class="panel-sub">Hand-picked, contrast-checked palettes that stay on-brand.</p>
+        <div class="presets" id="presets"><!-- injected by JS --></div>
+      </div>
+
+      <div class="panel panel-pad">
+        <h2 class="panel-title"><i class="bi bi-eyedropper"></i> Custom color</h2>
+        <p class="panel-sub">Want something else? Choose any color — we’ll check it stays readable.</p>
+        <div class="custom-row">
+          <label class="swatch-input" title="Pick a color">
+            <input type="color" id="colorInput" value="#0D1B2A" />
+          </label>
+          <div class="hex-field">
+            <span>#</span>
+            <input id="hexInput" type="text" maxlength="6" value="0D1B2A" spellcheck="false" />
+          </div>
+          <span class="contrast-pill ok" id="contrast">
+            <i class="bi bi-check-circle-fill"></i> Readable
+          </span>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="applyBtn"><i class="bi bi-check2-circle"></i> Save theme</button>
+          <button class="btn btn-ghost" id="resetBtn"><i class="bi bi-arrow-counterclockwise"></i> Reset to default</button>
+        </div>
+      </div>
+
+      <div class="note">
+        <i class="bi bi-info-circle-fill"></i>
+        <span><b style="color:var(--ink)">Prototype.</b> This is the design starting point — nothing is saved yet.
+        In the real build, “Save theme” writes the color to your user profile so it follows you on every device.</span>
+      </div>
+    </div>
+
+    <!-- ── LIVE PREVIEW ── -->
+    <div class="preview-wrap">
+      <div class="device">
+        <div class="device-bar">
+          <span class="tl" style="background:#ff5f57"></span>
+          <span class="tl" style="background:#febc2e"></span>
+          <span class="tl" style="background:#28c840"></span>
+          <small>Live preview</small>
+        </div>
+        <div class="mini-app">
+          <aside class="mini-sidebar">
+            <div class="mini-brand"><span class="mark"><i class="bi bi-people-fill"></i></span> <b>Stafforyx</b></div>
+            <div class="mini-label">Main</div>
+            <a class="mini-link active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+            <div class="mini-label">People</div>
+            <a class="mini-link"><i class="bi bi-people"></i> Employees</a>
+            <a class="mini-link"><i class="bi bi-building"></i> Companies</a>
+            <div class="mini-label">Workforce</div>
+            <a class="mini-link"><i class="bi bi-clock-history"></i> Attendance</a>
+            <a class="mini-link"><i class="bi bi-calendar2-check"></i> Leave</a>
+            <div class="mini-label">Finance</div>
+            <a class="mini-link"><i class="bi bi-cash-stack"></i> Payroll</a>
+          </aside>
+          <div class="mini-main">
+            <div class="mini-topbar">
+              <span class="t">Dashboard</span>
+              <span class="av">A</span>
+            </div>
+            <div class="mini-body">
+              <div class="mini-cardrow">
+                <div class="mini-stat"><div class="n">128</div><div class="l">Employees</div><div class="bar"><i></i></div></div>
+                <div class="mini-stat"><div class="n">96%</div><div class="l">Present</div><div class="bar"><i></i></div></div>
+              </div>
+              <div class="mini-wide">
+                <div class="h">Recent activity</div>
+                <div class="ln"></div><div class="ln s"></div><div class="ln"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="preview-caption">Sidebar: <b id="capColor">#0D1B2A</b></p>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ── Preset palettes ─────────────────────────────────────────────
+   Each preset = sidebar base + an accent for the active item.
+   Accent auto-derives if omitted. ─────────────────────────────── */
+const PRESETS = [
+  { name: 'Midnight Navy', base: '#0D1B2A', accent: '#1565C0' },
+  { name: 'Slate',         base: '#1E293B', accent: '#3B82F6' },
+  { name: 'Forest',        base: '#0F2A22', accent: '#10B981' },
+  { name: 'Plum',          base: '#2A1330', accent: '#A855F7' },
+  { name: 'Espresso',      base: '#241A14', accent: '#D97706' },
+  { name: 'Teal Deep',     base: '#06363B', accent: '#06B6D4' },
+  { name: 'Crimson',       base: '#2C0E13', accent: '#EF4444' },
+  { name: 'Graphite',      base: '#17181C', accent: '#6366F1' },
+];
+const DEFAULT = PRESETS[0];
+
+const root      = document.documentElement;
+const presetsEl = document.getElementById('presets');
+const colorIn   = document.getElementById('colorInput');
+const hexIn     = document.getElementById('hexInput');
+const capColor  = document.getElementById('capColor');
+const savedAs   = document.getElementById('savedAs');
+const contrast  = document.getElementById('contrast');
+
+/* relative luminance → choose readable accent + warn on low contrast */
+function lum(hex) {
+  const c = hex.replace('#','');
+  const r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+  const f = v => v <= .03928 ? v/12.92 : Math.pow((v+.055)/1.055, 2.4);
+  return .2126*f(r) + .7152*f(g) + .0722*f(b);
+}
+function contrastRatio(h1, h2) {
+  const a = lum(h1), b = lum(h2);
+  return (Math.max(a,b)+.05) / (Math.min(a,b)+.05);
+}
+function lighten(hex, amt) {
+  const c = hex.replace('#','');
+  const ch = i => Math.min(255, Math.round(parseInt(c.substr(i,2),16) + 255*amt));
+  return '#' + [0,2,4].map(i => ch(i).toString(16).padStart(2,'0')).join('');
+}
+
+let currentAccent = DEFAULT.accent;
+
+function apply(base, accent, presetName) {
+  base = base.toUpperCase();
+  currentAccent = accent || lighten(base, .35);
+  root.style.setProperty('--sb', base);
+  root.style.setProperty('--sb-accent', currentAccent);
+  colorIn.value = base;
+  hexIn.value   = base.replace('#','');
+  capColor.textContent = base;
+
+  // contrast of white sidebar text against the chosen base
+  const ratio = contrastRatio(base, '#FFFFFF');
+  if (ratio >= 4.5) {
+    contrast.className = 'contrast-pill ok';
+    contrast.innerHTML = '<i class="bi bi-check-circle-fill"></i> Readable';
+  } else {
+    contrast.className = 'contrast-pill warn';
+    contrast.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Low contrast';
+  }
+
+  // active-state on preset cards
+  [...presetsEl.children].forEach(el =>
+    el.classList.toggle('is-active', el.dataset.base === base));
+  if (presetName) savedAs.textContent = 'Selected: ' + presetName;
+  else savedAs.textContent = 'Custom: ' + base;
+}
+
+/* build preset cards */
+PRESETS.forEach(p => {
+  const card = document.createElement('button');
+  card.className = 'preset';
+  card.dataset.base = p.base.toUpperCase();
+  card.innerHTML = `
+    <div class="chip" style="background:${p.base}">
+      <span class="dot" style="background:${p.accent}"></span>
+      <span class="dot" style="background:#00BCD4"></span>
+      <span class="dot" style="background:rgba(255,255,255,.5)"></span>
+    </div>
+    <div class="name">${p.name}</div>
+    <div class="hex">${p.base.toUpperCase()}</div>`;
+  card.addEventListener('click', () => apply(p.base, p.accent, p.name));
+  presetsEl.appendChild(card);
+});
+
+/* custom inputs */
+colorIn.addEventListener('input', e => apply(e.target.value, null));
+hexIn.addEventListener('input', e => {
+  const v = e.target.value.replace(/[^0-9a-fA-F]/g,'').slice(0,6);
+  e.target.value = v.toUpperCase();
+  if (v.length === 6) apply('#'+v, null);
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => apply(DEFAULT.base, DEFAULT.accent, DEFAULT.name));
+document.getElementById('applyBtn').addEventListener('click', () => {
+  savedAs.textContent = 'Saved as: ' + capColor.textContent;
+  const btn = document.getElementById('applyBtn');
+  btn.innerHTML = '<i class="bi bi-check2-all"></i> Saved!';
+  setTimeout(() => btn.innerHTML = '<i class="bi bi-check2-circle"></i> Save theme', 1400);
+});
+
+/* boot */
+apply(DEFAULT.base, DEFAULT.accent, DEFAULT.name);
+</script>
+</body>
+</html>

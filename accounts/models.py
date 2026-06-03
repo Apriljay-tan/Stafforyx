@@ -1,8 +1,14 @@
 from django.contrib.auth.models import User
+from django.core.validators import RegexValidator
 from django.db import models
 
 from companies.models import Company
 from employees.models import Employee
+
+hex_color_validator = RegexValidator(
+    r'^#(?:[0-9a-fA-F]{6})$',
+    'Enter a valid 6-digit hex color, e.g. #0D1B2A.',
+)
 
 
 class UserCompanyAccess(models.Model):
@@ -49,6 +55,18 @@ class UserProfile(models.Model):
     )
     role = models.CharField(max_length=30, choices=ROLE_CHOICES, default='employee')
     is_active_stafforyx = models.BooleanField(default=True)
+
+    # Per-user UI appearance. Blank = use the app default theme.
+    sidebar_color = models.CharField(
+        max_length=7, blank=True, default='',
+        validators=[hex_color_validator],
+        help_text='Sidebar background color (hex). Blank uses the default theme.',
+    )
+    sidebar_accent = models.CharField(
+        max_length=7, blank=True, default='',
+        validators=[hex_color_validator],
+        help_text='Active menu-item color (hex). Blank derives from the sidebar color.',
+    )
 
     can_access_dashboard = models.BooleanField(default=True)
     can_manage_employees = models.BooleanField(default=False)

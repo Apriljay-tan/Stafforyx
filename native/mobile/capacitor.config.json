@@ -1,0 +1,9 @@
+{
+  "appId": "com.poxelgraphic.stafforyx",
+  "appName": "Stafforyx HR",
+  "webDir": "www",
+  "server": {
+    "url": "https://admin.poxelgraphic.com/",
+    "cleartext": false
+  }
+}

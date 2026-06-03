@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% block title %}Theme{% endblock %}
+{% block page_title %}Theme{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Theme Studio (scoped) ── */
+  .ts-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .8rem; }
+  .ts-preset {
+    cursor: pointer; border: 1px solid #e2e8f0; border-radius: 12px; padding: .55rem;
+    background: #fff; text-align: left; position: relative;
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  }
+  .ts-preset:hover { transform: translateY(-3px); box-shadow: 0 10px 24px rgba(13,27,42,.10); }
+  .ts-preset.is-active { border-color: var(--blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 35%, transparent); }
+  .ts-preset.is-active::after {
+    content: "\F26E"; font-family: "bootstrap-icons"; position: absolute; top: 8px; right: 9px;
+    width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
+    background: var(--blue); color: #fff; font-size: .7rem;
+  }
+  .ts-preset .chip { height: 46px; border-radius: 8px; margin-bottom: .5rem; display: flex; align-items: flex-end; gap: 4px; padding: 6px; }
+  .ts-preset .chip .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .ts-preset .name { font-size: .78rem; font-weight: 600; color: var(--navy); }
+  .ts-preset .hex  { font-size: .68rem; color: #64748b; font-variant-numeric: tabular-nums; }
+
+  .ts-swatch { position: relative; width: 58px; height: 58px; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: inset 0 0 0 4px #fff; cursor: pointer; flex-shrink: 0; }
+  .ts-swatch input[type="color"] { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); border: 0; padding: 0; cursor: pointer; background: transparent; }
+  .ts-hexfield { display: flex; align-items: center; border: 1px solid #e2e8f0; border-radius: 10px; padding: .5rem .7rem; gap: .35rem; background: #fff; }
+  .ts-hexfield:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 18%, transparent); }
+  .ts-hexfield span { color: #64748b; font-weight: 600; }
+  .ts-hexfield input { border: 0; outline: 0; font-weight: 600; letter-spacing: .04em; width: 7ch; text-transform: uppercase; color: var(--navy); }
+  .ts-contrast { font-size: .72rem; font-weight: 600; padding: .3rem .65rem; border-radius: 999px; display: inline-flex; align-items: center; gap: .35rem; }
+  .ts-contrast.ok   { color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }
+  .ts-contrast.warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
+
+  /* live preview */
+  .ts-preview-wrap { position: sticky; top: 80px; }
+  .ts-device { border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 20px 50px rgba(13,27,42,.16); background: #fff; }
+  .ts-bar { height: 30px; background: #0D1B2A; display: flex; align-items: center; gap: 6px; padding: 0 12px; }
+  .ts-bar .tl { width: 9px; height: 9px; border-radius: 50%; }
+  .ts-bar small { margin-left: auto; color: #61748c; font-size: .6rem; letter-spacing: .5px; }
+  .ts-app { display: flex; height: 400px; background: #F4F6FA; }
+  .ts-sidebar { width: 150px; flex-shrink: 0; background: var(--pv-base); display: flex; flex-direction: column; transition: background .35s ease; }
+  .ts-sbrand { padding: 11px 12px 9px; border-bottom: 1px solid color-mix(in srgb, var(--pv-base) 78%, #fff 22%); display: flex; align-items: center; gap: 7px; }
+  .ts-sbrand .mk { width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, var(--cyan), var(--pv-accent)); display: grid; place-items: center; color: #fff; font-size: .65rem; }
+  .ts-sbrand b { color: #fff; font-size: .74rem; font-weight: 700; }
+  .ts-slabel { padding: 10px 12px 4px; font-size: .52rem; font-weight: 700; letter-spacing: 1.1px; text-transform: uppercase; color: color-mix(in srgb, var(--pv-base) 32%, #8aa0b8 68%); }
+  .ts-link { display: flex; align-items: center; gap: 7px; padding: 5px 12px; font-size: .66rem; color: color-mix(in srgb, var(--pv-base) 16%, #cdd9e6 84%); }
+  .ts-link i { font-size: .78rem; width: 13px; text-align: center; }
+  .ts-link.active { background: var(--pv-accent); color: #fff; font-weight: 600; }
+  .ts-link.active i { color: var(--cyan); }
+  .ts-main { flex: 1; display: flex; flex-direction: column; }
+  .ts-top { height: 34px; background: #fff; border-bottom: 1px solid #e7edf4; display: flex; align-items: center; padding: 0 12px; }
+  .ts-top .t { font-size: .68rem; font-weight: 600; color: #0D1B2A; }
+  .ts-top .av { margin-left: auto; width: 20px; height: 20px; border-radius: 50%; background: var(--pv-accent); color: #fff; font-size: .58rem; font-weight: 700; display: grid; place-items: center; transition: background .3s ease; }
+  .ts-pbody { padding: 12px; display: grid; gap: 9px; }
+  .ts-prow { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .ts-pstat { background: #fff; border: 1px solid #e8edf5; border-radius: 9px; padding: 9px; }
+  .ts-pstat .n { font-size: 1rem; font-weight: 700; color: #0D1B2A; }
+  .ts-pstat .l { font-size: .54rem; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+  .ts-pstat .pb { height: 4px; border-radius: 4px; margin-top: 7px; background: color-mix(in srgb, var(--pv-accent) 22%, #eef2f7); }
+  .ts-pstat .pb > i { display: block; height: 100%; width: 64%; border-radius: 4px; background: var(--pv-accent); transition: background .3s ease; }
+  .ts-pwide { background: #fff; border: 1px solid #e8edf5; border-radius: 9px; padding: 10px; }
+  .ts-pwide .h { font-size: .6rem; font-weight: 600; color: #0D1B2A; margin-bottom: 7px; }
+  .ts-pwide .ln { height: 6px; border-radius: 4px; background: #eef2f7; margin-bottom: 6px; }
+  .ts-pwide .ln.s { width: 70%; }
+  .ts-cap { text-align: center; font-size: .74rem; color: #64748b; margin-top: .75rem; }
+  .ts-cap b { color: var(--navy); font-variant-numeric: tabular-nums; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-3">
+  <h1><i class="bi bi-palette2 me-2" style="color:var(--blue);"></i>Theme</h1>
+  <p>Personalize your sidebar color. This applies only to your account, on every device.</p>
+</div>
+
+<form method="post" id="themeForm">
+  {% csrf_token %}
+  <input type="hidden" name="sidebar_color" id="f_color" value="{{ current_color }}">
+  <input type="hidden" name="sidebar_accent" id="f_accent" value="{{ current_accent }}">
+
+  <div class="row g-4">
+    <!-- ── Controls ── -->
+    <div class="col-12 col-lg-8">
+
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-grid-3x3-gap me-1" style="color:var(--blue);"></i>Preset themes</div>
+        <div class="card-body p-4">
+          <p class="text-muted small mb-3">Hand-picked, contrast-checked palettes that stay on-brand.</p>
+          <div class="ts-presets" id="tsPresets">
+            {% for p in presets %}
+              <button type="button" class="ts-preset" data-base="{{ p.base }}" data-accent="{{ p.accent }}">
+                <span class="chip" style="background:{{ p.base }}">
+                  <span class="dot" style="background:{{ p.accent }}"></span>
+                  <span class="dot" style="background:#00BCD4"></span>
+                  <span class="dot" style="background:rgba(255,255,255,.5)"></span>
+                </span>
+                <span class="name d-block">{{ p.name }}</span>
+                <span class="hex d-block">{{ p.base }}</span>
+              </button>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card mb-4">
+        <div class="card-header"><i class="bi bi-eyedropper me-1" style="color:var(--blue);"></i>Custom color</div>
+        <div class="card-body p-4">
+          <p class="text-muted small mb-3">Want something else? Choose any color &mdash; we&rsquo;ll check it stays readable.</p>
+
+          <div class="d-flex align-items-center gap-3 flex-wrap mb-2">
+            <label class="ts-swatch mb-0" title="Pick a color">
+              <input type="color" id="colorInput" value="{{ current_color }}">
+            </label>
+            <div class="ts-hexfield">
+              <span>#</span>
+              <input id="hexInput" type="text" maxlength="6" value="{{ current_color|slice:'1:' }}" spellcheck="false">
+            </div>
+            <span class="ts-contrast ok" id="contrast"><i class="bi bi-check-circle-fill"></i> Readable</span>
+          </div>
+
+          <div class="form-check mt-3">
+            <input class="form-check-input" type="checkbox" id="accentToggle">
+            <label class="form-check-label small fw-semibold" for="accentToggle">
+              Also set the active menu-item color
+            </label>
+          </div>
+          <div class="d-flex align-items-center gap-3 flex-wrap mt-2" id="accentRow" style="display:none !important;">
+            <label class="ts-swatch mb-0" title="Pick accent color">
+              <input type="color" id="accentInput" value="{{ current_accent }}">
+            </label>
+            <div class="ts-hexfield">
+              <span>#</span>
+              <input id="accentHex" type="text" maxlength="6" value="{{ current_accent|slice:'1:' }}" spellcheck="false">
+            </div>
+            <span class="text-muted small">Defaults to a tone derived from the sidebar color.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-check2-circle me-1"></i>Save theme
+        </button>
+        <button type="submit" name="reset" value="1" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-counterclockwise me-1"></i>Reset to default
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Live preview ── -->
+    <div class="col-12 col-lg-4">
+      <div class="ts-preview-wrap">
+        <div class="ts-device">
+          <div class="ts-bar">
+            <span class="tl" style="background:#ff5f57"></span>
+            <span class="tl" style="background:#febc2e"></span>
+            <span class="tl" style="background:#28c840"></span>
+            <small>Live preview</small>
+          </div>
+          <div class="ts-app">
+            <aside class="ts-sidebar">
+              <div class="ts-sbrand"><span class="mk"><i class="bi bi-people-fill"></i></span> <b>Stafforyx</b></div>
+              <div class="ts-slabel">Main</div>
+              <a class="ts-link active"><i class="bi bi-speedometer2"></i> Dashboard</a>
+              <div class="ts-slabel">People</div>
+              <a class="ts-link"><i class="bi bi-people"></i> Employees</a>
+              <a class="ts-link"><i class="bi bi-building"></i> Companies</a>
+              <div class="ts-slabel">Workforce</div>
+              <a class="ts-link"><i class="bi bi-clock-history"></i> Attendance</a>
+              <a class="ts-link"><i class="bi bi-calendar2-check"></i> Leave</a>
+              <div class="ts-slabel">Finance</div>
+              <a class="ts-link"><i class="bi bi-cash-stack"></i> Payroll</a>
+            </aside>
+            <div class="ts-main">
+              <div class="ts-top"><span class="t">Dashboard</span><span class="av">{{ request.user.username|first|upper }}</span></div>
+              <div class="ts-pbody">
+                <div class="ts-prow">
+                  <div class="ts-pstat"><div class="n">128</div><div class="l">Employees</div><div class="pb"><i></i></div></div>
+                  <div class="ts-pstat"><div class="n">96%</div><div class="l">Present</div><div class="pb"><i></i></div></div>
+                </div>
+                <div class="ts-pwide"><div class="h">Recent activity</div><div class="ln"></div><div class="ln s"></div><div class="ln"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="ts-cap">Sidebar: <b id="capColor">{{ current_color }}</b></p>
+      </div>
+    </div>
+  </div>
+</form>
+
+<script>
+(function () {
+  var DEFAULT_COLOR  = '{{ default_color }}';
+  var DEFAULT_ACCENT = '{{ default_accent }}';
+
+  var root      = document.querySelector('.ts-preview-wrap');
+  var presetsEl = document.getElementById('tsPresets');
+  var colorIn   = document.getElementById('colorInput');
+  var hexIn     = document.getElementById('hexInput');
+  var accentIn  = document.getElementById('accentInput');
+  var accentHex = document.getElementById('accentHex');
+  var accentTog = document.getElementById('accentToggle');
+  var accentRow = document.getElementById('accentRow');
+  var fColor    = document.getElementById('f_color');
+  var fAccent   = document.getElementById('f_accent');
+  var capColor  = document.getElementById('capColor');
+  var contrast  = document.getElementById('contrast');
+
+  var useCustomAccent = ('{{ current_accent }}' !== DEFAULT_ACCENT);
+
+  function lum(hex) {
+    var c = hex.replace('#','');
+    var r = parseInt(c.substr(0,2),16)/255, g = parseInt(c.substr(2,2),16)/255, b = parseInt(c.substr(4,2),16)/255;
+    function f(v){ return v <= .03928 ? v/12.92 : Math.pow((v+.055)/1.055, 2.4); }
+    return .2126*f(r) + .7152*f(g) + .0722*f(b);
+  }
+  function ratio(a, b) { var la = lum(a), lb = lum(b); return (Math.max(la,lb)+.05)/(Math.min(la,lb)+.05); }
+  function lighten(hex, amt) {
+    var c = hex.replace('#','');
+    function ch(i){ return Math.min(255, Math.round(parseInt(c.substr(i,2),16) + 255*amt)); }
+    return '#' + [0,2,4].map(function(i){ return ch(i).toString(16).padStart(2,'0'); }).join('').toUpperCase();
+  }
+
+  function setCard(base) {
+    [].forEach.call(presetsEl.children, function (el) {
+      el.classList.toggle('is-active', (el.dataset.base || '').toUpperCase() === base);
+    });
+  }
+
+  function render() {
+    var base = ('#' + (hexIn.value || '').replace(/[^0-9a-fA-F]/g,'')).toUpperCase();
+    if (base.length !== 7) return;
+    var accent = useCustomAccent
+      ? ('#' + (accentHex.value || '').replace(/[^0-9a-fA-F]/g,'')).toUpperCase()
+      : lighten(base, .30);
+    if (accent.length !== 7) accent = lighten(base, .30);
+
+    root.style.setProperty('--pv-base', base);
+    root.style.setProperty('--pv-accent', accent);
+    capColor.textContent = base;
+    colorIn.value = base;
+
+    fColor.value = base;
+    fAccent.value = useCustomAccent ? accent : '';
+
+    if (ratio(base, '#FFFFFF') >= 4.5) {
+      contrast.className = 'ts-contrast ok';
+      contrast.innerHTML = '<i class="bi bi-check-circle-fill"></i> Readable';
+    } else {
+      contrast.className = 'ts-contrast warn';
+      contrast.innerHTML = '<i class="bi bi-exclamation-triangle-fill"></i> Low contrast';
+    }
+    setCard(base);
+  }
+
+  // preset clicks
+  [].forEach.call(presetsEl.children, function (card) {
+    card.addEventListener('click', function () {
+      hexIn.value = (card.dataset.base || '').replace('#','').toUpperCase();
+      useCustomAccent = true;
+      accentTog.checked = true;
+      accentRow.style.setProperty('display', 'flex', 'important');
+      accentHex.value = (card.dataset.accent || '').replace('#','').toUpperCase();
+      accentIn.value = card.dataset.accent;
+      render();
+    });
+  });
+
+  colorIn.addEventListener('input', function (e) { hexIn.value = e.target.value.replace('#','').toUpperCase(); render(); });
+  hexIn.addEventListener('input', function (e) {
+    var v = e.target.value.replace(/[^0-9a-fA-F]/g,'').slice(0,6); e.target.value = v.toUpperCase();
+    if (v.length === 6) render();
+  });
+
+  accentTog.addEventListener('change', function () {
+    useCustomAccent = accentTog.checked;
+    accentRow.style.setProperty('display', useCustomAccent ? 'flex' : 'none', 'important');
+    render();
+  });
+  accentIn.addEventListener('input', function (e) { accentHex.value = e.target.value.replace('#','').toUpperCase(); render(); });
+  accentHex.addEventListener('input', function (e) {
+    var v = e.target.value.replace(/[^0-9a-fA-F]/g,'').slice(0,6); e.target.value = v.toUpperCase();
+    if (v.length === 6) { accentIn.value = '#'+v; render(); }
+  });
+
+  // boot
+  accentTog.checked = useCustomAccent;
+  accentRow.style.setProperty('display', useCustomAccent ? 'flex' : 'none', 'important');
+  render();
+})();
+</script>
+
+{% endblock %}

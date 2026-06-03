@@ -1,0 +1,19 @@
+{
+  "name": "stafforyx-mobile",
+  "version": "1.0.0",
+  "description": "Mobile wrapper for Stafforyx HR.",
+  "author": "SYNTRIX PH",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync android",
+    "build:android": "cap sync android && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.3",
+    "@capacitor/core": "^7.4.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.3"
+  }
+}

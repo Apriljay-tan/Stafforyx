@@ -24,4 +24,7 @@ def company_context(request):
         'is_super_admin_user': is_super_admin,
         'can_manage_license_user': can_manage_license,
         'can_manage_settings_user': can_manage_settings,
+        # Per-user sidebar theme (blank = default theme in base.html).
+        'sidebar_color': getattr(profile, 'sidebar_color', '') if profile else '',
+        'sidebar_accent': getattr(profile, 'sidebar_accent', '') if profile else '',
     }

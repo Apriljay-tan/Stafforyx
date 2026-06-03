@@ -34,3 +34,12 @@ desktop.ini
 *.orig
 *.zip
 *.tar.gz
+
+# Native packaging dependencies/build outputs
+native/**/node_modules/
+native/desktop/release/
+native/mobile/android/.gradle/
+native/mobile/android/build/
+native/mobile/android/app/build/
+native/mobile/android/.idea/
+native/mobile/android/local.properties
