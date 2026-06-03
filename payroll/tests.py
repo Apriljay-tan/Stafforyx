@@ -174,6 +174,57 @@ class AttendanceStatusTest(PayrollV2TestCase):
         self.assertEqual(rec.present_days, 0)
 
 
+# ── Attendance counts even without a WorkSchedule ───────────────────────────────
+
+class NoScheduleAttendanceTest(TestCase):
+    """
+    An employee with NO WorkSchedule must still be paid from actual attendance.
+    Mirrors a live bug where present/payable/basic were 0 despite clock-ins.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(name='No-Sched Co', email='ns@test.com')
+        self.emp = Employee.objects.create(
+            company=self.company, employee_id='NS001',
+            first_name='Test', last_name='Employee', email='ns@test.com',
+            date_hired=datetime.date(2024, 1, 1),
+            basic_salary=Decimal('25000.00'), pay_basis='daily', status='active',
+            # no work_schedule on purpose; 25000 mirrors the live record
+        )
+        self.period = PayrollPeriod.objects.create(
+            company=self.company, name='June',
+            start_date=datetime.date(2026, 6, 1), end_date=datetime.date(2026, 6, 30),
+        )
+
+    def test_attendance_and_worked_holiday_counted(self):
+        from holidays.models import Holiday
+        for d in (15, 16, 17):
+            AttendanceRecord.objects.create(
+                company=self.company, employee=self.emp,
+                date=datetime.date(2026, 6, d),
+                time_in=datetime.time(8, 0), time_out=datetime.time(17, 0),
+                total_hours=Decimal('9.00'), status='present',
+            )
+        Holiday.objects.create(
+            company=self.company, name='TEST HOLIDAY', date=datetime.date(2026, 6, 15),
+            is_enabled=True, is_paid=True,
+            no_work_pay_pct=Decimal('100.00'), worked_multiplier=Decimal('2.00'),
+        )
+
+        generate_payroll_for_period(self.period)
+        rec = PayrollRecord.objects.get(payroll_period=self.period, employee=self.emp)
+
+        # Jun 16 & 17 are regular present days; Jun 15 is the worked holiday.
+        self.assertEqual(rec.present_days, 2)
+        self.assertEqual(rec.payable_days, Decimal('2'))
+        self.assertEqual(rec.absent_days, Decimal('0'))   # no schedule → no phantom absences
+        self.assertEqual(rec.basic_pay, Decimal('1923.08'))
+        self.assertEqual(rec.holiday_worked_days, 1)
+        self.assertEqual(rec.holiday_pay, Decimal('1923.08'))
+        self.assertEqual(rec.gross_pay, Decimal('3846.16'))
+        self.assertNotEqual(rec.basic_pay, Decimal('0'))
+
+
 # ── Test 2: Partial attendance ─────────────────────────────────────────────────
 
 class PartialAttendanceTest(PayrollV2TestCase):

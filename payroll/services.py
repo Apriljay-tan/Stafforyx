@@ -224,7 +224,13 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     # Dates to evaluate for holidays: scheduled days plus any attended day.
     holiday_candidate_dates = set(scheduled_dates) | set(att_by_date.keys())
 
-    for date in scheduled_dates:
+    # Classify presence/absence over scheduled days AND any day with an
+    # attendance record. This lets payroll honour actual attendance even when
+    # an employee has no WorkSchedule configured (otherwise present/payable/
+    # basic would all be 0 despite real clock-ins).
+    classify_dates = set(scheduled_dates) | set(att_by_date.keys())
+
+    for date in classify_dates:
         # Leave-covered → do not count toward present/absent
         if date in paid_leave_dates or date in unpaid_leave_dates:
             continue
@@ -245,7 +251,10 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
                 emp, date, att.overtime_minutes or 0, approval_index
             )
         elif state == 'absent':
-            absent_dates.add(date)
+            # Only a scheduled working day can count as an absence. A
+            # non-scheduled day without attendance is simply a non-working day.
+            if date in scheduled_dates:
+                absent_dates.add(date)
         # 'neutral' (e.g. on_leave without a leave request) → neither paid nor docked
 
     # ── Holiday pass ──────────────────────────────────────────────────────────
