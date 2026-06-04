@@ -133,6 +133,35 @@
   padding-bottom: .15rem;
 }
 
+/* ── Mobile fit: preserve the layout, just make it fit the screen ─────────── */
+@media (max-width: 768px) {
+  #payslip-doc { max-width: 100%; width: 100%; box-sizing: border-box; font-size: .72rem; }
+  .ps-header { padding: .8rem 1rem; gap: .75rem; }
+  .ps-title { font-size: 1.2rem; letter-spacing: 1.5px; }
+  .ps-company-address { max-width: 100%; }
+  /* Keep employee info side-by-side; minmax(0,1fr) lets cells shrink, not overflow.
+     Also reins in the 6-col attendance summary so it fits. */
+  .ps-info-grid { grid-template-columns: repeat(3, minmax(0,1fr)) !important; }
+  .ps-info-cell { padding: .45rem .5rem; }
+  /* Earnings & Deductions stay side-by-side; minmax(0,1fr) stops the right column being clipped */
+  .ps-body { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  /* Tables: tighter, labels wrap, peso amounts stay right-aligned and whole */
+  .ps-table { font-size: .68rem; }
+  .ps-table td { padding: .3rem .4rem; }
+  .ps-table .label { white-space: normal; word-break: break-word; }
+  .ps-table .amount { white-space: nowrap; text-align: right; }
+  /* GROSS PAY / TOTAL DEDUCTIONS rows: their inline .95rem amount was clipped on mobile.
+     Shrink only these total rows so the full currency amount stays visible. */
+  .ps-table tr.ps-grand .label { font-size: .74rem !important; }
+  .ps-table tr.ps-grand .amount { font-size: .78rem !important; white-space: nowrap !important; overflow: visible !important; text-align: right !important; }
+  /* Net pay */
+  .ps-net-block { padding: .8rem 1rem; }
+  .ps-net-amount { font-size: 1.4rem; }
+  /* Signatures: equal-width columns + equal-length lines (override inline flex:2 / flex:1) */
+  .ps-received-grid { gap: 1.25rem; padding: .8rem 1rem; }
+  .ps-received-grid > div { flex: 1 1 0 !important; min-width: 0; }
+}
+
 /* Print */
 @media print {
   nav, #topbar, .d-flex.justify-content-between.align-items-center.mb-3,
@@ -386,7 +415,7 @@
             <td class="amount">&#8369;{{ record.allowances|floatformat:2 }}</td>
           </tr>
           {% endif %}
-          <tr style="background:#dcfce7;">
+          <tr class="ps-grand" style="background:#dcfce7;">
             <td class="label" style="font-weight:700;font-size:.85rem;">GROSS PAY</td>
             <td class="amount" style="font-weight:800;font-size:.95rem;color:#059669;">&#8369;{{ record.gross_pay|floatformat:2 }}</td>
           </tr>
@@ -460,7 +489,7 @@
           {% endif %}
           <!-- Total deductions spacer -->
           <tr style="height:8px;"><td colspan="2"></td></tr>
-          <tr style="background:#fee2e2;">
+          <tr class="ps-grand" style="background:#fee2e2;">
             <td class="label" style="font-weight:700;font-size:.85rem;">TOTAL DEDUCTIONS</td>
             <td class="amount" style="font-weight:800;font-size:.95rem;color:#DC2626;">&#8369;{{ total_deductions|floatformat:2 }}</td>
           </tr>
