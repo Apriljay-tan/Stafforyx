@@ -58,14 +58,22 @@
   .ps-table .amount { white-space:nowrap; text-align:right; }
   /* GROSS PAY / TOTAL DEDUCTIONS rows: their inline .95rem amount was clipped on mobile.
      Shrink only these total rows so the full currency amount stays visible. */
-  .ps-table tr.ps-grand .label { font-size:.74rem !important; }
-  .ps-table tr.ps-grand .amount { font-size:.78rem !important; white-space:nowrap !important; overflow:visible !important; text-align:right !important; }
+  .ps-table tr.ps-grand .label { font-size:.62rem !important; line-height:1.15 !important; white-space:normal !important; word-break:break-word !important; padding-right:4px !important; }
+  .ps-table tr.ps-grand .amount { font-size:.68rem !important; white-space:nowrap !important; text-align:right !important; overflow:visible !important; min-width:74px !important; }
   /* Net pay */
   .ps-net-block { padding:.8rem 1rem; }
   .ps-net-amount { font-size:1.4rem; }
   /* Signatures: equal-width columns + equal-length lines (override inline flex:2 / flex:1) */
   .ps-received-grid { gap:1.25rem; padding:.8rem 1rem; }
   .ps-received-grid > div { flex:1 1 0 !important; min-width:0; }
+}
+/* Very narrow phones (≤360px): if the total row is still tight, drop the amount
+   onto its own line inside the SAME colored row — label above, amount right-aligned
+   below. Scoped to tr.ps-grand only; the rest of the payslip layout is unchanged. */
+@media (max-width:360px) {
+  .ps-table tr.ps-grand td { display:block; width:100%; }
+  .ps-table tr.ps-grand .label { text-align:left; padding-bottom:0 !important; }
+  .ps-table tr.ps-grand .amount { text-align:right; min-width:0 !important; padding-top:0 !important; }
 }
 @media print {
   nav, #topbar, .no-print, .alert, .btn { display:none !important; }
