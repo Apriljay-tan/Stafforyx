@@ -11,6 +11,33 @@ from .forms import PayrollAdjustmentForm, PayrollPeriodForm, PayrollRecordForm
 from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 
 
+def _attach_payroll_display(record):
+    totals = record.calculate_totals()
+    record.display_gross_pay = totals['gross_pay']
+    record.display_total_deductions = totals['total_deductions']
+    record.display_net_pay = totals['net_pay']
+    record.show_daily_rate = bool(record.basic_pay or record.payable_days)
+    record.show_hourly_rate = bool(
+        record.overtime_pay or record.overtime_minutes or
+        record.late_deduction or record.late_minutes or
+        record.undertime_deduction or record.undertime_minutes
+    )
+    record.show_regular_ot_rate = bool(record.overtime_pay or record.overtime_minutes)
+    # Payroll currently stores holiday pay, but not separate rest-day or holiday
+    # overtime pay components. Avoid displaying OT rates that are not represented
+    # by actual payslip rows.
+    record.show_rest_day_ot_rate = False
+    record.show_holiday_ot_rate = False
+    record.show_rate_information = any((
+        record.show_daily_rate,
+        record.show_hourly_rate,
+        record.show_regular_ot_rate,
+        record.show_rest_day_ot_rate,
+        record.show_holiday_ot_rate,
+    ))
+    return record
+
+
 def _employee_salary_map():
     return {
         str(emp.pk): str(emp.basic_salary)
@@ -24,7 +51,7 @@ def payroll_record_list(request):
     records = filter_queryset_by_user_companies(
         PayrollRecord.objects.select_related(
             'company', 'payroll_period', 'employee', 'employee__department'
-        ),
+        ).prefetch_related('adjustments'),
         request.user,
     )
 
@@ -43,6 +70,9 @@ def payroll_record_list(request):
     company_id = request.GET.get('company', '')
     if company_id:
         records = records.filter(company_id=company_id)
+
+    for record in records:
+        _attach_payroll_display(record)
 
     accessible_companies = filter_queryset_by_user_companies(Company.objects.all(), request.user)
     context = {
@@ -85,6 +115,7 @@ def payroll_record_edit(request, pk):
     )
     if not user_can_access_company(request.user, record.company):
         raise PermissionDenied
+    _attach_payroll_display(record)
     form = PayrollRecordForm(request.POST or None, instance=record)
     if request.method == 'POST' and form.is_valid():
         form.save()
@@ -250,7 +281,7 @@ def payslip_view(request, pk):
 
     hourly_rate = record.hourly_rate or Decimal('0')
     q2 = Decimal('0.01')
-    total_deductions = (record.gross_pay - record.net_pay).quantize(q2)
+    _attach_payroll_display(record)
 
     return render(request, 'payroll/payslip.html', {
         'record': record,
@@ -260,7 +291,9 @@ def payslip_view(request, pk):
         'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
         'rest_day_ot_rate': (hourly_rate * Decimal('1.30')).quantize(q2),
         'holiday_ot_rate': (hourly_rate * Decimal('2.60')).quantize(q2),
-        'total_deductions': total_deductions,
+        'gross_pay': record.display_gross_pay,
+        'total_deductions': record.display_total_deductions,
+        'net_pay': record.display_net_pay,
     })
 
 
@@ -289,6 +322,9 @@ def payslip_send_email(request, pk):
             'company': record.company,
             'earning_adjs': record.adjustments.filter(adjustment_type='earning'),
             'deduction_adjs': record.adjustments.filter(adjustment_type='deduction'),
+            'gross_pay': record.calculated_gross_pay,
+            'total_deductions': record.calculated_total_deductions,
+            'net_pay': record.calculated_net_pay,
         }, request=request)
 
         from_email = getattr(django_settings, 'DEFAULT_FROM_EMAIL', None) or \
@@ -337,7 +373,6 @@ def adjustment_add(request, record_pk):
             adj = form.save(commit=False)
             adj.payroll_record = record
             adj.save()
-            record.recalculate()
             messages.success(request, f'Adjustment "{adj.name}" added.')
         else:
             messages.error(request, 'Invalid adjustment data.')
@@ -358,7 +393,6 @@ def adjustment_delete(request, pk):
         name = adj.name
         record_pk = record.pk
         adj.delete()
-        record.recalculate()
         messages.success(request, f'Adjustment "{name}" removed.')
         return redirect('payroll:payroll_record_edit', pk=record_pk)
 

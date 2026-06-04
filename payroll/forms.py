@@ -69,29 +69,18 @@ class PayrollRecordForm(forms.ModelForm):
 
     def save(self, commit=True):
         record = super().save(commit=False)
-        zero = Decimal('0.00')
 
-        basic_pay = record.basic_pay or zero
-        if basic_pay == zero and record.employee_id:
-            basic_pay = record.employee.basic_salary or zero
-            record.basic_pay = basic_pay
-
-        allowances = record.allowances or zero
-        overtime_pay = record.overtime_pay or zero
-        sss = record.sss_deduction or zero
-        philhealth = record.philhealth_deduction or zero
-        pagibig = record.pagibig_deduction or zero
-        tax = record.tax_deduction or zero
-        late = record.late_deduction or zero
-        undertime = record.undertime_deduction or zero
-        other = record.other_deductions or zero
-
-        record.gross_pay = basic_pay + allowances + overtime_pay
-        record.net_pay = record.gross_pay - (sss + philhealth + pagibig + tax + late + undertime + other)
+        # Default basic_pay from employee salary when the field is left blank.
+        if not record.basic_pay and record.employee_id:
+            record.basic_pay = Decimal(str(record.employee.basic_salary or 0))
 
         if commit:
             record.save()
             self.save_m2m()
+            # recalculate() is the single source of truth for gross_pay / net_pay.
+            # It includes holiday_pay and all PayrollAdjustment entries so that
+            # manually-added deductions/earnings survive a form save.
+            record.recalculate()
 
         return record
 

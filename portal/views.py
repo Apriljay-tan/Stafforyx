@@ -64,6 +64,30 @@ def _portal_announcements_queryset(employee):
     return queryset.order_by('-created_at')
 
 
+def _attach_payroll_display(record):
+    totals = record.calculate_totals()
+    record.display_gross_pay = totals['gross_pay']
+    record.display_total_deductions = totals['total_deductions']
+    record.display_net_pay = totals['net_pay']
+    record.show_daily_rate = bool(record.basic_pay or record.payable_days)
+    record.show_hourly_rate = bool(
+        record.overtime_pay or record.overtime_minutes or
+        record.late_deduction or record.late_minutes or
+        record.undertime_deduction or record.undertime_minutes
+    )
+    record.show_regular_ot_rate = bool(record.overtime_pay or record.overtime_minutes)
+    record.show_rest_day_ot_rate = False
+    record.show_holiday_ot_rate = False
+    record.show_rate_information = any((
+        record.show_daily_rate,
+        record.show_hourly_rate,
+        record.show_regular_ot_rate,
+        record.show_rest_day_ot_rate,
+        record.show_holiday_ot_rate,
+    ))
+    return record
+
+
 # ── Portal: Dashboard ─────────────────────────────────────────────────────────
 
 @login_required
@@ -76,8 +100,11 @@ def portal_dashboard(request):
         PayrollRecord.objects
         .filter(employee=employee)
         .select_related('payroll_period')
+        .prefetch_related('adjustments')
         .order_by('-payroll_period__start_date')[:3]
     )
+    for payslip in recent_payslips:
+        _attach_payroll_display(payslip)
     recent_leaves = (
         LeaveRequest.objects
         .filter(employee=employee)
@@ -116,8 +143,11 @@ def portal_payslip_list(request):
         PayrollRecord.objects
         .filter(employee=employee)
         .select_related('payroll_period', 'company')
+        .prefetch_related('adjustments')
         .order_by('-payroll_period__start_date')
     )
+    for payslip in payslips:
+        _attach_payroll_display(payslip)
     return render(request, 'portal/payslip_list.html', {
         'employee': employee,
         'payslips': payslips,
@@ -146,6 +176,7 @@ def portal_payslip_detail(request, pk):
 
     earning_adjs = record.adjustments.filter(adjustment_type='earning')
     deduction_adjs = record.adjustments.filter(adjustment_type='deduction')
+    _attach_payroll_display(record)
 
     return render(request, 'portal/payslip_detail.html', {
         'employee': employee,
@@ -153,6 +184,9 @@ def portal_payslip_detail(request, pk):
         'company': record.company,
         'earning_adjs': earning_adjs,
         'deduction_adjs': deduction_adjs,
+        'gross_pay': record.display_gross_pay,
+        'total_deductions': record.display_total_deductions,
+        'net_pay': record.display_net_pay,
         'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
         'rest_day_ot_rate': (hourly_rate * Decimal('1.30')).quantize(q2),
         'holiday_ot_rate': (hourly_rate * Decimal('2.60')).quantize(q2),

@@ -97,21 +97,27 @@ class PayrollRecord(models.Model):
     def __str__(self):
         return f"{self.employee} — {self.payroll_period.name} (Net: ₱{self.net_pay})"
 
-    def recalculate(self):
+    def calculate_totals(self):
         """
-        Recompute gross_pay and net_pay from current component fields + PayrollAdjustments.
-        Call after adding/removing adjustments or editing pay components.
+        Return gross, deduction, and net totals from component fields plus adjustments.
+
+        This is the single calculation source used for persisted PayrollRecord
+        totals and for display. Absence deduction is intentionally excluded
+        because absent days are already excluded from basic_pay.
         """
         zero = Decimal('0.00')
-        earning_adj = sum(
-            (a.amount for a in self.adjustments.filter(adjustment_type='earning')),
-            zero,
-        )
-        deduction_adj = sum(
-            (a.amount for a in self.adjustments.filter(adjustment_type='deduction')),
-            zero,
-        )
-        self.gross_pay = (
+        earning_adj = zero
+        deduction_adj = zero
+
+        if self.pk:
+            for adj in self.adjustments.all():
+                amount = adj.amount or zero
+                if adj.adjustment_type == 'earning':
+                    earning_adj += amount
+                elif adj.adjustment_type == 'deduction':
+                    deduction_adj += amount
+
+        gross_pay = (
             (self.basic_pay or zero) +
             (self.overtime_pay or zero) +
             (self.holiday_pay or zero) +
@@ -127,8 +133,34 @@ class PayrollRecord(models.Model):
             (self.undertime_deduction or zero) +
             (self.other_deductions or zero) +
             deduction_adj
-        )
-        self.net_pay = (self.gross_pay - total_ded).quantize(Decimal('0.01'))
+        ).quantize(Decimal('0.01'))
+        net_pay = (gross_pay - total_ded).quantize(Decimal('0.01'))
+        return {
+            'gross_pay': gross_pay,
+            'total_deductions': total_ded,
+            'net_pay': net_pay,
+        }
+
+    @property
+    def calculated_gross_pay(self):
+        return self.calculate_totals()['gross_pay']
+
+    @property
+    def calculated_total_deductions(self):
+        return self.calculate_totals()['total_deductions']
+
+    @property
+    def calculated_net_pay(self):
+        return self.calculate_totals()['net_pay']
+
+    def recalculate(self):
+        """
+        Recompute and persist gross_pay and net_pay from current component fields
+        plus PayrollAdjustments.
+        """
+        totals = self.calculate_totals()
+        self.gross_pay = totals['gross_pay']
+        self.net_pay = totals['net_pay']
         self.save(update_fields=['gross_pay', 'net_pay'])
 
 
@@ -158,3 +190,28 @@ class PayrollAdjustment(models.Model):
     def __str__(self):
         sign = '+' if self.adjustment_type == 'earning' else '-'
         return f"{self.name} ({sign}₱{self.amount})"
+
+    def save(self, *args, **kwargs):
+        old_record_id = None
+        if self.pk:
+            old_record_id = (
+                PayrollAdjustment.objects
+                .filter(pk=self.pk)
+                .values_list('payroll_record_id', flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        if old_record_id and old_record_id != self.payroll_record_id:
+            try:
+                PayrollRecord.objects.get(pk=old_record_id).recalculate()
+            except PayrollRecord.DoesNotExist:
+                pass
+        if self.payroll_record_id:
+            self.payroll_record.recalculate()
+
+    def delete(self, *args, **kwargs):
+        record = self.payroll_record
+        result = super().delete(*args, **kwargs)
+        if record.pk:
+            record.recalculate()
+        return result

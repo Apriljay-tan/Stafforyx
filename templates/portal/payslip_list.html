@@ -38,8 +38,8 @@
             </div>
           </td>
           <td>&#8369;{{ ps.basic_pay|floatformat:2 }}</td>
-          <td>&#8369;{{ ps.gross_pay|floatformat:2 }}</td>
-          <td class="fw-semibold" style="color:#1565C0;">&#8369;{{ ps.net_pay|floatformat:2 }}</td>
+          <td>&#8369;{{ ps.display_gross_pay|floatformat:2 }}</td>
+          <td class="fw-semibold" style="color:#1565C0;">&#8369;{{ ps.display_net_pay|floatformat:2 }}</td>
           <td>
             {% if ps.status == 'paid' %}<span class="badge text-bg-primary">Paid</span>
             {% elif ps.status == 'approved' %}<span class="badge text-bg-success">Approved</span>

@@ -12,7 +12,7 @@ from companies.models import Company
 from documents.models import EmployeeDocument
 from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
-from payroll.models import PayrollPeriod, PayrollRecord
+from payroll.models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 
 from .models import IncidentReport
 
@@ -195,6 +195,36 @@ class PortalAccessAndIsolationTests(TestCase):
 
         other_detail = self.client.get(reverse("portal:payslip_detail", args=[self.payslip_b.pk]))
         self.assertEqual(other_detail.status_code, 404)
+
+    def test_portal_payslip_uses_calculated_adjustment_totals(self):
+        PayrollAdjustment.objects.create(
+            payroll_record=self.payslip_a,
+            name="Cash Advance",
+            adjustment_type="deduction",
+            amount=500,
+        )
+        PayrollAdjustment.objects.create(
+            payroll_record=self.payslip_a,
+            name="Bonus",
+            adjustment_type="earning",
+            amount=1000,
+        )
+        PayrollRecord.objects.filter(pk=self.payslip_a.pk).update(
+            gross_pay=18000,
+            net_pay=18000,
+        )
+
+        self._login_a()
+        detail = self.client.get(reverse("portal:payslip_detail", args=[self.payslip_a.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.context["gross_pay"], 17000)
+        self.assertEqual(detail.context["total_deductions"], 500)
+        self.assertEqual(detail.context["net_pay"], 16500)
+
+        listing = self.client.get(reverse("portal:payslip_list"))
+        listed = next(ps for ps in listing.context["payslips"] if ps.pk == self.payslip_a.pk)
+        self.assertEqual(listed.display_gross_pay, 17000)
+        self.assertEqual(listed.display_net_pay, 16500)
 
     def test_employee_only_sees_own_documents_and_cannot_download_other(self):
         self._login_a()

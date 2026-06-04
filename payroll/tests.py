@@ -21,7 +21,9 @@ Ten scenarios:
 import datetime
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 
 from attendance.models import AttendanceRecord, WorkSchedule
 from companies.models import Company
@@ -638,3 +640,246 @@ class PayrollOvertimeGatingTests(TestCase):
         rec = self._record(emp)
         self.assertEqual(rec.overtime_minutes, 120)
         self.assertEqual(rec.overtime_pay, Decimal('312.50'))
+
+
+# ── Test 14: PayrollAdjustment deduction reflected in total_deductions ────────
+
+class AdjustmentDeductionTotalTest(PayrollV2TestCase):
+    """
+    Regression: PayrollAdjustment deductions must appear in total_deductions
+    and reduce net_pay.  The live bug was that:
+      - record.gross_pay = 500, record.net_pay = 500  (no standard deductions)
+      - PayrollAdjustment(type='deduction', amount=20) existed
+      - total_deductions (computed as gross_pay - net_pay) remained 0
+      - net_pay remained 500
+
+    Root cause 1: PayrollRecordForm.save() recomputed gross/net without calling
+                  recalculate(), silently wiping adjustment effects on save.
+    Root cause 2: portal/views.py portal_payslip_detail never passed
+                  total_deductions to the template context, so the template
+                  always rendered just "₱" (peso sign + empty string).
+    """
+
+    def test_deduction_adjustment_reduces_net_and_total(self):
+        """recalculate() must include deduction adjustments in net_pay."""
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.gross_pay, Decimal('5000.00'))
+        self.assertEqual(rec.net_pay,   Decimal('5000.00'))
+
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Cash Advance',
+            adjustment_type='deduction',
+            amount=Decimal('500.00'),
+        )
+        rec.recalculate()
+        rec.refresh_from_db()
+
+        self.assertEqual(rec.gross_pay, Decimal('5000.00'))   # gross unchanged
+        self.assertEqual(rec.net_pay,   Decimal('4500.00'))   # deducted
+        # total_deductions as computed in both payslip views (gross - net)
+        total_deductions = rec.gross_pay - rec.net_pay
+        self.assertEqual(total_deductions, Decimal('500.00'))
+
+    def test_adjustment_save_and_delete_refresh_record_totals(self):
+        """Adjustment writes should keep the parent PayrollRecord totals current."""
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        adj = PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Uniform Deduction',
+            adjustment_type='deduction',
+            amount=Decimal('250.00'),
+        )
+        rec.refresh_from_db()
+        self.assertEqual(rec.gross_pay, Decimal('5000.00'))
+        self.assertEqual(rec.net_pay, Decimal('4750.00'))
+
+        adj.amount = Decimal('400.00')
+        adj.save()
+        rec.refresh_from_db()
+        self.assertEqual(rec.net_pay, Decimal('4600.00'))
+
+        adj.delete()
+        rec.refresh_from_db()
+        self.assertEqual(rec.gross_pay, Decimal('5000.00'))
+        self.assertEqual(rec.net_pay, Decimal('5000.00'))
+
+    def test_views_use_calculated_totals_when_saved_totals_are_stale(self):
+        """
+        Payslip and list displays must use the shared calculated totals, not just
+        cached gross_pay/net_pay fields.
+        """
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Cash Advance',
+            adjustment_type='deduction',
+            amount=Decimal('500.00'),
+        )
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Bonus',
+            adjustment_type='earning',
+            amount=Decimal('1000.00'),
+        )
+
+        # Simulate stale persisted totals from older records or external writes.
+        PayrollRecord.objects.filter(pk=rec.pk).update(
+            gross_pay=Decimal('5000.00'),
+            net_pay=Decimal('5000.00'),
+        )
+
+        admin = User.objects.create_superuser(
+            username='payroll-admin',
+            email='payroll-admin@test.com',
+            password='testpass123',
+        )
+        self.client.force_login(admin)
+
+        detail = self.client.get(reverse('payroll:payslip_view', args=[rec.pk]))
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.context['gross_pay'], Decimal('6000.00'))
+        self.assertEqual(detail.context['total_deductions'], Decimal('500.00'))
+        self.assertEqual(detail.context['net_pay'], Decimal('5500.00'))
+
+        listing = self.client.get(reverse('payroll:payroll_record_list'))
+        self.assertEqual(listing.status_code, 200)
+        listed = next(r for r in listing.context['records'] if r.pk == rec.pk)
+        self.assertEqual(listed.display_gross_pay, Decimal('6000.00'))
+        self.assertEqual(listed.display_net_pay, Decimal('5500.00'))
+
+    def test_rate_information_only_shows_rates_for_present_pay_types(self):
+        """Do not show hourly or OT rates unless the related payslip row exists."""
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        admin = User.objects.create_superuser(
+            username='rate-admin',
+            email='rate-admin@test.com',
+            password='testpass123',
+        )
+        self.client.force_login(admin)
+
+        response = self.client.get(reverse('payroll:payslip_view', args=[rec.pk]))
+        self.assertContains(response, 'Daily Rate')
+        self.assertNotContains(response, 'Hourly Rate')
+        self.assertNotContains(response, 'Regular O.T. Rate')
+
+        PayrollRecord.objects.filter(pk=rec.pk).update(
+            holiday_pay=Decimal('1000.00'),
+            holiday_worked_days=1,
+        )
+        response = self.client.get(reverse('payroll:payslip_view', args=[rec.pk]))
+        self.assertContains(response, 'Holiday Pay')
+        self.assertNotContains(response, 'Rest Day / Sp. Holiday O.T.')
+        self.assertNotContains(response, 'Regular Holiday O.T.')
+
+    def test_form_save_preserves_adjustment_deduction(self):
+        """
+        Editing a PayrollRecord via PayrollRecordForm must not overwrite
+        net_pay back to a value that excludes PayrollAdjustments.
+        Previously, form.save() did its own gross/net math without calling
+        recalculate(), so any subsequent form save would silently reset
+        net_pay to gross_pay (making total_deductions appear as 0).
+        """
+        from payroll.forms import PayrollRecordForm
+
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        # Add a deduction adjustment and confirm it is reflected.
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Loan Repayment',
+            adjustment_type='deduction',
+            amount=Decimal('200.00'),
+        )
+        rec.recalculate()
+        rec.refresh_from_db()
+        self.assertEqual(rec.net_pay, Decimal('4800.00'))
+
+        # Simulate a user editing and saving the record through the admin form.
+        form_data = {
+            'company':               rec.company_id,
+            'payroll_period':        rec.payroll_period_id,
+            'employee':              rec.employee_id,
+            'basic_pay':             str(rec.basic_pay),
+            'allowances':            '0',
+            'overtime_pay':          '0',
+            'sss_deduction':         '0',
+            'philhealth_deduction':  '0',
+            'pagibig_deduction':     '0',
+            'tax_deduction':         '0',
+            'late_deduction':        '0',
+            'undertime_deduction':   '0',
+            'absence_deduction':     '0',
+            'other_deductions':      '0',
+            'status':                rec.status,
+        }
+        form = PayrollRecordForm(form_data, instance=rec)
+        self.assertTrue(form.is_valid(), form.errors)
+        saved = form.save()
+        saved.refresh_from_db()
+
+        # net_pay must still reflect the ₱200 deduction adjustment.
+        self.assertEqual(saved.net_pay, Decimal('4800.00'))
+        total_deductions = saved.gross_pay - saved.net_pay
+        self.assertEqual(total_deductions, Decimal('200.00'))
+
+    def test_earning_adjustment_increases_gross_and_net(self):
+        """Earning adjustments must raise both gross_pay and net_pay."""
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='Performance Bonus',
+            adjustment_type='earning',
+            amount=Decimal('1000.00'),
+        )
+        rec.recalculate()
+        rec.refresh_from_db()
+
+        self.assertEqual(rec.gross_pay, Decimal('6000.00'))
+        self.assertEqual(rec.net_pay,   Decimal('6000.00'))
+
+    def test_regenerate_respects_existing_adjustments(self):
+        """
+        After regenerating a draft period that already has adjustments,
+        recalculate() is called inside generate_payroll_for_period and the
+        adjustments must still be reflected in net_pay.
+        """
+        for d in (_MAY_19, _MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+        self._generate()
+        rec = self._record()
+
+        PayrollAdjustment.objects.create(
+            payroll_record=rec,
+            name='SSS Loan',
+            adjustment_type='deduction',
+            amount=Decimal('300.00'),
+        )
+        rec.recalculate()
+
+        # Regenerate — should preserve the ₱300 deduction.
+        self._generate()
+        rec.refresh_from_db()
+        self.assertEqual(rec.net_pay, Decimal('4700.00'))

@@ -2,7 +2,7 @@
 {% block title %}Payslip — {{ record.payroll_period.name }}{% endblock %}
 {% block page_title %}My Payslip{% endblock %}
 
-{% block extra_css %}
+{% block extra_css %}{{ block.super }}
 <style>
 #payslip-doc {
   font-family: 'Inter', Arial, sans-serif;
@@ -51,15 +51,25 @@
   .ps-info-cell { padding:.45rem .5rem; }
   /* Earnings & Deductions stay side-by-side; minmax(0,1fr) stops the right column being clipped */
   .ps-body { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
-  /* Tables: tighter, labels wrap, peso amounts stay right-aligned and whole */
   .ps-table { font-size:.68rem; }
   .ps-table td { padding:.3rem .4rem; }
   .ps-table .label { white-space:normal; word-break:break-word; }
   .ps-table .amount { white-space:nowrap; text-align:right; }
-  /* GROSS PAY / TOTAL DEDUCTIONS rows: their inline .95rem amount was clipped on mobile.
-     Shrink only these total rows so the full currency amount stays visible. */
-  .ps-table tr.ps-grand .label { font-size:.62rem !important; line-height:1.15 !important; white-space:normal !important; word-break:break-word !important; padding-right:4px !important; }
-  .ps-table tr.ps-grand .amount { font-size:.68rem !important; white-space:nowrap !important; text-align:right !important; overflow:visible !important; min-width:74px !important; }
+  /* GROSS PAY / TOTAL DEDUCTIONS: escape the table layout algorithm entirely.
+     No CSS width or table-layout trick can reliably prevent the label from
+     claiming so much space that the amount collapses.  Making the <tr> a flex
+     container gives the amount a FIXED 88px regardless of label width. */
+  .ps-table tr.ps-grand { display:flex !important; align-items:stretch; }
+  .ps-table tr.ps-grand td.label {
+    flex:1 1 0 !important; min-width:0 !important;
+    font-size:.62rem !important; line-height:1.15 !important;
+    word-break:break-word !important; padding-right:4px !important;
+  }
+  .ps-table tr.ps-grand td.amount {
+    flex:0 0 88px !important; min-width:0 !important;
+    font-size:.68rem !important; white-space:nowrap !important;
+    display:flex !important; align-items:center !important; justify-content:flex-end !important;
+  }
   /* Net pay */
   .ps-net-block { padding:.8rem 1rem; }
   .ps-net-amount { font-size:1.4rem; }
@@ -67,14 +77,8 @@
   .ps-received-grid { gap:1.25rem; padding:.8rem 1rem; }
   .ps-received-grid > div { flex:1 1 0 !important; min-width:0; }
 }
-/* Very narrow phones (≤360px): if the total row is still tight, drop the amount
-   onto its own line inside the SAME colored row — label above, amount right-aligned
-   below. Scoped to tr.ps-grand only; the rest of the payslip layout is unchanged. */
-@media (max-width:360px) {
-  .ps-table tr.ps-grand td { display:block; width:100%; }
-  .ps-table tr.ps-grand .label { text-align:left; padding-bottom:0 !important; }
-  .ps-table tr.ps-grand .amount { text-align:right; min-width:0 !important; padding-top:0 !important; }
-}
+/* ≤360px: flex layout on tr.ps-grand already works at this width —
+   label takes remaining space after the fixed 88px amount column. */
 @media print {
   nav, #topbar, .no-print, .alert, .btn { display:none !important; }
   #main-content { margin:0 !important; padding:0 !important; }
@@ -135,14 +139,14 @@
     </div></div>
   </div>
 
-  {% if company.payslip_show_rates %}
+  {% if company.payslip_show_rates and record.show_rate_information %}
   <div class="ps-section-header"><i class="bi bi-calculator me-1"></i>Rate Information</div>
   <div style="display:flex;flex-wrap:wrap;border-bottom:1px solid #e8edf5;">
-    <div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Daily Rate</div><div style="font-weight:700;">&#8369;{{ record.daily_rate|floatformat:2 }}</div></div>
-    {% if record.hourly_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Hourly Rate</div><div style="font-weight:700;">&#8369;{{ record.hourly_rate|floatformat:2 }}/hr</div></div>{% endif %}
-    {% if record.overtime_pay or record.overtime_minutes %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Regular O.T.</div><div style="font-weight:700;">&#8369;{{ regular_ot_rate|floatformat:2 }}/hr</div></div>{% endif %}
-    {% if record.holiday_pay or record.holiday_worked_days %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Rest Day O.T.</div><div style="font-weight:700;">&#8369;{{ rest_day_ot_rate|floatformat:2 }}/hr</div></div>
-    <div style="flex:1 1 160px;padding:.45rem 1rem;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Holiday O.T.</div><div style="font-weight:700;">&#8369;{{ holiday_ot_rate|floatformat:2 }}/hr</div></div>{% endif %}
+    {% if record.show_daily_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Daily Rate</div><div style="font-weight:700;">&#8369;{{ record.daily_rate|floatformat:2 }}</div></div>{% endif %}
+    {% if record.show_hourly_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Hourly Rate</div><div style="font-weight:700;">&#8369;{{ record.hourly_rate|floatformat:2 }}/hr</div></div>{% endif %}
+    {% if record.show_regular_ot_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Regular O.T.</div><div style="font-weight:700;">&#8369;{{ regular_ot_rate|floatformat:2 }}/hr</div></div>{% endif %}
+    {% if record.show_rest_day_ot_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;border-right:1px solid #e8edf5;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Rest Day O.T.</div><div style="font-weight:700;">&#8369;{{ rest_day_ot_rate|floatformat:2 }}/hr</div></div>{% endif %}
+    {% if record.show_holiday_ot_rate %}<div style="flex:1 1 160px;padding:.45rem 1rem;"><div style="font-size:.67rem;color:#64748b;text-transform:uppercase;">Holiday O.T.</div><div style="font-weight:700;">&#8369;{{ holiday_ot_rate|floatformat:2 }}/hr</div></div>{% endif %}
   </div>
   {% endif %}
 
@@ -160,7 +164,7 @@
         {% if record.holiday_pay %}<tr><td class="label">Holiday Pay{% if record.holiday_worked_days %} ({{ record.holiday_worked_days }} worked){% endif %}</td><td class="amount">&#8369;{{ record.holiday_pay|floatformat:2 }}</td></tr>{% endif %}
         {% for adj in earning_adjs %}<tr><td class="label">{{ adj.name }}</td><td class="amount" style="color:#059669;">+&#8369;{{ adj.amount|floatformat:2 }}</td></tr>{% endfor %}
         {% if record.allowances %}<tr><td class="label">Allowances</td><td class="amount">&#8369;{{ record.allowances|floatformat:2 }}</td></tr>{% endif %}
-        <tr class="ps-grand" style="background:#dcfce7;"><td class="label" style="font-weight:700;font-size:.85rem;">GROSS PAY</td><td class="amount" style="font-weight:800;font-size:.95rem;color:#059669;">&#8369;{{ record.gross_pay|floatformat:2 }}</td></tr>
+        <tr class="ps-grand" style="background:#dcfce7;"><td class="label" style="font-weight:700;font-size:.85rem;">GROSS PAY</td><td class="amount" style="font-weight:800;font-size:.95rem;color:#059669;">&#8369;{{ gross_pay|floatformat:2 }}</td></tr>
       </tbody></table>
     </div>
     <div class="ps-col">
@@ -182,7 +186,7 @@
 
   <div class="ps-net-block">
     <div><div class="ps-net-label">Net Pay</div><div style="font-size:.78rem;opacity:.75;">{{ record.payroll_period.name }}</div></div>
-    <div class="ps-net-amount">&#8369;{{ record.net_pay|floatformat:2 }}</div>
+    <div class="ps-net-amount">&#8369;{{ net_pay|floatformat:2 }}</div>
   </div>
 
   {% if company.payslip_show_received_by %}
