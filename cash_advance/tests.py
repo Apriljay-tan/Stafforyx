@@ -7,8 +7,11 @@ from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import UserCompanyAccess, UserProfile
+from attendance.models import AttendanceRecord, WorkSchedule
 from companies.models import Company
 from employees.models import Employee
+from payroll.models import PayrollAdjustment, PayrollPeriod, PayrollRecord
+from payroll.services import generate_payroll_for_period
 
 from .models import CashAdvanceRequest
 
@@ -259,3 +262,234 @@ class ManageCashAdvanceTests(TestCase):
             reverse('cash_advance:manage_ca_detail', args=[other_ca.pk])
         )
         self.assertEqual(resp.status_code, 403)
+
+
+# ── Phase 6C: payroll deduction integration ───────────────────────────────────
+
+_MON = datetime.date(2025, 5, 19)   # Monday
+_DAYS = [_MON + datetime.timedelta(days=i) for i in range(5)]  # Mon–Fri
+
+
+class CashAdvanceDeductionTests(TestCase):
+    """Released cash advances flow into payroll as deduction lines."""
+
+    def setUp(self):
+        self.company = _company('Deduct Co')
+        self.schedule = WorkSchedule.objects.create(
+            company=self.company, name='Std',
+            start_time=datetime.time(8, 0), end_time=datetime.time(17, 0),
+            grace_minutes=15,
+            work_monday=True, work_tuesday=True, work_wednesday=True,
+            work_thursday=True, work_friday=True, is_active=True,
+        )
+        self.emp = Employee.objects.create(
+            company=self.company, employee_id='DED1',
+            first_name='Dee', last_name='Ducted', email='dee@test.com',
+            date_hired=datetime.date(2020, 1, 1),
+            basic_salary=Decimal('26000.00'),  # daily 1000 → 5 days = 5000 net
+            work_schedule=self.schedule, status='active',
+        )
+        self.period = PayrollPeriod.objects.create(
+            company=self.company, name='May 19-23 2025',
+            start_date=_DAYS[0], end_date=_DAYS[-1],
+        )
+
+    # helpers ------------------------------------------------------------------
+    def _present_all(self):
+        for d in _DAYS:
+            AttendanceRecord.objects.create(
+                company=self.company, employee=self.emp, date=d,
+                time_in=datetime.time(8, 0), status='present',
+            )
+
+    def _released_ca(self, amount):
+        return _ca(
+            self.company, self.emp, amount=Decimal(amount),
+            status=CashAdvanceRequest.STATUS_RELEASED,
+        )
+
+    def _record(self):
+        return PayrollRecord.objects.get(payroll_period=self.period, employee=self.emp)
+
+    def _ca_lines(self, ca):
+        return PayrollAdjustment.objects.filter(source_cash_advance=ca)
+
+    # 1. approved (not released) CA is not deducted -----------------------------
+    def test_approved_ca_is_not_deducted(self):
+        self._present_all()
+        ca = _ca(self.company, self.emp, amount=Decimal('1000.00'),
+                 status=CashAdvanceRequest.STATUS_APPROVED)
+        generate_payroll_for_period(self.period)
+        rec = self._record()
+        self.assertFalse(self._ca_lines(ca).exists())
+        self.assertEqual(rec.net_pay, Decimal('5000.00'))
+
+    # 2 & 3 & 5. released CA deducted, appears on record, reduces net -----------
+    def test_released_ca_is_deducted_in_next_payroll(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        rec = self._record()
+
+        line = self._ca_lines(ca).get()
+        self.assertEqual(line.payroll_record, rec)
+        self.assertEqual(line.adjustment_type, 'deduction')
+        self.assertEqual(line.name, 'Cash Advance')
+        self.assertEqual(line.amount, Decimal('1000.00'))
+        # net pay subtracts the CA
+        self.assertEqual(rec.net_pay, Decimal('4000.00'))
+
+    # 4. CA deduction appears in payslip context/template ----------------------
+    def test_ca_deduction_appears_in_payslip(self):
+        self._present_all()
+        self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        rec = self._record()
+
+        admin = User.objects.create_superuser('ca-admin', 'ca-admin@test.com', 'pw')
+        self.client.force_login(admin)
+        resp = self.client.get(reverse('payroll:payslip_view', args=[rec.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Cash Advance')
+        names = [a.name for a in resp.context['deduction_adjs']]
+        self.assertIn('Cash Advance', names)
+
+    # 6. partial deduction leaves a remaining balance --------------------------
+    def test_partial_deduction_leaves_remaining_balance(self):
+        self._present_all()                      # net pay 5000
+        ca = self._released_ca('7000.00')        # bigger than net pay
+        generate_payroll_for_period(self.period)
+        rec = self._record()
+
+        line = self._ca_lines(ca).get()
+        self.assertEqual(line.amount, Decimal('5000.00'))   # capped by net pay
+        self.assertEqual(rec.net_pay, Decimal('0.00'))
+        ca.refresh_from_db()
+        self.assertEqual(ca.total_deducted_amount, Decimal('5000.00'))
+        self.assertEqual(ca.remaining_balance, Decimal('2000.00'))
+        self.assertEqual(ca.deduction_status, CashAdvanceRequest.DEDUCTION_SCHEDULED)
+
+    # 7. full deduction marks CA as deducted / paid off ------------------------
+    def test_full_deduction_marks_ca_deducted(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        ca.refresh_from_db()
+        self.assertEqual(ca.remaining_balance, Decimal('0.00'))
+        self.assertEqual(ca.deduction_status, CashAdvanceRequest.DEDUCTION_DEDUCTED)
+        self.assertIsNotNone(ca.fully_deducted_at)
+
+    # 8. regenerating draft payroll does not duplicate the deduction -----------
+    def test_regenerate_does_not_double_deduct(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        generate_payroll_for_period(self.period)   # regenerate draft
+        generate_payroll_for_period(self.period)   # and again
+
+        self.assertEqual(self._ca_lines(ca).count(), 1)
+        rec = self._record()
+        self.assertEqual(rec.net_pay, Decimal('4000.00'))
+        ca.refresh_from_db()
+        self.assertEqual(ca.total_deducted_amount, Decimal('1000.00'))
+
+    # 9. payroll officer can defer/revoke before finalization ------------------
+    def test_payroll_officer_can_defer_deduction(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        line = self._ca_lines(ca).get()
+
+        officer = _hr_user(self.company, username='officer', can_manage_payroll=True)
+        self.client.force_login(officer)
+        with patch('licenses.middleware.is_license_active', return_value=True):
+            resp = self.client.post(
+                reverse('cash_advance:manage_ca_detail', args=[ca.pk]),
+                {'action': 'revoke_deduction', 'adjustment_id': line.pk},
+            )
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(self._ca_lines(ca).exists())
+        ca.refresh_from_db()
+        self.assertEqual(ca.total_deducted_amount, Decimal('0.00'))
+        self.assertEqual(ca.remaining_balance, Decimal('1000.00'))
+        self.assertEqual(ca.deduction_status, CashAdvanceRequest.DEDUCTION_RELEASED)
+        self.assertEqual(self._record().net_pay, Decimal('5000.00'))
+
+    def test_payroll_officer_can_adjust_deduction_amount(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        line = self._ca_lines(ca).get()
+
+        officer = _hr_user(self.company, username='officer2', can_manage_payroll=True)
+        self.client.force_login(officer)
+        with patch('licenses.middleware.is_license_active', return_value=True):
+            self.client.post(
+                reverse('cash_advance:manage_ca_detail', args=[ca.pk]),
+                {'action': 'adjust_deduction', 'adjustment_id': line.pk, 'amount': '400.00'},
+            )
+        ca.refresh_from_db()
+        self.assertEqual(ca.total_deducted_amount, Decimal('400.00'))
+        self.assertEqual(ca.remaining_balance, Decimal('600.00'))
+        self.assertEqual(self._record().net_pay, Decimal('4600.00'))
+
+    def test_non_payroll_user_cannot_defer_deduction(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')
+        generate_payroll_for_period(self.period)
+        line = self._ca_lines(ca).get()
+
+        hr = _hr_user(self.company, username='hronly',
+                      can_manage_payroll=False, can_manage_employees=True)
+        self.client.force_login(hr)
+        with patch('licenses.middleware.is_license_active', return_value=True):
+            resp = self.client.post(
+                reverse('cash_advance:manage_ca_detail', args=[ca.pk]),
+                {'action': 'revoke_deduction', 'adjustment_id': line.pk},
+            )
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(self._ca_lines(ca).exists())
+
+    # 10. company scoping prevents cross-company deduction ---------------------
+    def test_company_scoping_prevents_cross_company_deduction(self):
+        self._present_all()
+        ca = self._released_ca('1000.00')   # company A advance
+
+        # A separate company + employee + period; generating its payroll must
+        # never touch company A's cash advance.
+        other_co = _company('Other Deduct Co')
+        other_sched = WorkSchedule.objects.create(
+            company=other_co, name='Std',
+            start_time=datetime.time(8, 0), end_time=datetime.time(17, 0),
+            grace_minutes=15,
+            work_monday=True, work_tuesday=True, work_wednesday=True,
+            work_thursday=True, work_friday=True, is_active=True,
+        )
+        other_emp = Employee.objects.create(
+            company=other_co, employee_id='OD1',
+            first_name='Bee', last_name='Other', email='bee@test.com',
+            date_hired=datetime.date(2020, 1, 1),
+            basic_salary=Decimal('26000.00'),
+            work_schedule=other_sched, status='active',
+        )
+        for d in _DAYS:
+            AttendanceRecord.objects.create(
+                company=other_co, employee=other_emp, date=d,
+                time_in=datetime.time(8, 0), status='present',
+            )
+        other_period = PayrollPeriod.objects.create(
+            company=other_co, name='May 19-23 2025',
+            start_date=_DAYS[0], end_date=_DAYS[-1],
+        )
+        generate_payroll_for_period(other_period)
+
+        other_rec = PayrollRecord.objects.get(
+            payroll_period=other_period, employee=other_emp
+        )
+        # Other company's payroll has no CA deduction.
+        self.assertFalse(other_rec.adjustments.filter(source_cash_advance__isnull=False).exists())
+        self.assertEqual(other_rec.net_pay, Decimal('5000.00'))
+        # Company A advance remains untouched.
+        ca.refresh_from_db()
+        self.assertEqual(ca.total_deducted_amount, Decimal('0.00'))
+        self.assertFalse(self._ca_lines(ca).exists())

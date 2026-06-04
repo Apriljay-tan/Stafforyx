@@ -10,21 +10,11 @@
 </div>
 
 <ul class="nav nav-pills mb-3 flex-wrap gap-1">
+  {% for key, label in tabs %}
   <li class="nav-item">
-    <a class="nav-link {% if tab == 'pending' %}active{% endif %}" href="?tab=pending">Pending</a>
+    <a class="nav-link {% if tab == key %}active{% endif %}" href="?tab={{ key }}">{{ label }}</a>
   </li>
-  <li class="nav-item">
-    <a class="nav-link {% if tab == 'approved' %}active{% endif %}" href="?tab=approved">Approved</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if tab == 'released' %}active{% endif %}" href="?tab=released">Released</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if tab == 'closed' %}active{% endif %}" href="?tab=closed">Rejected / Cancelled</a>
-  </li>
-  <li class="nav-item">
-    <a class="nav-link {% if tab == 'history' %}active{% endif %}" href="?tab=history">History</a>
-  </li>
+  {% endfor %}
 </ul>
 
 <div class="card">
@@ -40,7 +30,8 @@
           <th>Employee</th>
           <th>Company</th>
           <th>Amount</th>
-          <th>Release Date</th>
+          <th>Deducted</th>
+          <th>Balance</th>
           <th>Status</th>
           <th class="text-end pe-3"></th>
         </tr>
@@ -52,8 +43,12 @@
           <td class="fw-semibold">{{ r.employee.full_name }}</td>
           <td>{{ r.company.name }}</td>
           <td>&#8369;{{ r.amount|floatformat:2 }}</td>
-          <td>{% if r.requested_release_date %}{{ r.requested_release_date|date:"M d, Y" }}{% else %}—{% endif %}</td>
-          <td>{{ r.get_status_display }}</td>
+          <td>&#8369;{{ r.total_deducted_amount|floatformat:2 }}</td>
+          <td>&#8369;{{ r.remaining_balance|floatformat:2 }}</td>
+          <td>
+            {% if r.status == 'released' %}{{ r.get_deduction_status_display }}
+            {% else %}{{ r.get_status_display }}{% endif %}
+          </td>
           <td class="text-end pe-3">
             <a href="{% url 'cash_advance:manage_ca_detail' r.pk %}" class="btn btn-sm btn-outline-primary">
               <i class="bi bi-eye me-1"></i>Open
@@ -61,7 +56,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center py-5 text-muted">No cash advance requests in this view.</td></tr>
+        <tr><td colspan="8" class="text-center py-5 text-muted">No cash advance requests in this view.</td></tr>
         {% endfor %}
       </tbody>
     </table>

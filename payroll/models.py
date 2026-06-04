@@ -185,6 +185,13 @@ class PayrollAdjustment(models.Model):
     adjustment_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     remarks = models.TextField(blank=True)
+    # Set when this deduction line was generated from a released Cash Advance
+    # (Phase 6C). Lets payroll roll the CA balance forward without duplicating.
+    source_cash_advance = models.ForeignKey(
+        'cash_advance.CashAdvanceRequest',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='deduction_adjustments',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -212,10 +219,16 @@ class PayrollAdjustment(models.Model):
                 pass
         if self.payroll_record_id:
             self.payroll_record.recalculate()
+        # Keep the source cash advance's deduction totals/status in sync.
+        if self.source_cash_advance_id:
+            self.source_cash_advance.reconcile_deductions()
 
     def delete(self, *args, **kwargs):
         record = self.payroll_record
+        source_ca = self.source_cash_advance
         result = super().delete(*args, **kwargs)
         if record.pk:
             record.recalculate()
+        if source_ca is not None:
+            source_ca.reconcile_deductions()
         return result

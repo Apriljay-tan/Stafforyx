@@ -60,14 +60,23 @@ def _require_ca_manager(request):
 
 # ── HR/Admin: manage cash-advance requests ────────────────────────────────────
 
-# Tab key → statuses included in that tab.
-TAB_FILTERS = {
-    'pending': [CashAdvanceRequest.STATUS_PENDING],
-    'approved': [CashAdvanceRequest.STATUS_APPROVED],
-    'released': [CashAdvanceRequest.STATUS_RELEASED],
-    'closed': [CashAdvanceRequest.STATUS_REJECTED, CashAdvanceRequest.STATUS_CANCELLED],
-    'history': None,  # everything
-}
+# Ordered tabs shown on the management page. Each maps to a queryset filter.
+CA = CashAdvanceRequest
+TAB_DEFS = [
+    ('pending', 'Pending', {'status': CA.STATUS_PENDING}),
+    ('approved', 'Approved', {'status': CA.STATUS_APPROVED}),
+    ('released', 'Released', {'status': CA.STATUS_RELEASED,
+                              'deduction_status': CA.DEDUCTION_RELEASED}),
+    ('scheduled', 'Scheduled for Deduction', {'status': CA.STATUS_RELEASED,
+                                              'deduction_status': CA.DEDUCTION_SCHEDULED}),
+    ('partial', 'Partially Deducted', {'status': CA.STATUS_RELEASED,
+                                       'deduction_status': CA.DEDUCTION_PARTIAL}),
+    ('deducted', 'Deducted / Paid Off', {'status': CA.STATUS_RELEASED,
+                                         'deduction_status': CA.DEDUCTION_DEDUCTED}),
+    ('closed', 'Rejected / Cancelled', {'status__in': [CA.STATUS_REJECTED, CA.STATUS_CANCELLED]}),
+    ('history', 'History', None),
+]
+TAB_FILTERS = {key: flt for key, _label, flt in TAB_DEFS}
 
 
 @login_required
@@ -83,13 +92,14 @@ def manage_ca(request):
         request.user,
     )
 
-    statuses = TAB_FILTERS[tab]
-    if statuses is not None:
-        requests = requests.filter(status__in=statuses)
+    flt = TAB_FILTERS[tab]
+    if flt is not None:
+        requests = requests.filter(**flt)
 
     return render(request, 'cash_advance/manage_ca.html', {
         'requests': requests,
         'tab': tab,
+        'tabs': [(key, label) for key, label, _flt in TAB_DEFS],
         'can_release': user_can_release_ca(request.user),
     })
 
@@ -108,6 +118,11 @@ def manage_ca_detail(request, pk):
 
     if request.method == 'POST':
         action = request.POST.get('action')
+
+        # ── Deduction controls (payroll authority, draft payroll only) ────────
+        if action in ('revoke_deduction', 'adjust_deduction'):
+            return _handle_deduction_action(request, ca, action, can_release)
+
         note = request.POST.get('manager_note', ca.manager_note)
         ca.manager_note = note
         now = timezone.now()
@@ -164,7 +179,58 @@ def manage_ca_detail(request, pk):
 
         return redirect('cash_advance:manage_ca')
 
+    deduction_lines = (
+        ca.deduction_adjustments
+        .select_related('payroll_record', 'payroll_record__payroll_period')
+        .order_by('payroll_record__payroll_period__start_date')
+    )
     return render(request, 'cash_advance/manage_ca_detail.html', {
         'ca': ca,
         'can_release': can_release,
+        'deduction_lines': deduction_lines,
     })
+
+
+def _handle_deduction_action(request, ca, action, can_release):
+    """Defer/revoke or adjust a CA deduction line on a *draft* payroll record.
+
+    Restricted to payroll-authorized users. Finalized (approved/paid) payroll is
+    never modified here.
+    """
+    from payroll.models import PayrollAdjustment
+
+    if not can_release:
+        raise PermissionDenied
+
+    adj = get_object_or_404(
+        PayrollAdjustment.objects.select_related('payroll_record'),
+        pk=request.POST.get('adjustment_id'),
+        source_cash_advance=ca,
+    )
+    if adj.payroll_record.status != 'draft':
+        messages.warning(
+            request,
+            'This deduction is on a finalized payroll and can no longer be changed.',
+        )
+        return redirect('cash_advance:manage_ca_detail', pk=ca.pk)
+
+    if action == 'revoke_deduction':
+        adj.delete()  # triggers record recalculation + CA reconcile
+        messages.success(request, 'Cash advance deduction deferred for this payroll.')
+    elif action == 'adjust_deduction':
+        from decimal import Decimal, InvalidOperation
+        raw = (request.POST.get('amount') or '').strip()
+        try:
+            new_amount = Decimal(raw)
+        except (InvalidOperation, ValueError):
+            messages.error(request, 'Invalid deduction amount.')
+            return redirect('cash_advance:manage_ca_detail', pk=ca.pk)
+        if new_amount <= 0:
+            adj.delete()
+            messages.success(request, 'Cash advance deduction removed for this payroll.')
+        else:
+            adj.amount = new_amount
+            adj.save()  # triggers record recalculation + CA reconcile
+            messages.success(request, 'Cash advance deduction amount updated.')
+
+    return redirect('cash_advance:manage_ca_detail', pk=ca.pk)

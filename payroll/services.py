@@ -390,6 +390,61 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     )
 
 
+# ── Cash advance deduction (Phase 6C) ───────────────────────────────────────────
+
+def apply_cash_advance_deductions(record):
+    """Pull released cash advances into a DRAFT payroll record as deduction lines.
+
+    Safety rules:
+      * Only draft records are touched — approved/paid payroll is never altered.
+      * Only *released* cash advances with an outstanding balance are eligible;
+        approved-but-not-released advances are ignored.
+      * At most one deduction line per (cash advance, payroll record), so
+        regenerating a draft period never double-deducts.
+      * Each line is capped by the record's remaining net pay, so net pay never
+        goes negative and any leftover balance rolls forward to a later period.
+    Scoped to the record's own company + employee, preventing cross-company leakage.
+    """
+    if record.status != 'draft':
+        return
+
+    from cash_advance.models import CashAdvanceRequest
+    from .models import PayrollAdjustment
+
+    cash_advances = (
+        CashAdvanceRequest.objects
+        .filter(
+            company=record.company,
+            employee=record.employee,
+            status=CashAdvanceRequest.STATUS_RELEASED,
+        )
+        .exclude(deduction_status=CashAdvanceRequest.DEDUCTION_DEDUCTED)
+        .order_by('created_at')
+    )
+
+    for ca in cash_advances:
+        if ca.remaining_balance <= 0:
+            continue
+        # Idempotent: never add a second line for this advance on this record.
+        if ca.deduction_adjustments.filter(payroll_record=record).exists():
+            continue
+        available = record.calculate_totals()['net_pay']
+        if available <= 0:
+            break  # no room left on this payslip; leave balance pending
+        amount = min(ca.remaining_balance, available)
+        if amount <= 0:
+            continue
+        # PayrollAdjustment.save() recalculates the record and reconciles the CA.
+        PayrollAdjustment.objects.create(
+            payroll_record=record,
+            name='Cash Advance',
+            adjustment_type='deduction',
+            amount=amount,
+            remarks=f'CA #{ca.pk}',
+            source_cash_advance=ca,
+        )
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def generate_payroll_for_period(period, department_id=None, allow_update_draft=True):
@@ -456,13 +511,14 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
         record = existing.get(emp.pk)
 
         if record is None:
-            PayrollRecord.objects.create(
+            record = PayrollRecord.objects.create(
                 company=period.company,
                 payroll_period=period,
                 employee=emp,
                 status='draft',
                 **components,
             )
+            apply_cash_advance_deductions(record)
             created += 1
 
         elif record.status == 'draft' and allow_update_draft:
@@ -470,6 +526,7 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
                 setattr(record, field, value)
             record.save(update_fields=list(components.keys()))
             record.recalculate()
+            apply_cash_advance_deductions(record)
             updated += 1
 
         else:

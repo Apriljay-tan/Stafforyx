@@ -16,6 +16,12 @@
       <dt class="col-sm-3">Requested Release Date</dt>
       <dd class="col-sm-9">{% if ca.requested_release_date %}{{ ca.requested_release_date|date:"M d, Y" }}{% else %}—{% endif %}</dd>
       <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ ca.get_status_display }}</dd>
+      {% if ca.status == 'released' %}
+      <dt class="col-sm-3">Deduction Status</dt><dd class="col-sm-9">{{ ca.get_deduction_status_display }}</dd>
+      <dt class="col-sm-3">Deducted / Balance</dt>
+      <dd class="col-sm-9">&#8369;{{ ca.total_deducted_amount|floatformat:2 }} deducted &bull;
+        &#8369;{{ ca.remaining_balance|floatformat:2 }} remaining</dd>
+      {% endif %}
       <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ ca.reason|default:"—" }}</dd>
       {% if ca.approved_by %}
       <dt class="col-sm-3">Approved By</dt><dd class="col-sm-9">{{ ca.approved_by }} @ {{ ca.approved_at|date:"M d, Y H:i" }}</dd>
@@ -82,4 +88,52 @@
     </form>
   </div>
 </div>
+
+{% if ca.status == 'released' %}
+<div class="card mt-3">
+  <div class="card-header"><i class="bi bi-cash-stack me-1"></i>Payroll Deductions</div>
+  <div class="table-responsive">
+    <table class="table mb-0 align-middle" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Payroll Period</th>
+          <th>Payroll Status</th>
+          <th>Amount</th>
+          {% if can_release %}<th class="text-end pe-3">Action (draft only)</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for line in deduction_lines %}
+        <tr>
+          <td class="ps-3">{{ line.payroll_record.payroll_period.name }}</td>
+          <td>{{ line.payroll_record.get_status_display }}</td>
+          <td>&#8369;{{ line.amount|floatformat:2 }}</td>
+          {% if can_release %}
+          <td class="text-end pe-3">
+            {% if line.payroll_record.status == 'draft' %}
+            <form method="post" class="d-inline-flex gap-1 align-items-center justify-content-end">
+              {% csrf_token %}
+              <input type="hidden" name="adjustment_id" value="{{ line.pk }}">
+              <input type="number" step="0.01" min="0" name="amount" value="{{ line.amount }}"
+                     class="form-control form-control-sm" style="width:110px;">
+              <button type="submit" name="action" value="adjust_deduction" class="btn btn-sm btn-outline-primary">Save</button>
+              <button type="submit" name="action" value="revoke_deduction" class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('Defer/revoke this deduction for this payroll?');">Defer</button>
+            </form>
+            {% else %}
+            <span class="text-muted">Finalized</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="{% if can_release %}4{% else %}3{% endif %}" class="text-center py-4 text-muted">
+          Not yet pulled into any payroll. It will be deducted when the next payroll is generated.
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
