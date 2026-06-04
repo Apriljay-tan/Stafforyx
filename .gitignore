@@ -43,3 +43,6 @@ native/mobile/android/build/
 native/mobile/android/app/build/
 native/mobile/android/.idea/
 native/mobile/android/local.properties
+
+# Local backup folders
+backups/
