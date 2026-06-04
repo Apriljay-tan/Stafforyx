@@ -22,8 +22,9 @@
     <p class="mb-1">
       <strong>Schedule:</strong>
       {% if shift.scheduled %}
-        {% if employee.flexible_schedule_enabled %}
+        {% if employee.uses_flexible_attendance_policy %}
           Flexible — {{ employee.required_daily_hours }} required hours
+          (OT grace {{ employee.flexible_overtime_grace_minutes }} min)
           {% if employee.allowed_clock_in_from %}
             (window {{ employee.allowed_clock_in_from|time:"g:i A" }}–{{ employee.allowed_clock_in_until|time:"g:i A" }})
           {% endif %}

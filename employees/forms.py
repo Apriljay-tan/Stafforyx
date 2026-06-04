@@ -7,6 +7,8 @@ def _bootstrap(form):
         w = field.widget
         if isinstance(w, forms.CheckboxInput):
             w.attrs.setdefault('class', 'form-check-input')
+        elif isinstance(w, forms.CheckboxSelectMultiple):
+            w.attrs.setdefault('class', 'form-check-input')
         elif isinstance(w, (forms.Select, forms.SelectMultiple)):
             w.attrs.setdefault('class', 'form-select')
         else:
@@ -36,6 +38,14 @@ class PositionForm(forms.ModelForm):
 
 
 class EmployeeForm(forms.ModelForm):
+    flexible_day_offs = forms.MultipleChoiceField(
+        choices=Employee.FLEXIBLE_DAY_OFF_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label='Flexible day-offs',
+        help_text='Days not normally required for flexible employees unless worked.',
+    )
+
     class Meta:
         model = Employee
         fields = [
@@ -45,6 +55,11 @@ class EmployeeForm(forms.ModelForm):
             'date_hired', 'department', 'position',
             'employment_type', 'status', 'pay_basis', 'basic_salary', 'daily_rate',
             'work_schedule',
+            'attendance_policy_type', 'required_daily_hours', 'default_break_minutes',
+            'flexible_overtime_grace_minutes', 'flexible_day_offs',
+            'night_differential_enabled',
+            'night_differential_percentage', 'night_differential_start_time',
+            'night_differential_end_time', 'allow_other_registered_locations',
             'biometric_user_id',
             'sss_number', 'philhealth_number', 'pagibig_number', 'tin_number',
             'sss_contribution_amount', 'philhealth_contribution_amount',
@@ -54,6 +69,8 @@ class EmployeeForm(forms.ModelForm):
         widgets = {
             'date_hired': forms.DateInput(attrs={'type': 'date'}),
             'address': forms.Textarea(attrs={'rows': 3}),
+            'night_differential_start_time': forms.TimeInput(attrs={'type': 'time'}),
+            'night_differential_end_time': forms.TimeInput(attrs={'type': 'time'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -63,3 +80,30 @@ class EmployeeForm(forms.ModelForm):
         self.fields['work_schedule'].queryset = WorkSchedule.objects.filter(is_active=True)
         self.fields['work_schedule'].required = False
         _bootstrap(self)
+
+    def clean_required_daily_hours(self):
+        value = self.cleaned_data['required_daily_hours']
+        if value <= 0:
+            raise forms.ValidationError('Required daily hours must be positive.')
+        return value
+
+    def clean_default_break_minutes(self):
+        value = self.cleaned_data['default_break_minutes']
+        if value < 0:
+            raise forms.ValidationError('Break minutes must not be negative.')
+        return value
+
+    def clean_flexible_overtime_grace_minutes(self):
+        value = self.cleaned_data['flexible_overtime_grace_minutes']
+        if value < 0:
+            raise forms.ValidationError('Overtime grace minutes must not be negative.')
+        return value
+
+    def clean_night_differential_percentage(self):
+        value = self.cleaned_data['night_differential_percentage']
+        if value < 0:
+            raise forms.ValidationError('Night differential percentage must not be negative.')
+        return value
+
+    def clean_flexible_day_offs(self):
+        return list(self.cleaned_data.get('flexible_day_offs') or [])

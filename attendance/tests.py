@@ -1417,6 +1417,20 @@ class PortalScheduleGatingTests(TestCase):
         emp.save(update_fields=['user'])
         return user, emp
 
+    def _make_user_with_flexible_employee(self, day_offs=None):
+        user, emp = self._make_user_with_employee(schedule=None)
+        emp.attendance_policy_type = 'flexible'
+        emp.required_daily_hours = Decimal('8.00')
+        emp.default_break_minutes = 60
+        emp.flexible_overtime_grace_minutes = 30
+        emp.flexible_day_offs = day_offs or []
+        emp.save(update_fields=[
+            'attendance_policy_type', 'required_daily_hours',
+            'default_break_minutes', 'flexible_overtime_grace_minutes',
+            'flexible_day_offs',
+        ])
+        return user, emp
+
     def _make_location(self, ip='127.0.0.1'):
         return AttendanceLocation.objects.create(
             company=self.company, name='Office', ip_address=ip
@@ -1448,11 +1462,57 @@ class PortalScheduleGatingTests(TestCase):
         self.assertTrue(resp.context['ip_allowed'])
         self.assertTrue(resp.context['schedule_allowed'])
 
+    def test_flexible_portal_shows_policy_panel_without_work_schedule(self):
+        user, _emp = self._make_user_with_flexible_employee()
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username=user.username, password='pass')
+
+        resp = self.client.get(self.portal_url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['allowed'])
+        self.assertTrue(resp.context['schedule_allowed'])
+        self.assertContains(resp, 'Flexible Schedule')
+        self.assertContains(resp, 'Required: 8.00 hours')
+        self.assertNotContains(resp, 'No schedule for today')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_flexible_can_time_in_and_out_without_work_schedule(self, _mock):
+        user, emp = self._make_user_with_flexible_employee()
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username=user.username, password='pass')
+
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.client.post(self.portal_url, {'action': 'time_out'})
+
+        record = AttendanceRecord.objects.get(employee=emp, date=datetime.date.today())
+        self.assertIsNotNone(record.time_in)
+        self.assertIsNotNone(record.time_out)
+        self.assertEqual(record.source, 'portal')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_flexible_day_off_with_attendance_is_allowed(self, _mock):
+        today_code = _TEST_DAY_CODES[datetime.date.today().weekday()]
+        user, emp = self._make_user_with_flexible_employee(day_offs=[today_code])
+        self._make_location(ip='127.0.0.1')
+        self.client.login(username=user.username, password='pass')
+
+        resp = self.client.get(self.portal_url)
+        self.assertContains(resp, 'Day-off today: Yes')
+        self.assertTrue(resp.context['allowed'])
+
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.client.post(self.portal_url, {'action': 'time_out'})
+
+        record = AttendanceRecord.objects.get(employee=emp, date=datetime.date.today())
+        self.assertEqual(record.computed_status, 'rest_day')
+
 
 _TEST_DAY_FIELDS = [
     'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
     'work_friday', 'work_saturday', 'work_sunday',
 ]
+_TEST_DAY_CODES = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
 
 
 class PotentialAbsencesTodayTests(TestCase):
@@ -1511,6 +1571,45 @@ class PotentialAbsencesTodayTests(TestCase):
 
         absent = _potential_absences_today(company=self.company)
         self.assertNotIn(emp, list(absent))
+
+    def test_flexible_day_off_without_attendance_excluded(self):
+        """Flexible employee day-off should not appear in potential absences."""
+        from attendance.views import _potential_absences_today
+        today_code = _TEST_DAY_CODES[self.today.weekday()]
+        emp = _make_employee(self.company)
+        emp.attendance_policy_type = 'flexible'
+        emp.required_daily_hours = Decimal('8.00')
+        emp.default_break_minutes = 60
+        emp.flexible_overtime_grace_minutes = 30
+        emp.flexible_day_offs = [today_code]
+        emp.save(update_fields=[
+            'attendance_policy_type', 'required_daily_hours',
+            'default_break_minutes', 'flexible_overtime_grace_minutes',
+            'flexible_day_offs',
+        ])
+
+        absent = _potential_absences_today(company=self.company)
+
+        self.assertNotIn(emp, list(absent))
+
+    def test_flexible_workday_without_attendance_included(self):
+        """Flexible employee non-day-off is expected to work without a WorkSchedule."""
+        from attendance.views import _potential_absences_today
+        emp = _make_employee(self.company)
+        emp.attendance_policy_type = 'flexible'
+        emp.required_daily_hours = Decimal('8.00')
+        emp.default_break_minutes = 60
+        emp.flexible_overtime_grace_minutes = 30
+        emp.flexible_day_offs = []
+        emp.save(update_fields=[
+            'attendance_policy_type', 'required_daily_hours',
+            'default_break_minutes', 'flexible_overtime_grace_minutes',
+            'flexible_day_offs',
+        ])
+
+        absent = _potential_absences_today(company=self.company)
+
+        self.assertIn(emp, list(absent))
 
 
 class ScheduleCrossCompanyAccessTests(TestCase):
@@ -1574,13 +1673,15 @@ class FlexibleScheduleAttendanceTests(TestCase):
             end_time=datetime.time(17, 0),
         )
 
-    def _flex_employee(self, required_hours='8.00', break_minutes=60):
-        emp = _make_employee(self.company, self.schedule)
-        emp.flexible_schedule_enabled = True
+    def _flex_employee(self, required_hours='8.00', break_minutes=60, overtime_grace=30):
+        emp = _make_employee(self.company)
+        emp.attendance_policy_type = 'flexible'
         emp.required_daily_hours = Decimal(required_hours)
         emp.default_break_minutes = break_minutes
+        emp.flexible_overtime_grace_minutes = overtime_grace
         emp.save(update_fields=[
-            'flexible_schedule_enabled', 'required_daily_hours', 'default_break_minutes',
+            'attendance_policy_type', 'required_daily_hours',
+            'default_break_minutes', 'flexible_overtime_grace_minutes',
         ])
         return emp
 
@@ -1610,17 +1711,29 @@ class FlexibleScheduleAttendanceTests(TestCase):
         self.assertEqual(rec.overtime_minutes, 0)
         self.assertEqual(rec.computed_status, 'undertime')
 
-    def test_flexible_overtime_when_above_required(self):
+    def test_flexible_overtime_grace_blocks_early_overtime(self):
         emp = self._flex_employee()
-        # 08:00-19:00, 60 min break = 10.0h worked → 2h (120 min) overtime.
         rec = _make_record(
-            emp, time_in=datetime.time(8, 0), time_out=datetime.time(19, 0),
+            emp, time_in=datetime.time(8, 0), time_out=datetime.time(17, 20),
         )
         compute_attendance(rec)
         rec.refresh_from_db()
-        self.assertEqual(rec.overtime_minutes, 120)
+        self.assertEqual(rec.total_work_minutes, 500)
+        self.assertEqual(rec.overtime_minutes, 0)
         self.assertEqual(rec.undertime_minutes, 0)
-        self.assertEqual(rec.computed_status, 'overtime')
+        self.assertEqual(rec.computed_status, 'present')
+
+    def test_flexible_overtime_starts_after_required_plus_grace(self):
+        emp = self._flex_employee()
+        rec = _make_record(
+            emp, time_in=datetime.time(8, 0), time_out=datetime.time(18, 0),
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.total_work_minutes, 540)
+        self.assertEqual(rec.overtime_minutes, 30)
+        self.assertEqual(rec.undertime_minutes, 0)
+        self.assertEqual(rec.computed_status, 'present')
 
 
 class FixedShiftRegressionTests(TestCase):

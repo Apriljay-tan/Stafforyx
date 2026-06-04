@@ -184,13 +184,6 @@
         </div>
         <div class="col-12 col-md-5">
           <label class="form-label fw-semibold small">
-            Work Schedule
-            <span class="fw-normal text-muted">(optional)</span>
-          </label>
-          {{ form.work_schedule }}
-        </div>
-        <div class="col-12 col-md-5">
-          <label class="form-label fw-semibold small">
             {{ form.biometric_user_id.label }}
             <span class="fw-normal text-muted">(optional)</span>
           </label>
@@ -200,6 +193,118 @@
           {% endif %}
           {% if form.biometric_user_id.errors %}
             <div class="text-danger small mt-1">{{ form.biometric_user_id.errors.as_text }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: Attendance Policy -->
+  <div class="card mb-3">
+    <div class="card-header">
+      <i class="bi bi-calendar-check me-1" style="color:#1565C0;"></i>Attendance Policy
+    </div>
+    <div class="card-body p-4">
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">{{ form.attendance_policy_type.label }}</label>
+          {{ form.attendance_policy_type }}
+          {% if form.attendance_policy_type.errors %}
+            <div class="text-danger small mt-1">{{ form.attendance_policy_type.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label fw-semibold small">
+            Work Schedule
+            <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.work_schedule }}
+          {% if form.work_schedule.errors %}
+            <div class="text-danger small mt-1">{{ form.work_schedule.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label fw-semibold small">{{ form.required_daily_hours.label }}</label>
+          {{ form.required_daily_hours }}
+          {% if form.required_daily_hours.errors %}
+            <div class="text-danger small mt-1">{{ form.required_daily_hours.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-2">
+          <label class="form-label fw-semibold small">Break minutes</label>
+          {{ form.default_break_minutes }}
+          {% if form.default_break_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.default_break_minutes.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">Overtime grace minutes</label>
+          {{ form.flexible_overtime_grace_minutes }}
+          {% if form.flexible_overtime_grace_minutes.help_text %}
+            <div class="form-text">{{ form.flexible_overtime_grace_minutes.help_text }}</div>
+          {% endif %}
+          {% if form.flexible_overtime_grace_minutes.errors %}
+            <div class="text-danger small mt-1">{{ form.flexible_overtime_grace_minutes.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small d-block">{{ form.flexible_day_offs.label }}</label>
+          <div class="d-flex flex-wrap gap-3">
+            {% for checkbox in form.flexible_day_offs %}
+              <div class="form-check">
+                {{ checkbox.tag }}
+                <label class="form-check-label small" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+              </div>
+            {% endfor %}
+          </div>
+          {% if form.flexible_day_offs.help_text %}
+            <div class="form-text">{{ form.flexible_day_offs.help_text }}</div>
+          {% endif %}
+          {% if form.flexible_day_offs.errors %}
+            <div class="text-danger small mt-1">{{ form.flexible_day_offs.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <div class="form-check mt-4">
+            {{ form.night_differential_enabled }}
+            <label class="form-check-label fw-semibold small" for="{{ form.night_differential_enabled.id_for_label }}">
+              Night differential enabled
+            </label>
+          </div>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.night_differential_percentage.label }}</label>
+          <div class="input-group">
+            {{ form.night_differential_percentage }}
+            <span class="input-group-text">%</span>
+          </div>
+          {% if form.night_differential_percentage.errors %}
+            <div class="text-danger small mt-1">{{ form.night_differential_percentage.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.night_differential_start_time.label }}</label>
+          {{ form.night_differential_start_time }}
+          {% if form.night_differential_start_time.errors %}
+            <div class="text-danger small mt-1">{{ form.night_differential_start_time.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">{{ form.night_differential_end_time.label }}</label>
+          {{ form.night_differential_end_time }}
+          {% if form.night_differential_end_time.errors %}
+            <div class="text-danger small mt-1">{{ form.night_differential_end_time.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12">
+          <div class="form-check">
+            {{ form.allow_other_registered_locations }}
+            <label class="form-check-label fw-semibold small" for="{{ form.allow_other_registered_locations.id_for_label }}">
+              Allow other registered locations
+            </label>
+          </div>
+          {% if form.allow_other_registered_locations.help_text %}
+            <div class="form-text">{{ form.allow_other_registered_locations.help_text }}</div>
           {% endif %}
         </div>
       </div>

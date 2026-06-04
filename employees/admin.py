@@ -23,13 +23,13 @@ class EmployeeAdmin(admin.ModelAdmin):
     list_display = (
         'employee_id', 'last_name', 'first_name', 'company',
         'department', 'position', 'employment_type', 'status',
-        'biometric_user_id',
+        'attendance_policy_type', 'biometric_user_id',
     )
     search_fields = (
         'employee_id', 'biometric_user_id',
         'first_name', 'last_name', 'email', 'phone',
     )
-    list_filter = ('company', 'department', 'employment_type', 'status')
+    list_filter = ('company', 'department', 'employment_type', 'status', 'attendance_policy_type')
     readonly_fields = ('created_at', 'updated_at')
     fieldsets = (
         ('Basic Information', {
@@ -46,13 +46,20 @@ class EmployeeAdmin(admin.ModelAdmin):
                 'biometric_user_id',
             )
         }),
-        ('Overtime & Schedule', {
+        ('Attendance Policy', {
             'fields': (
-                'work_schedule', 'overtime_policy',
-                'flexible_schedule_enabled', 'required_daily_hours',
-                'allowed_clock_in_from', 'allowed_clock_in_until',
-                'default_break_minutes',
+                'work_schedule', 'attendance_policy_type', 'required_daily_hours',
+                'default_break_minutes', 'flexible_overtime_grace_minutes',
+                'flexible_day_offs',
+                'flexible_schedule_enabled', 'allowed_clock_in_from',
+                'allowed_clock_in_until',
+                'night_differential_enabled', 'night_differential_percentage',
+                'night_differential_start_time', 'night_differential_end_time',
+                'allow_other_registered_locations',
             )
+        }),
+        ('Overtime', {
+            'fields': ('overtime_policy',),
         }),
         ('Government IDs', {
             'fields': ('sss_number', 'philhealth_number', 'pagibig_number', 'tin_number'),

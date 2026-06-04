@@ -1,5 +1,10 @@
-from django.db import models
+import datetime
+from decimal import Decimal
+
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
+from django.db import models
 from companies.models import Company
 
 
@@ -34,6 +39,21 @@ class Position(models.Model):
 
 
 class Employee(models.Model):
+    ATTENDANCE_POLICY_FIXED = 'fixed'
+    ATTENDANCE_POLICY_FLEXIBLE = 'flexible'
+    ATTENDANCE_POLICY_TYPE_CHOICES = [
+        (ATTENDANCE_POLICY_FIXED, 'Fixed'),
+        (ATTENDANCE_POLICY_FLEXIBLE, 'Flexible'),
+    ]
+    FLEXIBLE_DAY_OFF_CHOICES = [
+        ('mon', 'Monday'),
+        ('tue', 'Tuesday'),
+        ('wed', 'Wednesday'),
+        ('thu', 'Thursday'),
+        ('fri', 'Friday'),
+        ('sat', 'Saturday'),
+        ('sun', 'Sunday'),
+    ]
     EMPLOYMENT_TYPE_CHOICES = [
         ('regular', 'Regular'),
         ('probationary', 'Probationary'),
@@ -129,6 +149,12 @@ class Employee(models.Model):
         null=True, blank=True,
         related_name='employees',
     )
+    attendance_policy_type = models.CharField(
+        max_length=10,
+        choices=ATTENDANCE_POLICY_TYPE_CHOICES,
+        default=ATTENDANCE_POLICY_FIXED,
+        help_text='Fixed employees follow assigned schedules; flexible employees use configured required hours in a later attendance phase.',
+    )
     overtime_policy = models.CharField(
         max_length=20, choices=OVERTIME_POLICY_CHOICES, default='not_allowed',
         help_text='Controls how this employee\'s overtime is paid by payroll.',
@@ -138,7 +164,8 @@ class Employee(models.Model):
         help_text='If on, attendance uses required daily hours instead of a fixed start/end.',
     )
     required_daily_hours = models.DecimalField(
-        max_digits=4, decimal_places=2, default=8.00,
+        max_digits=4, decimal_places=2, default=Decimal('8.00'),
+        validators=[MinValueValidator(Decimal('0.01'))],
         help_text='Hours a flexible employee must complete per day.',
     )
     allowed_clock_in_from = models.TimeField(
@@ -151,7 +178,32 @@ class Employee(models.Model):
     )
     default_break_minutes = models.PositiveIntegerField(
         default=60,
+        validators=[MinValueValidator(0)],
         help_text='Break minutes assumed for flexible computation when not recorded.',
+    )
+    flexible_overtime_grace_minutes = models.PositiveIntegerField(
+        default=30,
+        validators=[MinValueValidator(0)],
+        help_text='Overtime starts only after this many minutes beyond required daily hours.',
+    )
+    flexible_day_offs = models.JSONField(
+        default=list,
+        blank=True,
+        help_text='Weekday codes configured as flexible day-offs.',
+    )
+    night_differential_enabled = models.BooleanField(default=False)
+    night_differential_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        default=Decimal('10.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Additional night differential percentage configured for payroll in a later phase.',
+    )
+    night_differential_start_time = models.TimeField(default=datetime.time(22, 0))
+    night_differential_end_time = models.TimeField(default=datetime.time(6, 0))
+    allow_other_registered_locations = models.BooleanField(
+        default=False,
+        help_text='Allows future flexible/mobile rules to include other registered locations without bypassing validation.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -163,10 +215,38 @@ class Employee(models.Model):
     def __str__(self):
         return f"{self.last_name}, {self.first_name} [{self.employee_id}]"
 
+    def clean(self):
+        super().clean()
+        valid_days = {value for value, _label in self.FLEXIBLE_DAY_OFF_CHOICES}
+        day_offs = self.flexible_day_offs or []
+        if not isinstance(day_offs, list):
+            raise ValidationError({'flexible_day_offs': 'Choose valid weekdays.'})
+        invalid_days = sorted(set(day_offs) - valid_days)
+        if invalid_days:
+            raise ValidationError({'flexible_day_offs': 'Choose valid weekdays.'})
+
     @property
     def full_name(self):
         parts = [self.first_name, self.middle_name, self.last_name]
         return ' '.join(p for p in parts if p)
+
+    @property
+    def uses_flexible_attendance_policy(self):
+        return (
+            self.attendance_policy_type == self.ATTENDANCE_POLICY_FLEXIBLE
+            or self.flexible_schedule_enabled
+        )
+
+    def is_flexible_day_off(self, date):
+        day_codes = [value for value, _label in self.FLEXIBLE_DAY_OFF_CHOICES]
+        return day_codes[date.weekday()] in (self.flexible_day_offs or [])
+
+    @property
+    def flexible_day_offs_display(self):
+        if not self.flexible_day_offs:
+            return 'None'
+        labels = dict(self.FLEXIBLE_DAY_OFF_CHOICES)
+        return ', '.join(labels.get(day, day) for day in self.flexible_day_offs)
 
     @property
     def effective_daily_rate(self):

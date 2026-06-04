@@ -101,6 +101,7 @@
           <th>Department</th>
           <th>Position</th>
           <th>Pay Basis</th>
+          <th>Schedule</th>
           <th class="text-end">Basic Salary</th>
           <th class="text-end">Daily Rate</th>
           <th>Type</th>
@@ -139,6 +140,13 @@
               <span class="badge text-bg-info">Daily</span>
             {% else %}
               <span class="badge text-bg-secondary">Monthly</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if emp.attendance_policy_type == 'flexible' %}
+              <span class="badge text-bg-warning">Flexible</span>
+            {% else %}
+              <span class="badge text-bg-secondary">Fixed</span>
             {% endif %}
           </td>
           <td class="text-end text-muted">
@@ -198,7 +206,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="11" class="text-center py-5">
+          <td colspan="12" class="text-center py-5">
             <i class="bi bi-people fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
             <span class="text-muted">No employees found.</span>
             {% if not q and not status_filter and not dept_filter and not license_read_only %}

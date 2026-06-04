@@ -130,7 +130,27 @@
     </div>
 
     <!-- Schedule status -->
-    {% if shift_info.scheduled %}
+    {% if is_flexible_schedule %}
+      <div class="card mb-3" style="border-left:3px solid #1565C0;">
+        <div class="card-body p-3">
+          <div class="fw-semibold mb-1" style="font-size:.85rem;color:#1565C0;">
+            <i class="bi bi-calendar-check me-1"></i>Flexible Schedule
+          </div>
+          <div class="text-muted" style="font-size:.82rem;">
+            Required: {{ employee.required_daily_hours|floatformat:2 }} hours
+          </div>
+          <div class="text-muted" style="font-size:.82rem;">
+            Break: {{ employee.default_break_minutes }} minutes
+          </div>
+          <div class="text-muted" style="font-size:.82rem;">
+            Overtime starts after: {{ employee.flexible_overtime_grace_minutes }} minutes beyond required hours
+          </div>
+          <div class="text-muted" style="font-size:.82rem;">
+            Day-off today: {% if flexible_day_off_today %}Yes{% else %}No{% endif %}
+          </div>
+        </div>
+      </div>
+    {% elif shift_info.scheduled %}
       <div class="card mb-3" style="border-left:3px solid #1565C0;">
         <div class="card-body p-3">
           <div class="fw-semibold mb-1" style="font-size:.85rem;color:#1565C0;">

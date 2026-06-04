@@ -34,6 +34,29 @@ _UNSCHEDULED = {
 }
 
 
+def _is_flexible_employee(employee):
+    return bool(getattr(employee, 'uses_flexible_attendance_policy', False))
+
+
+def _flexible_shift(employee, date):
+    is_day_off = employee.is_flexible_day_off(date)
+    return {
+        'scheduled': True,
+        'is_rest_day': is_day_off,
+        'start_time': None,
+        'end_time': None,
+        'is_overnight': False,
+        'break_minutes': employee.default_break_minutes or 0,
+        'grace_minutes': 0,
+        'overtime_after_minutes': employee.flexible_overtime_grace_minutes or 0,
+        'allow_early_clock_in_minutes': 0,
+        'source': 'flexible_policy',
+        'daily_schedule': None,
+        'shift_template': None,
+        'reason': 'Flexible day-off.' if is_day_off else '',
+    }
+
+
 def get_employee_schedule_for_date(employee, date):
     """Return the EmployeeDailySchedule for employee+date, or None."""
     from .models import EmployeeDailySchedule
@@ -66,6 +89,9 @@ def resolve_expected_shift(employee, date):
     """
 
     # ── Priority 1: EmployeeDailySchedule ─────────────────────────────────────
+    if _is_flexible_employee(employee):
+        return _flexible_shift(employee, date)
+
     daily = get_employee_schedule_for_date(employee, date)
     if daily is not None:
         if daily.is_rest_day:

@@ -173,7 +173,19 @@ def _potential_absences_today(company=None, accessible_companies_qs=None):
     ws_qs = Employee.objects.filter(status='active', **ws_filter).exclude(id__in=has_daily_ids)
     ws_ids = set(ws_qs.values_list('id', flat=True))
 
-    scheduled_ids = active_daily_ids | ws_ids
+    flexible_qs = Employee.objects.filter(status='active').filter(
+        Q(attendance_policy_type='flexible') | Q(flexible_schedule_enabled=True)
+    )
+    if company is not None:
+        flexible_qs = flexible_qs.filter(company=company)
+    elif accessible_companies_qs is not None:
+        flexible_qs = flexible_qs.filter(company__in=accessible_companies_qs)
+    flexible_ids = {
+        emp.id for emp in flexible_qs
+        if not emp.is_flexible_day_off(today)
+    }
+
+    scheduled_ids = active_daily_ids | ws_ids | flexible_ids
 
     already_present = AttendanceRecord.objects.filter(date=today).values_list('employee_id', flat=True)
     on_approved_leave = LeaveRequest.objects.filter(
@@ -1029,6 +1041,10 @@ def attendance_portal(request):
 
     # Schedule check â€” resolve today's expected shift
     shift_info = resolve_expected_shift(employee, today)
+    is_flexible_schedule = employee.uses_flexible_attendance_policy
+    flexible_day_off_today = (
+        employee.is_flexible_day_off(today) if is_flexible_schedule else False
+    )
     schedule_allowed = shift_info['scheduled']
     schedule_blocked_reason = ''
     if not schedule_allowed:
@@ -1151,6 +1167,11 @@ def attendance_portal(request):
                     employee=employee,
                     date=today,
                     time_in=now_time,
+                    break_minutes=(
+                        employee.default_break_minutes
+                        if employee.uses_flexible_attendance_policy
+                        else 0
+                    ),
                     status='present',
                     source='portal',
                     portal_location=matched_location,
@@ -1208,6 +1229,8 @@ def attendance_portal(request):
         'matched_location': matched_location,
         'blocked_reason': blocked_reason,
         'shift_info': shift_info,
+        'is_flexible_schedule': is_flexible_schedule,
+        'flexible_day_off_today': flexible_day_off_today,
         'schedule_allowed': schedule_allowed,
         'schedule_blocked_reason': schedule_blocked_reason,
         'require_selfie': require_selfie,

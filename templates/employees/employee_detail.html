@@ -201,6 +201,60 @@
     </div>
   </div>
 
+  <!-- Attendance Policy -->
+  <div class="col-12 col-md-6">
+    <div class="card h-100">
+      <div class="card-header">
+        <i class="bi bi-calendar-check me-1" style="color:#1565C0;"></i>Attendance Policy
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0" style="font-size:.875rem;">
+          <tbody>
+            <tr>
+              <td class="text-muted ps-3 py-2" style="width:42%;">Policy Type</td>
+              <td class="py-2">{{ employee.get_attendance_policy_type_display }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Required Daily Hours</td>
+              <td class="py-2">{{ employee.required_daily_hours|floatformat:2 }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Break Minutes</td>
+              <td class="py-2">{{ employee.default_break_minutes }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Overtime Grace</td>
+              <td class="py-2">{{ employee.flexible_overtime_grace_minutes }} min beyond required hours</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Flexible Day-offs</td>
+              <td class="py-2">{{ employee.flexible_day_offs_display }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Night Differential</td>
+              <td class="py-2">
+                {% if employee.night_differential_enabled %}
+                  {{ employee.night_differential_percentage|floatformat:2 }}%
+                  <div class="text-muted" style="font-size:.78rem;">
+                    {{ employee.night_differential_start_time|time:"g:i A" }} - {{ employee.night_differential_end_time|time:"g:i A" }}
+                  </div>
+                {% else %}
+                  <span class="text-muted">Disabled</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Other Registered Locations</td>
+              <td class="py-2">
+                {% if employee.allow_other_registered_locations %}Allowed{% else %}Not allowed{% endif %}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- Government IDs -->
   <div class="col-12 col-md-6">
     <div class="card h-100">
