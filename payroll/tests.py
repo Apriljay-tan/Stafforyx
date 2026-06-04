@@ -26,6 +26,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from attendance.models import AttendanceRecord, WorkSchedule
+from attendance.services import compute_attendance
 from companies.models import Company
 from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
@@ -622,6 +623,13 @@ class PayrollOvertimeGatingTests(TestCase):
         # 2h * 125 * 1.25 = 312.50
         self.assertEqual(rec.overtime_pay, Decimal('312.50'))
 
+    def test_no_ot_overtime_is_not_paid_even_with_actual_overtime(self):
+        emp = self._emp('no_ot')
+        self._attendance(emp, 120)
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_pay, Decimal('0.00'))
+
     def test_request_required_not_paid_until_approved(self):
         emp = self._emp('request_required')
         self._attendance(emp, 120)
@@ -641,8 +649,230 @@ class PayrollOvertimeGatingTests(TestCase):
         self.assertEqual(rec.overtime_minutes, 120)
         self.assertEqual(rec.overtime_pay, Decimal('312.50'))
 
+    def test_request_required_pays_min_approved_and_actual(self):
+        emp = self._emp('request_required')
+        self._attendance(emp, 60)
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('2.00'), approved_hours=Decimal('2.00'),
+            status='approved', source='employee',
+        )
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 60)
+        self.assertEqual(rec.overtime_pay, Decimal('156.25'))
+
+    def test_approved_overtime_without_actual_overtime_pays_zero(self):
+        emp = self._emp('request_required')
+        self._attendance(emp, 0)
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('2.00'), approved_hours=Decimal('2.00'),
+            status='approved', source='employee',
+        )
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_pay, Decimal('0.00'))
+
+    def test_multiple_approved_requests_do_not_pay_beyond_actual_overtime(self):
+        emp = self._emp('request_required')
+        self._attendance(emp, 120)
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('1.00'), approved_hours=Decimal('1.00'),
+            status='approved', source='employee',
+        )
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('2.00'), approved_hours=Decimal('2.00'),
+            status='approved', source='hr',
+        )
+        rec = self._record(emp)
+        self.assertEqual(rec.overtime_minutes, 120)
+        self.assertEqual(rec.overtime_pay, Decimal('312.50'))
+
 
 # ── Test 14: PayrollAdjustment deduction reflected in total_deductions ────────
+
+class FlexiblePayrollIntegrationTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(
+            name='Flexible Payroll Co',
+            email='flexpay@test.com',
+        )
+        self.day = datetime.date(2026, 6, 1)
+        self.period = PayrollPeriod.objects.create(
+            company=self.company,
+            name='Flexible Day',
+            start_date=self.day,
+            end_date=self.day,
+        )
+
+    def _employee(self, **overrides):
+        data = {
+            'company': self.company,
+            'employee_id': f'FLEX-{Employee.objects.count() + 1}',
+            'first_name': 'Flex',
+            'last_name': 'Worker',
+            'email': 'flex@test.com',
+            'date_hired': datetime.date(2024, 1, 1),
+            'basic_salary': Decimal('26000.00'),
+            'status': 'active',
+            'attendance_policy_type': Employee.ATTENDANCE_POLICY_FLEXIBLE,
+            'flexible_schedule_enabled': True,
+            'required_daily_hours': Decimal('8.00'),
+            'default_break_minutes': 0,
+            'flexible_overtime_grace_minutes': 30,
+            'overtime_policy': 'automatic',
+        }
+        data.update(overrides)
+        return Employee.objects.create(**data)
+
+    def _attendance(self, employee, time_in, time_out):
+        record = AttendanceRecord.objects.create(
+            company=self.company,
+            employee=employee,
+            date=self.day,
+            time_in=time_in,
+            time_out=time_out,
+            status='present',
+        )
+        compute_attendance(record)
+        record.refresh_from_db()
+        return record
+
+    def _payroll_record(self, employee):
+        generate_payroll_for_period(self.period)
+        return PayrollRecord.objects.get(payroll_period=self.period, employee=employee)
+
+    def test_flexible_eight_hours_twenty_minutes_has_no_overtime_pay(self):
+        employee = self._employee()
+        attendance = self._attendance(employee, datetime.time(8, 0), datetime.time(16, 20))
+        self.assertEqual(attendance.overtime_minutes, 0)
+
+        record = self._payroll_record(employee)
+
+        self.assertEqual(record.overtime_minutes, 0)
+        self.assertEqual(record.overtime_pay, Decimal('0.00'))
+
+    def test_flexible_nine_hours_pays_thirty_overtime_minutes_when_policy_allows(self):
+        employee = self._employee()
+        attendance = self._attendance(employee, datetime.time(8, 0), datetime.time(17, 0))
+        self.assertEqual(attendance.overtime_minutes, 30)
+
+        record = self._payroll_record(employee)
+
+        self.assertEqual(record.overtime_minutes, 30)
+        self.assertEqual(record.overtime_pay, Decimal('78.13'))
+
+    def test_night_differential_disabled_has_no_night_diff_pay(self):
+        employee = self._employee(night_differential_enabled=False)
+        attendance = self._attendance(employee, datetime.time(22, 0), datetime.time(2, 0))
+        self.assertEqual(attendance.night_differential_minutes, 0)
+
+        record = self._payroll_record(employee)
+
+        self.assertEqual(record.night_differential_minutes, 0)
+        self.assertEqual(record.night_differential_pay, Decimal('0.00'))
+
+    def test_night_differential_enabled_pays_premium_for_ten_pm_to_two_am(self):
+        employee = self._employee(
+            night_differential_enabled=True,
+            night_differential_percentage=Decimal('10.00'),
+            night_differential_start_time=datetime.time(22, 0),
+            night_differential_end_time=datetime.time(6, 0),
+        )
+        attendance = self._attendance(employee, datetime.time(22, 0), datetime.time(2, 0))
+        self.assertEqual(attendance.night_differential_minutes, 240)
+
+        record = self._payroll_record(employee)
+
+        self.assertEqual(record.night_differential_minutes, 240)
+        self.assertEqual(record.night_differential_pay, Decimal('50.00'))
+        self.assertEqual(record.gross_pay, Decimal('1050.00'))
+        self.assertEqual(record.net_pay, Decimal('550.00'))
+
+    def test_overnight_night_differential_window_counts_full_overlap(self):
+        employee = self._employee(
+            night_differential_enabled=True,
+            night_differential_percentage=Decimal('10.00'),
+            night_differential_start_time=datetime.time(22, 0),
+            night_differential_end_time=datetime.time(6, 0),
+            overtime_policy='no_ot',
+        )
+        attendance = self._attendance(employee, datetime.time(21, 0), datetime.time(6, 0))
+        self.assertEqual(attendance.night_differential_minutes, 480)
+
+        record = self._payroll_record(employee)
+
+        self.assertEqual(record.night_differential_minutes, 480)
+        self.assertEqual(record.night_differential_pay, Decimal('100.00'))
+
+    def test_payslip_shows_night_differential_pay_only_when_amount_exists(self):
+        admin = User.objects.create_superuser(
+            username='night-admin',
+            email='night-admin@test.com',
+            password='testpass123',
+        )
+        self.client.force_login(admin)
+
+        no_night_employee = self._employee(
+            employee_id='FLEX-NO-ND',
+            night_differential_enabled=False,
+        )
+        self._attendance(no_night_employee, datetime.time(22, 0), datetime.time(2, 0))
+        generate_payroll_for_period(self.period)
+        no_night_record = PayrollRecord.objects.get(
+            payroll_period=self.period,
+            employee=no_night_employee,
+        )
+
+        response = self.client.get(reverse('payroll:payslip_view', args=[no_night_record.pk]))
+        self.assertNotContains(response, 'Night Differential Pay')
+
+        night_employee = self._employee(
+            employee_id='FLEX-WITH-ND',
+            night_differential_enabled=True,
+            night_differential_percentage=Decimal('10.00'),
+            night_differential_start_time=datetime.time(22, 0),
+            night_differential_end_time=datetime.time(6, 0),
+        )
+        self._attendance(night_employee, datetime.time(22, 0), datetime.time(2, 0))
+        generate_payroll_for_period(self.period)
+        night_record = PayrollRecord.objects.get(
+            payroll_period=self.period,
+            employee=night_employee,
+        )
+
+        response = self.client.get(reverse('payroll:payslip_view', args=[night_record.pk]))
+        self.assertContains(response, 'Night Differential Pay')
+        self.assertContains(response, '&#8369;50.00')
+
+    def test_regenerate_updates_stale_draft_night_differential_totals(self):
+        employee = self._employee(
+            night_differential_enabled=True,
+            night_differential_percentage=Decimal('10.00'),
+            night_differential_start_time=datetime.time(22, 0),
+            night_differential_end_time=datetime.time(6, 0),
+        )
+        self._attendance(employee, datetime.time(22, 0), datetime.time(2, 0))
+        generate_payroll_for_period(self.period)
+        record = PayrollRecord.objects.get(payroll_period=self.period, employee=employee)
+
+        PayrollRecord.objects.filter(pk=record.pk).update(
+            night_differential_minutes=0,
+            night_differential_pay=Decimal('0.00'),
+            gross_pay=Decimal('0.00'),
+            net_pay=Decimal('0.00'),
+        )
+
+        created, updated, skipped = generate_payroll_for_period(self.period)
+        record.refresh_from_db()
+
+        self.assertEqual((created, updated, skipped), (0, 1, 0))
+        self.assertEqual(record.night_differential_minutes, 240)
+        self.assertEqual(record.night_differential_pay, Decimal('50.00'))
+        self.assertEqual(record.gross_pay, Decimal('1050.00'))
+
 
 class AdjustmentDeductionTotalTest(PayrollV2TestCase):
     """

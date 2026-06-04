@@ -247,6 +247,16 @@
             <div class="text-danger small mt-1">{{ form.flexible_overtime_grace_minutes.errors.as_text }}</div>
           {% endif %}
         </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">Overtime Mode</label>
+          {{ form.overtime_policy }}
+          {% if form.overtime_policy.help_text %}
+            <div class="form-text">{{ form.overtime_policy.help_text }}</div>
+          {% endif %}
+          {% if form.overtime_policy.errors %}
+            <div class="text-danger small mt-1">{{ form.overtime_policy.errors.as_text }}</div>
+          {% endif %}
+        </div>
         <div class="col-12">
           <label class="form-label fw-semibold small d-block">{{ form.flexible_day_offs.label }}</label>
           <div class="d-flex flex-wrap gap-3">

@@ -7,6 +7,7 @@ overtime policy and any approved OvertimeRequest. The attendance engine is never
 modified by this module — it only consumes its output.
 """
 
+from collections import defaultdict
 from decimal import Decimal, ROUND_HALF_UP
 
 _60 = Decimal(60)
@@ -26,7 +27,10 @@ def build_overtime_approval_index(company, employees, start_date, end_date):
         date__lte=end_date,
         status__in=['approved', 'auto_approved'],
     )
-    return {(o.employee_id, o.date): o for o in qs}
+    approval_minutes = defaultdict(int)
+    for request in qs:
+        approval_minutes[(request.employee_id, request.date)] += _approved_minutes(request)
+    return dict(approval_minutes)
 
 
 def _approved_minutes(request):
@@ -47,12 +51,12 @@ def payable_overtime_minutes(employee, date, detected_min, approval_index):
     - not_allowed        → 0, unless an approved (HR override) request exists → capped.
     """
     detected_min = detected_min or 0
-    policy = getattr(employee, 'overtime_policy', 'not_allowed')
+    policy = getattr(employee, 'overtime_mode', None) or getattr(employee, 'overtime_policy', 'no_ot')
 
     if policy == 'automatic':
         return detected_min
-
-    request = approval_index.get((employee.id, date))
-    if request is None:
+    if policy == 'no_ot':
         return 0
-    return min(detected_min, _approved_minutes(request))
+
+    approved_min = approval_index.get((employee.id, date), 0)
+    return min(detected_min, approved_min)

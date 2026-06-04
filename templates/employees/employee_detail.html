@@ -227,6 +227,10 @@
               <td class="py-2">{{ employee.flexible_overtime_grace_minutes }} min beyond required hours</td>
             </tr>
             <tr>
+              <td class="text-muted ps-3 py-2">Overtime Mode</td>
+              <td class="py-2">{{ employee.get_overtime_policy_display }}</td>
+            </tr>
+            <tr>
               <td class="text-muted ps-3 py-2">Flexible Day-offs</td>
               <td class="py-2">{{ employee.flexible_day_offs_display }}</td>
             </tr>

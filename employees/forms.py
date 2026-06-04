@@ -56,7 +56,7 @@ class EmployeeForm(forms.ModelForm):
             'employment_type', 'status', 'pay_basis', 'basic_salary', 'daily_rate',
             'work_schedule',
             'attendance_policy_type', 'required_daily_hours', 'default_break_minutes',
-            'flexible_overtime_grace_minutes', 'flexible_day_offs',
+            'flexible_overtime_grace_minutes', 'overtime_policy', 'flexible_day_offs',
             'night_differential_enabled',
             'night_differential_percentage', 'night_differential_start_time',
             'night_differential_end_time', 'allow_other_registered_locations',

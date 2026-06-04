@@ -37,7 +37,14 @@
         No schedule today
       {% endif %}
     </p>
-    <p class="mb-0"><strong>Overtime policy:</strong> {{ policy_display }}</p>
+    <p class="mb-1"><strong>Overtime policy:</strong> {{ policy_display }}</p>
+    {% if overtime_mode == 'automatic' %}
+      <p class="mb-0 text-muted">Overtime is automatically computed from your attendance.</p>
+    {% elif overtime_mode == 'no_ot' %}
+      <p class="mb-0 text-muted">Overtime requests are not enabled for your account.</p>
+    {% else %}
+      <p class="mb-0 text-muted">Submit requests here; payroll pays approved OT capped by actual attendance.</p>
+    {% endif %}
   </div>
 </div>
 

@@ -357,7 +357,8 @@ def portal_overtime_list(request):
         .filter(employee=employee)
         .order_by('-date')
     )
-    can_request = employee.overtime_policy != 'not_allowed'
+    overtime_mode = employee.overtime_mode
+    can_request = employee.can_request_overtime
 
     return render(request, 'portal/overtime_list.html', {
         'employee': employee,
@@ -365,6 +366,7 @@ def portal_overtime_list(request):
         'today': today,
         'shift': shift,
         'can_request': can_request,
+        'overtime_mode': overtime_mode,
         'policy_display': employee.get_overtime_policy_display(),
     })
 
@@ -375,8 +377,11 @@ def portal_overtime_new(request):
     if fallback:
         return fallback
 
-    if employee.overtime_policy == 'not_allowed':
-        messages.error(request, 'Overtime requests are not allowed for your account.')
+    if not employee.can_request_overtime:
+        if employee.overtime_mode == employee.OVERTIME_AUTOMATIC:
+            messages.info(request, 'Overtime is automatically computed from your attendance.')
+        else:
+            messages.info(request, 'Overtime requests are not enabled for your account.')
         return redirect('portal:overtime_list')
 
     if request.method == 'POST':

@@ -449,6 +449,12 @@
           <i class="bi bi-calendar2-check"></i> Leave Management
         </a>
       </li>
+      <li class="nav-item">
+        <a href="{% url 'overtime:manage_overtime' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'overtime' %}active{% endif %}">
+          <i class="bi bi-clock"></i> Overtime Requests
+        </a>
+      </li>
     </ul>
 
     <div class="sidebar-section-label">Finance</div>

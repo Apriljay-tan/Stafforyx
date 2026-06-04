@@ -357,6 +357,7 @@ class AttendanceRecord(models.Model):
     overtime_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
     total_work_minutes = models.PositiveIntegerField(default=0)
+    night_differential_minutes = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
     computed_status = models.CharField(max_length=20, blank=True, default='')
     remarks = models.CharField(max_length=255, blank=True)

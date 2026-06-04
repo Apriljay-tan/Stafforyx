@@ -40,6 +40,7 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from attendance.models import AttendanceRecord, EmployeeDailySchedule
+from attendance.services import calculate_night_differential_minutes
 from employees.models import Employee
 from holidays.services import build_exception_index, build_holiday_index, resolve_holiday
 from leaves.models import LeaveRequest
@@ -209,6 +210,15 @@ def _resolve_daily_rate(emp):
     return (salary / _DAILY_DIVISOR).quantize(_Q4, rounding=ROUND_HALF_UP)
 
 
+def _night_differential_percentage(emp):
+    if not getattr(emp, 'night_differential_enabled', False):
+        return Decimal('0.00')
+    percentage = Decimal(str(getattr(emp, 'night_differential_percentage', 0) or 0))
+    if percentage <= 0:
+        return Decimal('0.00')
+    return percentage.quantize(_Q2, rounding=ROUND_HALF_UP)
+
+
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
@@ -231,6 +241,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     late_min = 0
     undertime_min = 0
     overtime_min = 0
+    night_diff_min = 0
 
     holiday_pay = Decimal('0')
     holiday_days = 0
@@ -265,6 +276,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             overtime_min += payable_overtime_minutes(
                 emp, date, att.overtime_minutes or 0, approval_index
             )
+            night_diff_min += calculate_night_differential_minutes(att, emp)
         elif state == 'absent':
             # Only a scheduled working day can count as an absence. A
             # non-scheduled day without attendance is simply a non-working day.
@@ -296,6 +308,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
             overtime_min += payable_overtime_minutes(
                 emp, date, att.overtime_minutes or 0, approval_index
             )
+            night_diff_min += calculate_night_differential_minutes(att, emp)
         elif is_scheduled:
             # No-work holiday on a scheduled day.
             effective_paid = is_monthly or holiday['is_paid']
@@ -327,6 +340,13 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     ot_pay = (
         Decimal(overtime_min) / Decimal(60) * hourly_rate * _OT_MULTIPLIER
     ).quantize(_Q2, rounding=ROUND_HALF_UP)
+    night_diff_pct = _night_differential_percentage(emp)
+    night_diff_pay = (
+        Decimal(night_diff_min) / Decimal(60)
+        * hourly_rate
+        * night_diff_pct
+        / Decimal('100')
+    ).quantize(_Q2, rounding=ROUND_HALF_UP)
 
     # Copy fixed contributions from employee settings at generation time
     sss_ded = Decimal(str(emp.sss_contribution_amount or 0)).quantize(_Q2)
@@ -334,7 +354,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     pagibig_ded = Decimal(str(emp.pagibig_contribution_amount or 0)).quantize(_Q2)
     tax_ded = Decimal(str(emp.tax_deduction_amount or 0)).quantize(_Q2)
 
-    gross_pay = (basic_pay + ot_pay + holiday_pay).quantize(_Q2)
+    gross_pay = (basic_pay + ot_pay + night_diff_pay + holiday_pay).quantize(_Q2)
     total_ded = sss_ded + philhealth_ded + pagibig_ded + tax_ded + late_ded + undertime_ded
     net_pay = (gross_pay - total_ded).quantize(_Q2)
 
@@ -348,10 +368,13 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
         late_minutes=late_min,
         undertime_minutes=undertime_min,
         overtime_minutes=overtime_min,
+        night_differential_minutes=night_diff_min,
+        night_differential_percentage=night_diff_pct,
         daily_rate=daily_rate,
         hourly_rate=hourly_rate,
         basic_pay=basic_pay,
         overtime_pay=ot_pay,
+        night_differential_pay=night_diff_pay,
         holiday_pay=holiday_pay,
         holiday_days=holiday_days,
         holiday_worked_days=holiday_worked_days,

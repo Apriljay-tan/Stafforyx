@@ -57,6 +57,12 @@
       <td style="padding:4px 0;text-align:right;">&#8369;{{ record.holiday_pay|floatformat:2 }}</td>
     </tr>
     {% endif %}
+    {% if record.night_differential_pay %}
+    <tr>
+      <td style="padding:4px 0;">Night Differential Pay ({{ record.night_differential_minutes }}min)</td>
+      <td style="padding:4px 0;text-align:right;">&#8369;{{ record.night_differential_pay|floatformat:2 }}</td>
+    </tr>
+    {% endif %}
     {% if record.allowances %}
     <tr>
       <td style="padding:4px 0;">Allowances</td>

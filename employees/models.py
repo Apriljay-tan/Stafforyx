@@ -71,12 +71,18 @@ class Employee(models.Model):
         ('daily', 'Daily / Payable-days'),
         ('monthly', 'Monthly (fixed salary includes holidays)'),
     ]
+    OVERTIME_NO_OT = 'no_ot'
+    OVERTIME_REQUEST_REQUIRED = 'request_required'
+    OVERTIME_AUTOMATIC = 'automatic'
     OVERTIME_POLICY_CHOICES = [
-        ('not_allowed',       'Not Allowed'),
-        ('automatic',         'Automatic'),
-        ('request_required',  'Request Required'),
-        ('management_review', 'Management Review'),
+        (OVERTIME_NO_OT, 'No OT'),
+        (OVERTIME_REQUEST_REQUIRED, 'Request Required'),
+        (OVERTIME_AUTOMATIC, 'Automatic'),
     ]
+    LEGACY_OVERTIME_POLICY_MAP = {
+        'not_allowed': OVERTIME_NO_OT,
+        'management_review': OVERTIME_REQUEST_REQUIRED,
+    }
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='employees')
     user = models.OneToOneField(
@@ -156,8 +162,12 @@ class Employee(models.Model):
         help_text='Fixed employees follow assigned schedules; flexible employees use configured required hours in a later attendance phase.',
     )
     overtime_policy = models.CharField(
-        max_length=20, choices=OVERTIME_POLICY_CHOICES, default='not_allowed',
-        help_text='Controls how this employee\'s overtime is paid by payroll.',
+        max_length=20, choices=OVERTIME_POLICY_CHOICES, default=OVERTIME_NO_OT,
+        help_text=(
+            'No OT = never pay overtime. Request Required = employee requests, '
+            'HR approves, and attendance caps payable OT. Automatic = pay actual '
+            'computed overtime automatically.'
+        ),
     )
     flexible_schedule_enabled = models.BooleanField(
         default=False,
@@ -229,6 +239,17 @@ class Employee(models.Model):
     def full_name(self):
         parts = [self.first_name, self.middle_name, self.last_name]
         return ' '.join(p for p in parts if p)
+
+    @property
+    def overtime_mode(self):
+        return self.LEGACY_OVERTIME_POLICY_MAP.get(
+            self.overtime_policy,
+            self.overtime_policy or self.OVERTIME_NO_OT,
+        )
+
+    @property
+    def can_request_overtime(self):
+        return self.overtime_mode == self.OVERTIME_REQUEST_REQUIRED
 
     @property
     def uses_flexible_attendance_policy(self):

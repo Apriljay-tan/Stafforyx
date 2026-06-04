@@ -102,6 +102,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
             'basic_salary': '0.00',
             'daily_rate': '',
             'work_schedule': '',
+            'overtime_policy': 'request_required',
             'biometric_user_id': '',
             'sss_number': '',
             'philhealth_number': '',
@@ -136,6 +137,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
         )
 
         self.assertEqual(employee.attendance_policy_type, 'fixed')
+        self.assertEqual(employee.overtime_policy, 'no_ot')
         self.assertEqual(employee.required_daily_hours, Decimal('8.00'))
         self.assertEqual(employee.default_break_minutes, 60)
         self.assertEqual(employee.flexible_overtime_grace_minutes, 30)
@@ -155,6 +157,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
             required_daily_hours='7.50',
             default_break_minutes='30',
             flexible_overtime_grace_minutes='45',
+            overtime_policy='automatic',
             flexible_day_offs=['sat', 'sun'],
             night_differential_enabled='on',
             night_differential_percentage='12.50',
@@ -169,6 +172,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
         self.assertEqual(employee.required_daily_hours, Decimal('7.50'))
         self.assertEqual(employee.default_break_minutes, 30)
         self.assertEqual(employee.flexible_overtime_grace_minutes, 45)
+        self.assertEqual(employee.overtime_policy, 'automatic')
         self.assertEqual(employee.flexible_day_offs, ['sat', 'sun'])
         self.assertTrue(employee.night_differential_enabled)
         self.assertEqual(employee.night_differential_percentage, Decimal('12.50'))
@@ -183,6 +187,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
             required_daily_hours='8.00',
             default_break_minutes='60',
             flexible_overtime_grace_minutes='30',
+            overtime_policy='request_required',
             flexible_day_offs=['sun'],
             night_differential_percentage='10.00',
         )
@@ -195,6 +200,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(employee.attendance_policy_type, 'fixed')
         self.assertEqual(employee.email, 'polly.updated@test.com')
+        self.assertEqual(employee.overtime_policy, 'request_required')
         self.assertEqual(employee.flexible_day_offs, ['sun'])
         self.assertFalse(employee.night_differential_enabled)
         self.assertFalse(employee.allow_other_registered_locations)
@@ -231,7 +237,7 @@ class EmployeeAttendancePolicyPhase1Tests(TestCase):
         checks = [
             (reverse('employees:employee_add'), 'Attendance Policy'),
             (reverse('employees:employee_edit', kwargs={'pk': employee.pk}), 'Attendance Policy'),
-            (reverse('employees:employee_detail', kwargs={'pk': employee.pk}), 'Night Differential'),
+            (reverse('employees:employee_detail', kwargs={'pk': employee.pk}), 'Overtime Mode'),
             (reverse('employees:employee_list'), 'Flexible'),
         ]
         for url, expected in checks:

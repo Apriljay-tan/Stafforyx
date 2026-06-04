@@ -19,10 +19,14 @@ def _attach_payroll_display(record):
     record.show_daily_rate = bool(record.basic_pay or record.payable_days)
     record.show_hourly_rate = bool(
         record.overtime_pay or record.overtime_minutes or
+        record.night_differential_pay or record.night_differential_minutes or
         record.late_deduction or record.late_minutes or
         record.undertime_deduction or record.undertime_minutes
     )
     record.show_regular_ot_rate = bool(record.overtime_pay or record.overtime_minutes)
+    record.show_night_diff_rate = bool(
+        record.night_differential_pay or record.night_differential_minutes
+    )
     # Payroll currently stores holiday pay, but not separate rest-day or holiday
     # overtime pay components. Avoid displaying OT rates that are not represented
     # by actual payslip rows.
@@ -32,6 +36,7 @@ def _attach_payroll_display(record):
         record.show_daily_rate,
         record.show_hourly_rate,
         record.show_regular_ot_rate,
+        record.show_night_diff_rate,
         record.show_rest_day_ot_rate,
         record.show_holiday_ot_rate,
     ))
@@ -289,6 +294,11 @@ def payslip_view(request, pk):
         'deduction_adjs': deduction_adjs,
         'company': record.company,
         'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
+        'night_diff_rate': (
+            hourly_rate
+            * Decimal(str(record.night_differential_percentage or 0))
+            / Decimal('100')
+        ).quantize(q2),
         'rest_day_ot_rate': (hourly_rate * Decimal('1.30')).quantize(q2),
         'holiday_ot_rate': (hourly_rate * Decimal('2.60')).quantize(q2),
         'gross_pay': record.display_gross_pay,

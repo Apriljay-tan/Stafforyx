@@ -5,6 +5,7 @@ compute_attendance(record) resolves the employee's schedule for the exact
 attendance date and populates derived attendance fields.
 """
 
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from .schedule_services import resolve_expected_shift
@@ -37,6 +38,50 @@ def _required_minutes(employee):
         (Decimal(str(employee.required_daily_hours or 0)) * _60)
         .to_integral_value(rounding=ROUND_HALF_UP)
     )
+
+
+def _overlap_minutes(start, end, window_start, window_end):
+    overlap_start = max(start, window_start)
+    overlap_end = min(end, window_end)
+    if overlap_end <= overlap_start:
+        return 0
+    return int((overlap_end - overlap_start).total_seconds() // 60)
+
+
+def calculate_night_differential_minutes(record, employee=None):
+    employee = employee or record.employee
+    if not getattr(employee, 'night_differential_enabled', False):
+        return 0
+
+    percentage = Decimal(str(getattr(employee, 'night_differential_percentage', 0) or 0))
+    if percentage <= 0:
+        return 0
+
+    start_time = getattr(employee, 'night_differential_start_time', None)
+    end_time = getattr(employee, 'night_differential_end_time', None)
+    if not start_time or not end_time or start_time == end_time:
+        return 0
+    if not record.time_in or not record.time_out:
+        return 0
+
+    work_start = datetime.combine(record.date, record.time_in)
+    work_end = datetime.combine(record.date, record.time_out)
+    if work_end <= work_start:
+        work_end += timedelta(days=1)
+
+    minutes = 0
+    window_date = work_start.date() - timedelta(days=1)
+    final_window_date = work_end.date()
+
+    while window_date <= final_window_date:
+        window_start = datetime.combine(window_date, start_time)
+        window_end = datetime.combine(window_date, end_time)
+        if window_end <= window_start:
+            window_end += timedelta(days=1)
+        minutes += _overlap_minutes(work_start, work_end, window_start, window_end)
+        window_date += timedelta(days=1)
+
+    return minutes
 
 
 def compute_attendance(record):
@@ -159,14 +204,18 @@ def compute_attendance(record):
                 else:
                     computed = 'present'
 
+    night_diff_min = calculate_night_differential_minutes(record, record.employee)
+
     record.late_minutes = late_min
     record.undertime_minutes = undertime_min
     record.overtime_minutes = overtime_min
     record.total_work_minutes = total_work_min
+    record.night_differential_minutes = night_diff_min
     record.total_hours = _minutes_to_hours(total_work_min)
     record.overtime_hours = _minutes_to_hours(overtime_min)
     record.computed_status = computed
     record.save(update_fields=[
         'late_minutes', 'undertime_minutes', 'overtime_minutes',
-        'total_work_minutes', 'total_hours', 'overtime_hours', 'computed_status',
+        'total_work_minutes', 'night_differential_minutes', 'total_hours',
+        'overtime_hours', 'computed_status',
     ])

@@ -318,6 +318,12 @@
       <div class="ps-rate-value">&#8369;{{ regular_ot_rate|floatformat:2 }}/hr</div>
     </div>
     {% endif %}
+    {% if record.show_night_diff_rate %}
+    <div class="ps-rate-cell">
+      <div class="ps-rate-label">Night Differential ({{ record.night_differential_percentage|floatformat:2 }}%)</div>
+      <div class="ps-rate-value">&#8369;{{ night_diff_rate|floatformat:2 }}/hr</div>
+    </div>
+    {% endif %}
     {% if record.show_rest_day_ot_rate %}
     <div class="ps-rate-cell">
       <div class="ps-rate-label">Rest Day / Sp. Holiday O.T. (×1.30)</div>
@@ -362,11 +368,12 @@
       <div class="ps-info-value" style="color:{{ company.payslip_accent_color|default:'#1565C0' }};">{{ record.payable_days|floatformat:2 }}</div>
     </div>
   </div>
-  {% if record.late_minutes or record.undertime_minutes or record.overtime_minutes %}
+  {% if record.late_minutes or record.undertime_minutes or record.overtime_minutes or record.night_differential_minutes %}
   <div style="padding:.35rem 1rem;background:#fffbeb;border-bottom:1px solid #e8edf5;font-size:.75rem;display:flex;gap:1.5rem;flex-wrap:wrap;">
     {% if record.late_minutes %}<span><strong>Late:</strong> {{ record.late_minutes }} min</span>{% endif %}
     {% if record.undertime_minutes %}<span><strong>Undertime:</strong> {{ record.undertime_minutes }} min</span>{% endif %}
     {% if record.overtime_minutes %}<span><strong>Overtime:</strong> {{ record.overtime_minutes }} min</span>{% endif %}
+    {% if record.night_differential_minutes %}<span><strong>Night Diff:</strong> {{ record.night_differential_minutes }} min</span>{% endif %}
   </div>
   {% endif %}
   {% endif %}
@@ -418,6 +425,12 @@
           <tr>
             <td class="label">Holiday Pay{% if record.holiday_worked_days %} ({{ record.holiday_worked_days }} worked){% endif %}</td>
             <td class="amount">&#8369;{{ record.holiday_pay|floatformat:2 }}</td>
+          </tr>
+          {% endif %}
+          {% if record.night_differential_pay %}
+          <tr>
+            <td class="label">Night Differential Pay ({{ record.night_differential_minutes }}min)</td>
+            <td class="amount">&#8369;{{ record.night_differential_pay|floatformat:2 }}</td>
           </tr>
           {% endif %}
           {% for adj in earning_adjs %}

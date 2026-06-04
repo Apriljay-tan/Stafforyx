@@ -51,6 +51,8 @@
         {% if record.late_minutes %}<div><span class="text-muted">Late:</span> <strong>{{ record.late_minutes }} min</strong></div>{% endif %}
         {% if record.undertime_minutes %}<div><span class="text-muted">Undertime:</span> <strong>{{ record.undertime_minutes }} min</strong></div>{% endif %}
         {% if record.overtime_minutes %}<div><span class="text-muted">Overtime:</span> <strong>{{ record.overtime_minutes }} min</strong></div>{% endif %}
+        {% if record.night_differential_minutes %}<div><span class="text-muted">Night Diff:</span> <strong>{{ record.night_differential_minutes }} min</strong></div>{% endif %}
+        {% if record.night_differential_pay %}<div><span class="text-muted">Night Diff Pay:</span> <strong>&#8369;{{ record.night_differential_pay|floatformat:2 }}</strong></div>{% endif %}
       </div>
     </div>
   </div>

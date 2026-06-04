@@ -50,6 +50,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             'fields': (
                 'work_schedule', 'attendance_policy_type', 'required_daily_hours',
                 'default_break_minutes', 'flexible_overtime_grace_minutes',
+                'overtime_policy',
                 'flexible_day_offs',
                 'flexible_schedule_enabled', 'allowed_clock_in_from',
                 'allowed_clock_in_until',
@@ -57,9 +58,6 @@ class EmployeeAdmin(admin.ModelAdmin):
                 'night_differential_start_time', 'night_differential_end_time',
                 'allow_other_registered_locations',
             )
-        }),
-        ('Overtime', {
-            'fields': ('overtime_policy',),
         }),
         ('Government IDs', {
             'fields': ('sss_number', 'philhealth_number', 'pagibig_number', 'tin_number'),

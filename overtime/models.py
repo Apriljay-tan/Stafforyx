@@ -45,7 +45,6 @@ class OvertimeRequest(models.Model):
 
     class Meta:
         ordering = ['-date', 'employee']
-        unique_together = ('employee', 'date')
         indexes = [
             models.Index(fields=['company', 'status']),
             models.Index(fields=['employee', 'date']),

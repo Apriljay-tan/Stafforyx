@@ -197,6 +197,14 @@
           <i class="bi bi-exclamation-triangle"></i> Incident Reports
         </a>
       </li>
+      {% if employee.can_request_overtime %}
+      <li class="nav-item">
+        <a href="{% url 'portal:overtime_list' %}"
+           class="nav-link {% if 'overtime' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-clock"></i> Overtime Requests
+        </a>
+      </li>
+      {% endif %}
       <li class="nav-item">
         <a href="{% url 'portal:time_clock' %}" class="nav-link">
           <i class="bi bi-fingerprint"></i> Time In / Out

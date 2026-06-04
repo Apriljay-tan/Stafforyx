@@ -60,6 +60,8 @@ class PayrollRecord(models.Model):
     late_minutes = models.PositiveIntegerField(default=0)
     undertime_minutes = models.PositiveIntegerField(default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
+    night_differential_minutes = models.PositiveIntegerField(default=0)
+    night_differential_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     daily_rate = models.DecimalField(max_digits=10, decimal_places=4, default=0)
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=4, default=0)
 
@@ -67,6 +69,7 @@ class PayrollRecord(models.Model):
     basic_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     allowances = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     overtime_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    night_differential_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     holiday_pay = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     holiday_days = models.PositiveIntegerField(default=0)
     holiday_worked_days = models.PositiveIntegerField(default=0)
@@ -120,6 +123,7 @@ class PayrollRecord(models.Model):
         gross_pay = (
             (self.basic_pay or zero) +
             (self.overtime_pay or zero) +
+            (self.night_differential_pay or zero) +
             (self.holiday_pay or zero) +
             (self.allowances or zero) +
             earning_adj
