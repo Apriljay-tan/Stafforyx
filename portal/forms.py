@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 
+from cash_advance.models import CashAdvanceRequest
 from leaves.models import LeaveRequest, LeaveType
 from overtime.models import OvertimeRequest
 
@@ -88,3 +89,28 @@ class PortalOvertimeRequestForm(forms.ModelForm):
         if hours is None or hours <= 0:
             raise forms.ValidationError('Requested hours must be greater than zero.')
         return hours
+
+
+class PortalCashAdvanceRequestForm(forms.ModelForm):
+    class Meta:
+        model = CashAdvanceRequest
+        fields = ['amount', 'reason', 'requested_release_date']
+        widgets = {
+            'amount': forms.NumberInput(attrs={'step': '0.01', 'min': '0.01'}),
+            'reason': forms.Textarea(attrs={'rows': 4}),
+            'requested_release_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+        labels = {
+            'requested_release_date': 'Requested Release Date (optional)',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['requested_release_date'].required = False
+        _bootstrap(self)
+
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount is None or amount <= 0:
+            raise forms.ValidationError('Amount must be greater than zero.')
+        return amount

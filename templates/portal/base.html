@@ -206,6 +206,12 @@
       </li>
       {% endif %}
       <li class="nav-item">
+        <a href="{% url 'portal:ca_list' %}"
+           class="nav-link {% if 'ca_' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-cash-coin"></i> Cash Advance
+        </a>
+      </li>
+      <li class="nav-item">
         <a href="{% url 'portal:time_clock' %}" class="nav-link">
           <i class="bi bi-fingerprint"></i> Time In / Out
         </a>

@@ -17,7 +17,14 @@ from leaves.models import LeaveRequest, LeaveType
 from overtime.models import OvertimeRequest
 from payroll.models import PayrollRecord
 
-from .forms import PortalIncidentReportForm, PortalLeaveRequestForm, PortalOvertimeRequestForm
+from cash_advance.models import CashAdvanceRequest
+
+from .forms import (
+    PortalCashAdvanceRequestForm,
+    PortalIncidentReportForm,
+    PortalLeaveRequestForm,
+    PortalOvertimeRequestForm,
+)
 from .models import IncidentReport
 
 
@@ -409,6 +416,98 @@ def portal_overtime_new(request):
         'employee': employee,
         'form': form,
     })
+
+
+# ── Portal: Cash Advance ──────────────────────────────────────────────────────
+
+@login_required
+def portal_ca_list(request):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    requests = (
+        CashAdvanceRequest.objects
+        .filter(employee=employee)
+        .order_by('-created_at')
+    )
+    return render(request, 'portal/ca_list.html', {
+        'employee': employee,
+        'requests': requests,
+    })
+
+
+@login_required
+def portal_ca_new(request):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    if request.method == 'POST':
+        form = PortalCashAdvanceRequestForm(request.POST)
+        if form.is_valid():
+            ca = form.save(commit=False)
+            ca.employee = employee
+            ca.company = employee.company
+            ca.status = CashAdvanceRequest.STATUS_PENDING
+            ca.save()
+            messages.success(request, 'Cash advance request submitted. Waiting for approval.')
+            return redirect('portal:ca_list')
+    else:
+        form = PortalCashAdvanceRequestForm()
+
+    return render(request, 'portal/ca_new.html', {
+        'employee': employee,
+        'form': form,
+    })
+
+
+@login_required
+def portal_ca_edit(request, pk):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    # employee=employee enforces ownership — no cross-employee access.
+    ca = get_object_or_404(CashAdvanceRequest, pk=pk, employee=employee)
+
+    if not ca.is_editable_by_employee:
+        messages.info(request, 'This cash advance request can no longer be edited.')
+        return redirect('portal:ca_list')
+
+    if request.method == 'POST':
+        form = PortalCashAdvanceRequestForm(request.POST, instance=ca)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Cash advance request updated.')
+            return redirect('portal:ca_list')
+    else:
+        form = PortalCashAdvanceRequestForm(instance=ca)
+
+    return render(request, 'portal/ca_new.html', {
+        'employee': employee,
+        'form': form,
+        'editing': True,
+        'ca': ca,
+    })
+
+
+@login_required
+def portal_ca_cancel(request, pk):
+    employee, fallback = _require_portal_employee(request)
+    if fallback:
+        return fallback
+
+    ca = get_object_or_404(CashAdvanceRequest, pk=pk, employee=employee)
+    if request.method == 'POST':
+        if ca.is_editable_by_employee:
+            ca.status = CashAdvanceRequest.STATUS_CANCELLED
+            ca.cancel_reason = 'Cancelled by employee.'
+            ca.save(update_fields=['status', 'cancel_reason', 'updated_at'])
+            messages.success(request, 'Cash advance request cancelled.')
+        else:
+            messages.info(request, 'This cash advance request can no longer be cancelled.')
+    return redirect('portal:ca_list')
 
 
 # —— Portal: Announcements ———————————————————————————————————————————————————————————

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Cash Advance Requests{% endblock %}
+{% block page_title %}Cash Advance Requests{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>Cash Advance Requests</h1>
+  <p>HR/Payroll review queue scoped to your accessible companies.</p>
+</div>
+
+<ul class="nav nav-pills mb-3 flex-wrap gap-1">
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'pending' %}active{% endif %}" href="?tab=pending">Pending</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'approved' %}active{% endif %}" href="?tab=approved">Approved</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'released' %}active{% endif %}" href="?tab=released">Released</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'closed' %}active{% endif %}" href="?tab=closed">Rejected / Cancelled</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if tab == 'history' %}active{% endif %}" href="?tab=history">History</a>
+  </li>
+</ul>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-cash-coin me-1"></i>Queue</span>
+    <span class="badge bg-primary rounded-pill">{{ requests|length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 align-middle" style="font-size:.875rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Requested</th>
+          <th>Employee</th>
+          <th>Company</th>
+          <th>Amount</th>
+          <th>Release Date</th>
+          <th>Status</th>
+          <th class="text-end pe-3"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in requests %}
+        <tr>
+          <td class="ps-3">{{ r.created_at|date:"M d, Y" }}</td>
+          <td class="fw-semibold">{{ r.employee.full_name }}</td>
+          <td>{{ r.company.name }}</td>
+          <td>&#8369;{{ r.amount|floatformat:2 }}</td>
+          <td>{% if r.requested_release_date %}{{ r.requested_release_date|date:"M d, Y" }}{% else %}—{% endif %}</td>
+          <td>{{ r.get_status_display }}</td>
+          <td class="text-end pe-3">
+            <a href="{% url 'cash_advance:manage_ca_detail' r.pk %}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye me-1"></i>Open
+            </a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center py-5 text-muted">No cash advance requests in this view.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -28,6 +28,7 @@ urlpatterns = [
     path('portal/', include('portal.urls')),
     path('holidays/', include('holidays.urls')),
     path('overtime/', include('overtime.urls')),
+    path('cash-advance/', include('cash_advance.urls')),
 ]
 
 if settings.DEBUG:

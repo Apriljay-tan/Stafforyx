@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+
+{% block title %}Cash Advance Request{% endblock %}
+{% block page_title %}Cash Advance Request{% endblock %}
+
+{% block content %}
+<div class="page-header mb-3">
+  <h1>Cash Advance Request</h1>
+  <p>{{ ca.employee.full_name }} — &#8369;{{ ca.amount|floatformat:2 }} ({{ ca.company.name }})</p>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Amount</dt><dd class="col-sm-9">&#8369;{{ ca.amount|floatformat:2 }}</dd>
+      <dt class="col-sm-3">Requested Release Date</dt>
+      <dd class="col-sm-9">{% if ca.requested_release_date %}{{ ca.requested_release_date|date:"M d, Y" }}{% else %}—{% endif %}</dd>
+      <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ ca.get_status_display }}</dd>
+      <dt class="col-sm-3">Reason</dt><dd class="col-sm-9">{{ ca.reason|default:"—" }}</dd>
+      {% if ca.approved_by %}
+      <dt class="col-sm-3">Approved By</dt><dd class="col-sm-9">{{ ca.approved_by }} @ {{ ca.approved_at|date:"M d, Y H:i" }}</dd>
+      {% endif %}
+      {% if ca.rejected_by %}
+      <dt class="col-sm-3">Rejected By</dt><dd class="col-sm-9">{{ ca.rejected_by }} @ {{ ca.rejected_at|date:"M d, Y H:i" }}</dd>
+      {% endif %}
+      {% if ca.released_by %}
+      <dt class="col-sm-3">Released By</dt><dd class="col-sm-9">{{ ca.released_by }} @ {{ ca.released_at|date:"M d, Y H:i" }}</dd>
+      <dt class="col-sm-3">Release Note</dt><dd class="col-sm-9">{{ ca.release_note|default:"—" }}</dd>
+      {% endif %}
+      {% if ca.cancel_reason %}
+      <dt class="col-sm-3">Cancel Reason</dt><dd class="col-sm-9">{{ ca.cancel_reason }}</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-check2-square me-1"></i>Review</div>
+  <div class="card-body">
+    <form method="post" class="row g-3">
+      {% csrf_token %}
+      <div class="col-12">
+        <label class="form-label">Manager Note</label>
+        <textarea name="manager_note" rows="2" class="form-control">{{ ca.manager_note }}</textarea>
+      </div>
+
+      {% if ca.status == 'approved' and can_release %}
+      <div class="col-12">
+        <label class="form-label">Release Note</label>
+        <input type="text" name="release_note" value="{{ ca.release_note }}" class="form-control"
+               placeholder="e.g. cash handed over / bank transfer reference">
+      </div>
+      {% endif %}
+
+      <div class="col-12 d-flex justify-content-end gap-2 flex-wrap">
+        <a href="{% url 'cash_advance:manage_ca' %}" class="btn btn-outline-secondary">Back</a>
+
+        {% if ca.status == 'pending' or ca.status == 'approved' %}
+        <button type="submit" name="action" value="reject" class="btn btn-danger">
+          <i class="bi bi-x-lg me-1"></i>Reject
+        </button>
+        {% endif %}
+
+        {% if ca.status != 'released' and ca.status != 'cancelled' %}
+        <button type="submit" name="action" value="cancel" class="btn btn-outline-danger">
+          <i class="bi bi-slash-circle me-1"></i>Cancel
+        </button>
+        {% endif %}
+
+        {% if ca.status == 'pending' %}
+        <button type="submit" name="action" value="approve" class="btn btn-success">
+          <i class="bi bi-check-lg me-1"></i>Approve
+        </button>
+        {% endif %}
+
+        {% if ca.status == 'approved' and can_release %}
+        <button type="submit" name="action" value="release" class="btn btn-primary">
+          <i class="bi bi-cash-stack me-1"></i>Mark Released
+        </button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

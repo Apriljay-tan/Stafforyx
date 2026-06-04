@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "portal",
     "holidays",
     "overtime",
+    "cash_advance",
 ]
 
 MIDDLEWARE = [

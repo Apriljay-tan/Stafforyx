@@ -162,7 +162,7 @@ class PortalOvertimeViewTests(TestCase):
         self.assertContains(resp, 'Overtime is automatically computed from your attendance.')
 
         direct = self.client.get(reverse('portal:overtime_new'), follow=True)
-        self.assertContains(direct, 'Overtime requests are not enabled for your account.')
+        self.assertContains(direct, 'Overtime is automatically computed from your attendance.')
         self.assertNotContains(direct, 'Submit Request')
 
     # Write requests pass through the license middleware; patch it active

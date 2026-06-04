@@ -22,6 +22,10 @@ urlpatterns = [
     path('time-clock/', views.portal_time_clock, name='time_clock'),
     path('overtime/', views.portal_overtime_list, name='overtime_list'),
     path('overtime/new/', views.portal_overtime_new, name='overtime_new'),
+    path('cash-advance/', views.portal_ca_list, name='ca_list'),
+    path('cash-advance/new/', views.portal_ca_new, name='ca_new'),
+    path('cash-advance/<int:pk>/edit/', views.portal_ca_edit, name='ca_edit'),
+    path('cash-advance/<int:pk>/cancel/', views.portal_ca_cancel, name='ca_cancel'),
     # HR management
     path('manage/incidents/', views.manage_incidents, name='manage_incidents'),
     path('manage/incidents/<int:pk>/', views.manage_incident_detail, name='manage_incident_detail'),
