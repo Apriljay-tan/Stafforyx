@@ -1038,8 +1038,34 @@ def attendance_portal(request):
     ip_allowed = clock_check['allowed']
     matched_location = clock_check['location']
     ip_blocked_reason = clock_check['reason']
+    locations_checked = clock_check['locations_checked']
+    allow_other_registered_locations = clock_check['allow_other_registered_locations']
+    ip_validation_enabled = clock_check['ip_validation_enabled']
+    company_require_gps = clock_check['company_require_gps']
+    company_require_selfie = clock_check['company_require_selfie']
 
-    # Schedule check â€” resolve today's expected shift
+    # Record lookup — must precede the schedule/allowed check so that an open
+    # overnight carry-over record can influence whether time-out is permitted
+    # (e.g. when today happens to be a scheduled rest day).
+    today_record = AttendanceRecord.objects.filter(
+        employee=employee, date=today
+    ).first()
+
+    carry_over_record = None
+    if today_record is None:
+        yesterday = today - _timedelta(days=1)
+        carry_over_record = AttendanceRecord.objects.filter(
+            employee=employee,
+            date=yesterday,
+            time_in__isnull=False,
+            time_out__isnull=True,
+        ).first()
+
+    # The record shown/used on the portal: today's record if it exists, else
+    # yesterday's incomplete (carry-over) record so overnight workers can time out.
+    display_record = today_record or carry_over_record
+
+    # Schedule check — always evaluated against today's date for new time-ins.
     shift_info = resolve_expected_shift(employee, today)
     is_flexible_schedule = employee.uses_flexible_attendance_policy
     flexible_day_off_today = (
@@ -1053,21 +1079,35 @@ def attendance_portal(request):
         else:
             schedule_blocked_reason = 'No schedule assigned for today. Please contact HR.'
 
-    require_selfie = bool(matched_location and matched_location.require_selfie)
-    require_gps = bool(matched_location and matched_location.require_gps)
+    if ip_validation_enabled:
+        require_selfie = bool(matched_location and matched_location.require_selfie)
+        require_gps = bool(matched_location and matched_location.require_gps)
+    else:
+        require_selfie = company_require_selfie
+        require_gps = company_require_gps
 
-    # Overall: both IP and schedule must be OK to clock in/out
-    allowed = ip_allowed and schedule_allowed
+    # allowed for time-in: IP + schedule must both pass.
+    # allowed for time-out: IP must pass; schedule block is lifted when an open
+    # overnight carry-over record exists (the shift started in a prior day that
+    # was scheduled — blocking time-out now would strand the record open).
+    # A single `allowed` flag covers both buttons; the template disables the
+    # time-in button separately when a record already has time_in set.
+    has_open_carry_over = carry_over_record is not None
+    allowed = ip_allowed and (schedule_allowed or has_open_carry_over)
     if not ip_allowed:
         blocked_reason = ip_blocked_reason
-    elif not schedule_allowed:
+    elif not schedule_allowed and not has_open_carry_over:
         blocked_reason = schedule_blocked_reason
     else:
         blocked_reason = ''
 
-    today_record = AttendanceRecord.objects.filter(
-        employee=employee, date=today
-    ).first()
+    # Determine which validation path is active for audit logging.
+    if not ip_validation_enabled:
+        validation_method = 'IP_DISABLED_GPS_SELFIE'
+    elif ip_allowed:
+        validation_method = 'IP'
+    else:
+        validation_method = 'BLOCKED'
 
     user_agent = request.META.get('HTTP_USER_AGENT', '')[:500]
     log_page_opened = _should_log_page_opened(employee.company)
@@ -1085,6 +1125,7 @@ def attendance_portal(request):
             user_agent=user_agent,
             status='allowed' if allowed else 'blocked',
             blocked_reason='' if allowed else blocked_reason,
+            validation_method=validation_method,
         )
 
     if request.method == 'POST':
@@ -1122,6 +1163,7 @@ def attendance_portal(request):
                     gps_longitude=gps_longitude,
                     gps_accuracy=gps_accuracy,
                     selfie_image=selfie_image,
+                    validation_method='BLOCKED',
                 )
             messages.error(request, blocked_reason)
             return redirect('attendance:attendance_portal')
@@ -1151,6 +1193,7 @@ def attendance_portal(request):
                     gps_longitude=gps_longitude,
                     gps_accuracy=gps_accuracy,
                     selfie_image=selfie_image,
+                    validation_method='BLOCKED',
                 )
             messages.error(request, verification_error)
             return redirect('attendance:attendance_portal')
@@ -1161,6 +1204,13 @@ def attendance_portal(request):
         if action == 'time_in':
             if today_record:
                 messages.warning(request, 'You have already timed in today.')
+            elif carry_over_record:
+                # Prevent a new time-in while an overnight shift is still open
+                messages.warning(
+                    request,
+                    'You still have an open shift from the previous day. '
+                    'Please time out first before timing in again.',
+                )
             else:
                 record = AttendanceRecord.objects.create(
                     company=employee.company,
@@ -1175,22 +1225,27 @@ def attendance_portal(request):
                     status='present',
                     source='portal',
                     portal_location=matched_location,
-                    remarks=f'Portal clock-in from {matched_location.name}',
+                    remarks=(
+                        f'Portal clock-in from {matched_location.name}'
+                        if matched_location else 'Portal clock-in (IP validation disabled)'
+                    ),
                 )
                 compute_attendance(record)
                 messages.success(request, f'Time in recorded at {now_time.strftime("%I:%M %p")}.')
 
         elif action == 'time_out':
-            if not today_record or not today_record.time_in:
+            # Use today's record; fall back to yesterday's incomplete (overnight) record
+            target_record = today_record or carry_over_record
+            if not target_record or not target_record.time_in:
                 messages.warning(request, 'You have not timed in yet today.')
-            elif today_record.time_out:
+            elif target_record.time_out:
                 messages.warning(request, 'You have already timed out today.')
             else:
-                today_record.time_out = now_time
-                today_record.portal_location = today_record.portal_location or matched_location
-                today_record.save(update_fields=['time_out', 'portal_location'])
-                compute_attendance(today_record)
-                record = today_record
+                target_record.time_out = now_time
+                target_record.portal_location = target_record.portal_location or matched_location
+                target_record.save(update_fields=['time_out', 'portal_location'])
+                compute_attendance(target_record)
+                record = target_record
                 messages.success(request, f'Time out recorded at {now_time.strftime("%I:%M %p")}.')
 
         # Log the action result
@@ -1209,12 +1264,13 @@ def attendance_portal(request):
                 gps_longitude=gps_longitude,
                 gps_accuracy=gps_accuracy,
                 selfie_image=selfie_image,
+                validation_method=validation_method,
             )
         return redirect('attendance:attendance_portal')
 
-    if not today_record or not today_record.time_in:
+    if not display_record or not display_record.time_in:
         clock_state = 'not_timed_in'
-    elif today_record.time_out:
+    elif display_record.time_out:
         clock_state = 'timed_out'
     else:
         clock_state = 'timed_in'
@@ -1222,12 +1278,16 @@ def attendance_portal(request):
     return render(request, 'attendance/portal.html', {
         'employee': employee,
         'today': today,
-        'today_record': today_record,
+        'today_record': display_record,
+        'carry_over': carry_over_record is not None,
         'allowed': allowed,
         'ip': ip,
         'ip_allowed': ip_allowed,
         'matched_location': matched_location,
         'blocked_reason': blocked_reason,
+        'locations_checked': locations_checked,
+        'allow_other_registered_locations': allow_other_registered_locations,
+        'ip_validation_enabled': ip_validation_enabled,
         'shift_info': shift_info,
         'is_flexible_schedule': is_flexible_schedule,
         'flexible_day_off_today': flexible_day_off_today,

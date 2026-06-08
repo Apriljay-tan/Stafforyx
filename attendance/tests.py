@@ -23,7 +23,9 @@ from .biometric_services import (
 from .portal_services import (
     can_employee_clock_from_request,
     find_matching_attendance_location,
+    find_open_record,
     ip_matches_location,
+    is_in_clock_window,
 )
 
 
@@ -845,6 +847,171 @@ class IPMatchingTests(TestCase):
         self.assertIsNone(result)
 
 
+# ── allow_other_registered_locations tests ────────────────────────────────────
+
+class AllowOtherRegisteredLocationsTests(TestCase):
+    """
+    Business rule: when allow_other_registered_locations=True the employee
+    may clock from any active AttendanceLocation belonging to a company that
+    shares an admin user (UserCompanyAccess) with the employee's own company.
+    Companies outside that shared-admin system are never reachable.
+    """
+
+    def setUp(self):
+        from accounts.models import UserCompanyAccess
+
+        # Two companies in the same admin system (shared admin user)
+        self.co_main = Company.objects.create(name='MB SAN ISIDRO')
+        self.co_branch = Company.objects.create(name='POXEL')
+        # Third company with no shared admin — outside the system
+        self.co_outside = Company.objects.create(name='Outside Corp')
+
+        # Admin user who manages both co_main and co_branch
+        self.admin_user = User.objects.create_user(username='admin_shared', password='x')
+        UserCompanyAccess.objects.create(user=self.admin_user, company=self.co_main, role='owner', is_active=True)
+        UserCompanyAccess.objects.create(user=self.admin_user, company=self.co_branch, role='owner', is_active=True)
+        # co_outside has its own separate admin
+        other_admin = User.objects.create_user(username='admin_outside', password='x')
+        UserCompanyAccess.objects.create(user=other_admin, company=self.co_outside, role='owner', is_active=True)
+
+        # Locations
+        self.loc_main = AttendanceLocation.objects.create(
+            company=self.co_main, name='Main Office', ip_address='10.0.0.1', is_active=True
+        )
+        self.loc_branch = AttendanceLocation.objects.create(
+            company=self.co_branch, name='POXEL Office', ip_address='143.44.165.31', is_active=True
+        )
+        self.loc_branch_inactive = AttendanceLocation.objects.create(
+            company=self.co_branch, name='POXEL Old', ip_address='143.44.165.99', is_active=False
+        )
+        self.loc_outside = AttendanceLocation.objects.create(
+            company=self.co_outside, name='Outside Office', ip_address='200.200.200.200', is_active=True
+        )
+
+    def _emp(self, company, allow_other=False):
+        emp = _make_employee(company)
+        emp.allow_other_registered_locations = allow_other
+        emp.save(update_fields=['allow_other_registered_locations'])
+        return emp
+
+    def test_allow_false_cannot_clock_from_another_company_location(self):
+        """Employee with flag=False is blocked even if branch IP matches."""
+        emp = self._emp(self.co_main, allow_other=False)
+        result = find_matching_attendance_location(emp, '143.44.165.31')
+        self.assertIsNone(result)
+
+    def test_allow_true_can_clock_from_authorized_branch_location(self):
+        """Employee with flag=True can clock from a shared-admin branch."""
+        emp = self._emp(self.co_main, allow_other=True)
+        result = find_matching_attendance_location(emp, '143.44.165.31')
+        self.assertEqual(result, self.loc_branch)
+
+    def test_allow_true_inactive_branch_location_still_blocked(self):
+        """Inactive locations are never matched regardless of flag."""
+        emp = self._emp(self.co_main, allow_other=True)
+        result = find_matching_attendance_location(emp, '143.44.165.99')
+        self.assertIsNone(result)
+
+    def test_allow_true_cannot_clock_from_outside_company_location(self):
+        """flag=True does not open locations of companies outside the admin system."""
+        emp = self._emp(self.co_main, allow_other=True)
+        result = find_matching_attendance_location(emp, '200.200.200.200')
+        self.assertIsNone(result)
+
+    def test_selfie_and_gps_requirements_come_from_matched_location(self):
+        """Selfie/GPS flags are read from whichever location was matched."""
+        self.loc_branch.require_selfie = True
+        self.loc_branch.require_gps = True
+        self.loc_branch.save(update_fields=['require_selfie', 'require_gps'])
+
+        emp = self._emp(self.co_main, allow_other=True)
+        matched = find_matching_attendance_location(emp, '143.44.165.31')
+        self.assertIsNotNone(matched)
+        self.assertTrue(matched.require_selfie)
+        self.assertTrue(matched.require_gps)
+
+
+# ── IP-validation switch tests ────────────────────────────────────────────────
+
+class IPValidationSwitchTests(TestCase):
+    """
+    Tests for the company-level attendance_ip_validation_enabled switch.
+
+    When the switch is ON (default): existing IP/CIDR validation applies.
+    When the switch is OFF: IP mismatch does not block the employee, but
+    company-level GPS and selfie requirements still apply.
+    """
+
+    def setUp(self):
+        self.company = Company.objects.create(
+            name='Switch Test Co',
+            attendance_ip_validation_enabled=True,
+            require_attendance_gps_when_ip_disabled=True,
+            require_attendance_selfie_when_ip_disabled=True,
+        )
+        self.employee = _make_employee(self.company)
+        # Register a location with a specific IP
+        self.location = AttendanceLocation.objects.create(
+            company=self.company,
+            name='Main Office',
+            ip_address='10.0.0.1',
+            is_active=True,
+        )
+
+    def _check(self, company, employee, remote_ip='9.9.9.9'):
+        """Call can_employee_clock_from_request with a fake request."""
+        from unittest.mock import MagicMock
+        request = MagicMock()
+        request.META = {'REMOTE_ADDR': remote_ip}
+        return can_employee_clock_from_request(request, employee)
+
+    def test_ip_validation_on_blocks_wrong_ip(self):
+        """IP validation ON: unknown IP is blocked."""
+        self.company.attendance_ip_validation_enabled = True
+        self.company.save(update_fields=['attendance_ip_validation_enabled'])
+        result = self._check(self.company, self.employee, remote_ip='9.9.9.9')
+        self.assertFalse(result['allowed'])
+        self.assertTrue(result['ip_validation_enabled'])
+        self.assertIsNone(result['location'])
+
+    def test_ip_validation_off_allows_wrong_ip(self):
+        """IP validation OFF: wrong IP is no longer a blocker."""
+        self.company.attendance_ip_validation_enabled = False
+        self.company.save(update_fields=['attendance_ip_validation_enabled'])
+        self.employee.refresh_from_db()
+        result = self._check(self.company, self.employee, remote_ip='9.9.9.9')
+        self.assertTrue(result['allowed'])
+        self.assertFalse(result['ip_validation_enabled'])
+        self.assertIsNone(result['location'])
+        self.assertEqual(result['ip'], '9.9.9.9')
+
+    def test_ip_validation_off_gps_required_flag_propagated(self):
+        """When IP validation is OFF, company GPS requirement is returned."""
+        self.company.attendance_ip_validation_enabled = False
+        self.company.require_attendance_gps_when_ip_disabled = True
+        self.company.save(update_fields=[
+            'attendance_ip_validation_enabled',
+            'require_attendance_gps_when_ip_disabled',
+        ])
+        self.employee.refresh_from_db()
+        result = self._check(self.company, self.employee)
+        self.assertTrue(result['allowed'])
+        self.assertTrue(result['company_require_gps'])
+
+    def test_ip_validation_off_selfie_required_flag_propagated(self):
+        """When IP validation is OFF, company selfie requirement is returned."""
+        self.company.attendance_ip_validation_enabled = False
+        self.company.require_attendance_selfie_when_ip_disabled = True
+        self.company.save(update_fields=[
+            'attendance_ip_validation_enabled',
+            'require_attendance_selfie_when_ip_disabled',
+        ])
+        self.employee.refresh_from_db()
+        result = self._check(self.company, self.employee)
+        self.assertTrue(result['allowed'])
+        self.assertTrue(result['company_require_selfie'])
+
+
 # ── Portal view tests ─────────────────────────────────────────────────────────
 
 class AttendancePortalViewTests(TestCase):
@@ -1506,6 +1673,213 @@ class PortalScheduleGatingTests(TestCase):
 
         record = AttendanceRecord.objects.get(employee=emp, date=datetime.date.today())
         self.assertEqual(record.computed_status, 'rest_day')
+
+
+class FlexibleNightShiftPortalTests(TestCase):
+    """Overnight-shift and flexible-employee portal behaviour.
+
+    Business rules under test
+    -------------------------
+    1. time-in creates an AttendanceRecord on the time-in date.
+    2. time-out after midnight updates the same open carry-over record.
+    3. A new time-in is blocked while an open carry-over record exists.
+    4. carry_over lifts the schedule block so time-out works on a rest day.
+    5. IP check still blocks even when a carry-over record is present.
+    6. undertime / present are computed correctly for overnight durations.
+    """
+
+    def setUp(self):
+        self.company = _make_company()
+        self.portal_url = reverse('attendance:attendance_portal')
+        self.location = AttendanceLocation.objects.create(
+            company=self.company, name='Office', ip_address='127.0.0.1'
+        )
+
+    # ------------------------------------------------------------------ helpers
+
+    def _make_user_with_flexible_employee(self):
+        emp = _make_employee(self.company, schedule=None)
+        emp.attendance_policy_type = 'flexible'
+        emp.required_daily_hours = Decimal('8.00')
+        emp.default_break_minutes = 60
+        emp.flexible_overtime_grace_minutes = 30
+        emp.flexible_day_offs = []
+        emp.save(update_fields=[
+            'attendance_policy_type', 'required_daily_hours',
+            'default_break_minutes', 'flexible_overtime_grace_minutes',
+            'flexible_day_offs',
+        ])
+        user = User.objects.create_user(f'nightuser_{emp.pk}', password='pass')
+        emp.user = user
+        emp.save(update_fields=['user'])
+        return user, emp
+
+    def _open_record(self, emp, *, date, time_in):
+        """Create an open (no time_out) AttendanceRecord."""
+        return AttendanceRecord.objects.create(
+            company=emp.company,
+            employee=emp,
+            date=date,
+            time_in=time_in,
+            break_minutes=60,
+            status='present',
+            source='portal',
+        )
+
+    # ------------------------------------------------------------------ unit: find_open_record
+
+    def test_find_open_record_returns_none_when_no_open_record(self):
+        _user, emp = self._make_user_with_flexible_employee()
+        self.assertIsNone(find_open_record(emp, today=datetime.date.today()))
+
+    def test_find_open_record_finds_yesterdays_incomplete_record(self):
+        _user, emp = self._make_user_with_flexible_employee()
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+        rec = self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+        self.assertEqual(find_open_record(emp, today=today).pk, rec.pk)
+
+    def test_find_open_record_ignores_completed_record(self):
+        _user, emp = self._make_user_with_flexible_employee()
+        today = datetime.date.today()
+        yesterday = today - datetime.timedelta(days=1)
+        AttendanceRecord.objects.create(
+            company=emp.company, employee=emp, date=yesterday,
+            time_in=datetime.time(22, 0), time_out=datetime.time(6, 0),
+            break_minutes=60, status='present', source='portal',
+        )
+        self.assertIsNone(find_open_record(emp, today=today))
+
+    # ------------------------------------------------------------------ unit: is_in_clock_window
+
+    def test_clock_window_normal_range(self):
+        self.assertTrue(is_in_clock_window(
+            datetime.time(9, 0), datetime.time(8, 0), datetime.time(18, 0)
+        ))
+        self.assertFalse(is_in_clock_window(
+            datetime.time(7, 0), datetime.time(8, 0), datetime.time(18, 0)
+        ))
+
+    def test_clock_window_midnight_crossing(self):
+        # Window 22:00 – 03:00
+        self.assertTrue(is_in_clock_window(
+            datetime.time(23, 0), datetime.time(22, 0), datetime.time(3, 0)
+        ))
+        self.assertTrue(is_in_clock_window(
+            datetime.time(1, 30), datetime.time(22, 0), datetime.time(3, 0)
+        ))
+        self.assertFalse(is_in_clock_window(
+            datetime.time(12, 0), datetime.time(22, 0), datetime.time(3, 0)
+        ))
+
+    def test_clock_window_unbounded(self):
+        self.assertTrue(is_in_clock_window(datetime.time(0, 0), None, None))
+        self.assertTrue(is_in_clock_window(datetime.time(23, 59), None, None))
+
+    # ------------------------------------------------------------------ unit: overnight compute_attendance
+
+    def test_flexible_overnight_undertime(self):
+        """time_in 22:00, time_out 00:30 → 2.5 h work − 1 h break = 1.5 h < 8 h → undertime."""
+        _user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        rec = self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+        rec.time_out = datetime.time(0, 30)
+        rec.save(update_fields=['time_out'])
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.computed_status, 'undertime')
+        self.assertGreater(rec.undertime_minutes, 0)
+
+    def test_flexible_overnight_present(self):
+        """time_in 22:00, time_out 07:00 → 9 h work − 1 h break = 8 h = required → present."""
+        _user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        rec = self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+        rec.time_out = datetime.time(7, 0)
+        rec.save(update_fields=['time_out'])
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertIn(rec.computed_status, ('present', 'overtime'))
+
+    # ------------------------------------------------------------------ portal integration
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_flexible_time_in_creates_record_for_today(self, _mock):
+        """Basic flexible time-in creates a record dated today."""
+        user, emp = self._make_user_with_flexible_employee()
+        self.client.login(username=user.username, password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+        self.assertTrue(
+            AttendanceRecord.objects.filter(
+                employee=emp, date=datetime.date.today()
+            ).exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_overnight_carry_over_shows_in_portal_context(self, _mock):
+        """Portal GET with an open yesterday record exposes carry_over=True and allowed=True."""
+        user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+
+        self.client.login(username=user.username, password='pass')
+        resp = self.client.get(self.portal_url)
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.context['carry_over'])
+        self.assertTrue(resp.context['allowed'])
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_overnight_time_out_updates_carry_over_record(self, _mock):
+        """Time-out POST closes yesterday's open record; no new record created for today."""
+        user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        rec = self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+
+        self.client.login(username=user.username, password='pass')
+        self.client.post(self.portal_url, {'action': 'time_out'})
+
+        rec.refresh_from_db()
+        self.assertIsNotNone(rec.time_out)
+        self.assertFalse(
+            AttendanceRecord.objects.filter(
+                employee=emp, date=datetime.date.today()
+            ).exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_overnight_time_in_blocked_while_carry_over_open(self, _mock):
+        """Time-in is blocked while an open overnight carry-over record exists."""
+        user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+
+        self.client.login(username=user.username, password='pass')
+        self.client.post(self.portal_url, {'action': 'time_in'})
+
+        self.assertFalse(
+            AttendanceRecord.objects.filter(
+                employee=emp, date=datetime.date.today()
+            ).exists()
+        )
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_carry_over_time_out_blocked_without_approved_ip(self, _mock):
+        """IP check still blocks time-out even when a carry-over record is present."""
+        user, emp = self._make_user_with_flexible_employee()
+        yesterday = datetime.date.today() - datetime.timedelta(days=1)
+        self._open_record(emp, date=yesterday, time_in=datetime.time(22, 0))
+
+        AttendanceLocation.objects.all().delete()
+
+        self.client.login(username=user.username, password='pass')
+        resp = self.client.get(self.portal_url)
+        self.assertFalse(resp.context['allowed'])
+        self.assertFalse(resp.context['ip_allowed'])
+
+        self.client.post(self.portal_url, {'action': 'time_out'})
+        rec = AttendanceRecord.objects.get(employee=emp, date=yesterday)
+        self.assertIsNone(rec.time_out)
 
 
 _TEST_DAY_FIELDS = [

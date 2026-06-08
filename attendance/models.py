@@ -394,6 +394,12 @@ class AttendancePortalLog(models.Model):
         ('success',  'Success'),
         ('failed',   'Failed'),
     ]
+    VALIDATION_METHOD_CHOICES = [
+        ('IP',                     'IP Match'),
+        ('GPS_SELFIE',             'GPS + Selfie'),
+        ('IP_DISABLED_GPS_SELFIE', 'IP Disabled — GPS/Selfie'),
+        ('BLOCKED',                'Blocked'),
+    ]
 
     company = models.ForeignKey(
         Company, on_delete=models.CASCADE,
@@ -424,6 +430,12 @@ class AttendancePortalLog(models.Model):
         upload_to=portal_selfie_upload_path,
         null=True,
         blank=True,
+    )
+    validation_method = models.CharField(
+        max_length=30,
+        blank=True,
+        choices=VALIDATION_METHOD_CHOICES,
+        help_text='Which validation path was used for this portal interaction.',
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

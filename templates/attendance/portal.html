@@ -126,6 +126,17 @@
             <i class="bi bi-wifi me-1"></i>{{ today_record.portal_location.name }}
           </div>
         {% endif %}
+
+        {% if carry_over %}
+          <div class="alert alert-warning d-flex align-items-start gap-2 mt-2 mb-0 py-2" style="font-size:.8rem;">
+            <i class="bi bi-moon-stars flex-shrink-0 mt-1"></i>
+            <div>
+              <strong>Overnight shift open.</strong>
+              Your previous shift ({{ today_record.date|date:"M j" }}) has no time-out yet.
+              Please tap <strong>Time Out</strong> to close it.
+            </div>
+          </div>
+        {% endif %}
       </div>
     </div>
 
@@ -186,13 +197,38 @@
     {% endif %}
 
     <!-- Network status -->
-    {% if ip_allowed %}
+    {% if not ip_validation_enabled %}
+      <div class="alert alert-warning d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem;">
+        <i class="bi bi-wifi-off flex-shrink-0 mt-1"></i>
+        <div>
+          <strong>IP validation: Disabled by company policy.</strong>
+          <div class="text-muted mt-1" style="font-size:.78rem;">Detected IP: <code>{{ ip }}</code></div>
+          <div class="mt-1" style="font-size:.78rem;">
+            GPS:
+            {% if require_gps %}
+              <span class="badge text-bg-warning" style="font-size:.72rem;">Required</span>
+            {% else %}
+              <span class="badge text-bg-light border" style="font-size:.72rem;">Optional</span>
+            {% endif %}
+            &nbsp;Selfie:
+            {% if require_selfie %}
+              <span class="badge text-bg-warning" style="font-size:.72rem;">Required</span>
+            {% else %}
+              <span class="badge text-bg-light border" style="font-size:.72rem;">Optional</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% elif ip_allowed %}
       <div class="alert alert-success d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem;">
         <i class="bi bi-wifi flex-shrink-0 mt-1"></i>
         <div>
           <strong>Network approved.</strong>
           Location: {{ matched_location.name }}
-          <div class="text-muted mt-1" style="font-size:.78rem;">IP: {{ ip }}</div>
+          {% if matched_location.company != employee.company %}
+            <span class="badge text-bg-info ms-1" style="font-size:.72rem;">{{ matched_location.company.name }}</span>
+          {% endif %}
+          <div class="text-muted mt-1" style="font-size:.78rem;">Detected IP: <code>{{ ip }}</code></div>
         </div>
       </div>
     {% else %}
@@ -200,8 +236,18 @@
         <i class="bi bi-wifi-off flex-shrink-0 mt-1"></i>
         <div>
           <strong>Network blocked.</strong>
-          You are not connected to an approved company network.
-          <div class="mt-1" style="font-size:.78rem;">Your IP: <code>{{ ip }}</code></div>
+          <div class="mt-1" style="font-size:.78rem;">Detected IP: <code>{{ ip }}</code></div>
+          <div class="mt-1" style="font-size:.78rem;">Employee company: {{ employee.company.name }}</div>
+          <div class="mt-1" style="font-size:.78rem;">
+            Other registered locations:
+            {% if allow_other_registered_locations %}
+              <span class="badge text-bg-success" style="font-size:.72rem;">Allowed</span>
+            {% else %}
+              <span class="badge text-bg-secondary" style="font-size:.72rem;">Not allowed</span>
+            {% endif %}
+          </div>
+          <div class="mt-1" style="font-size:.78rem;">Active locations checked: {{ locations_checked }}</div>
+          <div class="text-muted mt-1" style="font-size:.78rem;">{{ blocked_reason }}</div>
           <div class="text-muted mt-1" style="font-size:.78rem;">Contact your HR admin if you believe this is an error.</div>
         </div>
       </div>

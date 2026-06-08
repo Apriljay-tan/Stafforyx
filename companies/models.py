@@ -98,6 +98,22 @@ class Company(models.Model):
         default=True,
         help_text='Allow automatic cleanup command to delete old attendance portal logs.',
     )
+    attendance_ip_validation_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            'Require employees to connect from a registered IP/network to clock in/out. '
+            'Disable only if your public IP changes frequently (e.g. dynamic router). '
+            'GPS and selfie requirements still apply when disabled.'
+        ),
+    )
+    require_attendance_gps_when_ip_disabled = models.BooleanField(
+        default=True,
+        help_text='When IP validation is disabled, require GPS from employees before clocking.',
+    )
+    require_attendance_selfie_when_ip_disabled = models.BooleanField(
+        default=True,
+        help_text='When IP validation is disabled, require a selfie from employees before clocking.',
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

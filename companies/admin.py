@@ -25,6 +25,9 @@ class CompanyAdmin(admin.ModelAdmin):
         ('Attendance Settings', {
             'classes': ('collapse',),
             'fields': (
+                'attendance_ip_validation_enabled',
+                'require_attendance_gps_when_ip_disabled',
+                'require_attendance_selfie_when_ip_disabled',
                 'attendance_selfie_retention_days',
                 'attendance_portal_log_retention_days',
                 'attendance_log_page_opened_events',
