@@ -105,7 +105,7 @@ def portal_dashboard(request):
 
     recent_payslips = (
         PayrollRecord.objects
-        .filter(employee=employee)
+        .filter(employee=employee, status__in=PayrollRecord.EMPLOYEE_VISIBLE_STATUSES)
         .select_related('payroll_period')
         .prefetch_related('adjustments')
         .order_by('-payroll_period__start_date')[:3]
@@ -148,7 +148,7 @@ def portal_payslip_list(request):
 
     payslips = (
         PayrollRecord.objects
-        .filter(employee=employee)
+        .filter(employee=employee, status__in=PayrollRecord.EMPLOYEE_VISIBLE_STATUSES)
         .select_related('payroll_period', 'company')
         .prefetch_related('adjustments')
         .order_by('-payroll_period__start_date')
@@ -175,6 +175,7 @@ def portal_payslip_detail(request, pk):
         ).prefetch_related('adjustments'),
         pk=pk,
         employee=employee,
+        status__in=PayrollRecord.EMPLOYEE_VISIBLE_STATUSES,
     )
 
     from decimal import Decimal

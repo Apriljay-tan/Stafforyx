@@ -45,6 +45,12 @@ class PayrollRecord(models.Model):
         ('approved', 'Approved'),
         ('paid', 'Paid'),
     ]
+    # Statuses an employee may see in the self-service portal. Draft payroll is
+    # internal-only until an admin/payroll officer approves it.
+    EMPLOYEE_VISIBLE_STATUSES = ('approved', 'paid')
+    # Only draft payroll may be deleted — approved/paid records are financial
+    # audit data and must be preserved.
+    DELETABLE_STATUSES = ('draft',)
 
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='payroll_records')
     payroll_period = models.ForeignKey(PayrollPeriod, on_delete=models.CASCADE, related_name='records')

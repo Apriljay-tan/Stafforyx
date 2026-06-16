@@ -20,11 +20,13 @@ Ten scenarios:
 """
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
+from accounts.models import UserCompanyAccess, UserProfile
 from attendance.models import AttendanceRecord, WorkSchedule
 from attendance.services import compute_attendance
 from companies.models import Company
@@ -1235,3 +1237,155 @@ class OvertimeMultiplierValidationTests(TestCase):
     def test_employee_blank_override_is_valid(self):
         self.emp.overtime_multiplier = None
         self.emp.full_clean()  # should not raise
+
+
+# ── Payroll approval workflow ───────────────────────────────────────────────────
+
+def _make_payroll_record(company, period, employee, status='draft'):
+    return PayrollRecord.objects.create(
+        company=company, payroll_period=period, employee=employee,
+        status=status,
+        basic_pay=Decimal('110.00'), gross_pay=Decimal('120.00'), net_pay=Decimal('100.00'),
+        daily_rate=Decimal('1000.0000'), hourly_rate=Decimal('125.0000'),
+    )
+
+
+@patch('licenses.clock_guard.check_clock_rollback', return_value=False)
+@patch('licenses.middleware.is_license_active', return_value=True)
+class PayrollApprovalWorkflowTests(TestCase):
+    def setUp(self):
+        self.company = Company.objects.create(name='Approve Co', email='approve@test.com')
+        self.other = Company.objects.create(name='Other Approve Co', email='other-ap@test.com')
+        self.admin = User.objects.create_superuser('payroll_admin', password='pass')
+        self.period = PayrollPeriod.objects.create(
+            company=self.company, name='P1',
+            start_date=datetime.date(2026, 5, 1), end_date=datetime.date(2026, 5, 15),
+        )
+        self.other_period = PayrollPeriod.objects.create(
+            company=self.other, name='OP1',
+            start_date=datetime.date(2026, 5, 1), end_date=datetime.date(2026, 5, 15),
+        )
+
+        def _emp(company, code):
+            return Employee.objects.create(
+                company=company, employee_id=code, first_name=code, last_name='Worker',
+                email=f'{code.lower()}@test.com', date_hired=datetime.date(2020, 1, 1),
+                basic_salary=_SALARY, status='active',
+            )
+
+        self.draft1 = _make_payroll_record(self.company, self.period, _emp(self.company, 'D1'))
+        self.draft2 = _make_payroll_record(self.company, self.period, _emp(self.company, 'D2'))
+        self.approved1 = _make_payroll_record(
+            self.company, self.period, _emp(self.company, 'A1'), status='approved'
+        )
+        self.other_draft = _make_payroll_record(
+            self.other, self.other_period, _emp(self.other, 'OD1')
+        )
+        self.bulk_url = reverse('payroll:payroll_record_bulk_action')
+
+    def _approve_url(self, pk):
+        return reverse('payroll:payroll_record_approve', args=[pk])
+
+    # ── Single approve ──────────────────────────────────────────────────────────
+
+    def test_single_approve_changes_draft_to_approved(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        response = self.client.post(self._approve_url(self.draft1.pk))
+        self.assertEqual(response.status_code, 302)
+        self.draft1.refresh_from_db()
+        self.assertEqual(self.draft1.status, 'approved')
+
+    def test_single_approve_preserves_snapshot_values(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        self.client.post(self._approve_url(self.draft1.pk))
+        self.draft1.refresh_from_db()
+        self.assertEqual(self.draft1.net_pay, Decimal('100.00'))
+        self.assertEqual(self.draft1.gross_pay, Decimal('120.00'))
+
+    def test_single_approve_get_is_rejected(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        response = self.client.get(self._approve_url(self.draft1.pk))
+        self.assertEqual(response.status_code, 405)
+        self.draft1.refresh_from_db()
+        self.assertEqual(self.draft1.status, 'draft')
+
+    def test_single_approve_skips_non_draft(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        self.client.post(self._approve_url(self.approved1.pk))
+        self.approved1.refresh_from_db()
+        self.assertEqual(self.approved1.status, 'approved')
+
+    # ── Bulk approve ────────────────────────────────────────────────────────────
+
+    def test_bulk_approve_only_drafts(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        response = self.client.post(self.bulk_url, {
+            'bulk_action': 'approve',
+            'selected_records': [self.draft1.pk, self.draft2.pk, self.approved1.pk],
+        })
+        self.assertEqual(response.status_code, 302)
+        self.draft1.refresh_from_db()
+        self.draft2.refresh_from_db()
+        self.assertEqual(self.draft1.status, 'approved')
+        self.assertEqual(self.draft2.status, 'approved')
+
+    # ── Bulk delete ─────────────────────────────────────────────────────────────
+
+    def test_bulk_delete_deletes_drafts_only(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        self.client.post(self.bulk_url, {
+            'bulk_action': 'delete',
+            'selected_records': [self.draft1.pk, self.approved1.pk],
+        })
+        self.assertFalse(PayrollRecord.objects.filter(pk=self.draft1.pk).exists())
+        self.assertTrue(PayrollRecord.objects.filter(pk=self.approved1.pk).exists())
+
+    def test_bulk_delete_does_not_delete_approved(self, *_mocks):
+        self.client.login(username='payroll_admin', password='pass')
+        self.client.post(self.bulk_url, {
+            'bulk_action': 'delete',
+            'selected_records': [self.approved1.pk],
+        })
+        self.assertTrue(PayrollRecord.objects.filter(pk=self.approved1.pk).exists())
+
+    # ── Company scoping ─────────────────────────────────────────────────────────
+
+    def _make_scoped_manager(self):
+        user = User.objects.create_user('scoped_payroll', password='pass')
+        UserProfile.objects.create(
+            user=user, role='hr_admin', is_active_stafforyx=True, can_manage_payroll=True,
+        )
+        UserCompanyAccess.objects.create(
+            user=user, company=self.company, role='hr_admin', is_active=True,
+        )
+        return user
+
+    def test_scoped_manager_cannot_single_approve_other_company(self, *_mocks):
+        self._make_scoped_manager()
+        self.client.login(username='scoped_payroll', password='pass')
+        response = self.client.post(self._approve_url(self.other_draft.pk))
+        self.assertEqual(response.status_code, 403)
+        self.other_draft.refresh_from_db()
+        self.assertEqual(self.other_draft.status, 'draft')
+
+    def test_bulk_approve_skips_other_company_records(self, *_mocks):
+        self._make_scoped_manager()
+        self.client.login(username='scoped_payroll', password='pass')
+        self.client.post(self.bulk_url, {
+            'bulk_action': 'approve',
+            'selected_records': [self.draft1.pk, self.other_draft.pk],
+        })
+        self.draft1.refresh_from_db()
+        self.other_draft.refresh_from_db()
+        self.assertEqual(self.draft1.status, 'approved')
+        self.assertEqual(self.other_draft.status, 'draft')  # out of scope, untouched
+
+    def test_bulk_delete_skips_other_company_records(self, *_mocks):
+        self._make_scoped_manager()
+        self.client.login(username='scoped_payroll', password='pass')
+        self.client.post(self.bulk_url, {
+            'bulk_action': 'delete',
+            'selected_records': [self.draft1.pk, self.other_draft.pk],
+        })
+        self.assertFalse(PayrollRecord.objects.filter(pk=self.draft1.pk).exists())
+        self.assertTrue(PayrollRecord.objects.filter(pk=self.other_draft.pk).exists())

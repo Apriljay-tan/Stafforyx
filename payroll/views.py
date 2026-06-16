@@ -2,6 +2,8 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from companies.models import Company
@@ -150,6 +152,93 @@ def payroll_record_delete(request, pk):
         messages.success(request, f'Payroll record for {employee_name} in {period_name} deleted.')
         return redirect('payroll:payroll_record_list')
     return render(request, 'payroll/payroll_record_confirm_delete.html', {'record': record})
+
+
+# ── Approval workflow ──────────────────────────────────────────────────────────
+
+def _safe_payroll_redirect(request):
+    """Return a redirect back to the originating list view, preserving filters."""
+    next_url = request.POST.get('next', '')
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(next_url)
+    return redirect('payroll:payroll_record_list')
+
+
+@require_POST
+def payroll_record_approve(request, pk):
+    record = get_object_or_404(
+        PayrollRecord.objects.select_related('company', 'employee', 'payroll_period'),
+        pk=pk,
+    )
+    if not user_can_access_company(request.user, record.company):
+        raise PermissionDenied
+
+    if record.status == 'draft':
+        record.status = 'approved'
+        # Only the status field is written — payroll snapshot values are preserved.
+        record.save(update_fields=['status'])
+        messages.success(request, 'Payroll record approved.')
+    else:
+        messages.warning(
+            request,
+            f'Only draft payroll records can be approved — '
+            f'this record is already {record.get_status_display()}.',
+        )
+    return _safe_payroll_redirect(request)
+
+
+@require_POST
+def payroll_record_bulk_action(request):
+    bulk_action = (request.POST.get('bulk_action') or '').strip()
+    selected_ids = request.POST.getlist('selected_records')
+
+    if bulk_action not in ('approve', 'delete'):
+        messages.error(request, 'Unknown bulk action requested.')
+        return _safe_payroll_redirect(request)
+
+    if not selected_ids:
+        messages.warning(request, 'No payroll records were selected.')
+        return _safe_payroll_redirect(request)
+
+    # Company scoping: only records the user may access are ever touched.
+    scoped = filter_queryset_by_user_companies(
+        PayrollRecord.objects.all(), request.user
+    ).filter(pk__in=selected_ids)
+    total_selected = scoped.count()
+
+    if bulk_action == 'approve':
+        # .update() bypasses save(), so payroll snapshot values are preserved.
+        approved_count = scoped.filter(status='draft').update(status='approved')
+        skipped = total_selected - approved_count
+        if approved_count:
+            msg = f'{approved_count} payroll record(s) approved.'
+            if skipped:
+                msg += f' {skipped} skipped (not draft).'
+            messages.success(request, msg)
+        else:
+            messages.warning(
+                request, 'No payroll records approved — selected records are not draft.'
+            )
+        return _safe_payroll_redirect(request)
+
+    # bulk_action == 'delete' — only draft records may be deleted.
+    deletable = scoped.filter(status__in=PayrollRecord.DELETABLE_STATUSES)
+    deletable_count = deletable.count()
+    skipped = total_selected - deletable_count
+    if deletable_count:
+        deletable.delete()
+        msg = f'{deletable_count} draft payroll record(s) deleted.'
+        if skipped:
+            msg += f' {skipped} skipped because they were already approved or paid.'
+        messages.success(request, msg)
+    else:
+        messages.warning(
+            request,
+            'No payroll records deleted — approved/paid records cannot be deleted.',
+        )
+    return _safe_payroll_redirect(request)
 
 
 # ── Generate Payroll ───────────────────────────────────────────────────────────

@@ -64,6 +64,7 @@ class PortalAccessAndIsolationTests(TestCase):
             basic_pay=16000,
             daily_rate=1000,
             hourly_rate=125,
+            status='approved',
         )
         self.payslip_b = PayrollRecord.objects.create(
             company=self.company,
@@ -74,6 +75,7 @@ class PortalAccessAndIsolationTests(TestCase):
             basic_pay=15000,
             daily_rate=1000,
             hourly_rate=125,
+            status='approved',
         )
 
         self.doc_a = EmployeeDocument.objects.create(
@@ -345,3 +347,55 @@ class IncidentManagementScopeTests(TestCase):
 
         forbidden = self.client.get(reverse("portal:manage_incident_detail", args=[self.incident_b.pk]))
         self.assertEqual(forbidden.status_code, 403)
+
+
+class PortalDraftPayslipVisibilityTests(TestCase):
+    """Draft payroll must stay hidden from the employee portal."""
+
+    def setUp(self):
+        self.company = _make_company("Draft Co")
+        self.user = _make_user("draft_emp")
+        self.employee = _make_employee(self.company, self.user, "EMP-D")
+        self.period_draft = PayrollPeriod.objects.create(
+            company=self.company,
+            name="June 1-15 2026",
+            start_date=datetime.date(2026, 6, 1),
+            end_date=datetime.date(2026, 6, 15),
+        )
+        self.period_approved = PayrollPeriod.objects.create(
+            company=self.company,
+            name="June 16-30 2026",
+            start_date=datetime.date(2026, 6, 16),
+            end_date=datetime.date(2026, 6, 30),
+        )
+        self.draft = PayrollRecord.objects.create(
+            company=self.company, payroll_period=self.period_draft, employee=self.employee,
+            net_pay=10000, gross_pay=12000, basic_pay=11000,
+            daily_rate=1000, hourly_rate=125, status='draft',
+        )
+        self.approved = PayrollRecord.objects.create(
+            company=self.company, payroll_period=self.period_approved, employee=self.employee,
+            net_pay=9000, gross_pay=11000, basic_pay=10000,
+            daily_rate=1000, hourly_rate=125, status='approved',
+        )
+        self.client.login(username="draft_emp", password="testpass123")
+
+    def test_draft_payslip_hidden_from_list(self):
+        response = self.client.get(reverse("portal:payslip_list"))
+        pks = {ps.pk for ps in response.context["payslips"]}
+        self.assertIn(self.approved.pk, pks)
+        self.assertNotIn(self.draft.pk, pks)
+
+    def test_draft_payslip_detail_returns_404(self):
+        response = self.client.get(reverse("portal:payslip_detail", args=[self.draft.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_approved_payslip_detail_visible(self):
+        response = self.client.get(reverse("portal:payslip_detail", args=[self.approved.pk]))
+        self.assertEqual(response.status_code, 200)
+
+    def test_draft_payslip_hidden_from_dashboard(self):
+        response = self.client.get(reverse("portal:dashboard"))
+        pks = {ps.pk for ps in response.context["recent_payslips"]}
+        self.assertIn(self.approved.pk, pks)
+        self.assertNotIn(self.draft.pk, pks)

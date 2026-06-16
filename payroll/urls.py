@@ -11,7 +11,9 @@ urlpatterns = [
     path('', payroll_access(views.payroll_record_list), name='payroll_record_list'),
     path('generate/', payroll_access(views.payroll_generate), name='payroll_generate'),
     path('records/add/', payroll_access(views.payroll_record_add), name='payroll_record_add'),
+    path('records/bulk-action/', payroll_access(views.payroll_record_bulk_action), name='payroll_record_bulk_action'),
     path('records/<int:pk>/edit/', payroll_access(views.payroll_record_edit), name='payroll_record_edit'),
+    path('records/<int:pk>/approve/', payroll_access(views.payroll_record_approve), name='payroll_record_approve'),
     path('records/<int:pk>/delete/', payroll_access(views.payroll_record_delete), name='payroll_record_delete'),
 
     # Payslip

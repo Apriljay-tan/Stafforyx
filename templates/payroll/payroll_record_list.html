@@ -88,86 +88,160 @@
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header d-flex align-items-center justify-content-between">
-    <span><i class="bi bi-cash-stack me-1" style="color:#1565C0;"></i>Payroll Records</span>
-    <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
-      <thead class="table-light">
-        <tr>
-          <th class="ps-3">Employee</th>
-          <th>Period</th>
-          <th>Basic Pay</th>
-          <th>Gross Pay</th>
-          <th>Net Pay</th>
-          <th>Status</th>
-          <th class="text-end pe-3">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for record in records %}
+<form method="post" action="{% url 'payroll:payroll_record_bulk_action' %}" id="payrollBulkForm">
+  {% csrf_token %}
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+
+  {% if not license_read_only %}
+    <div class="card mb-3">
+      <div class="card-body p-2 d-flex align-items-center flex-wrap gap-2">
+        <span class="text-muted small me-1"><span id="payrollSelectedCount">0</span> selected</span>
+        <button type="submit" name="bulk_action" value="approve" class="btn btn-success btn-sm" id="bulkApproveBtn" disabled>
+          <i class="bi bi-check2-circle me-1"></i>Bulk Approve
+        </button>
+        <button type="submit" name="bulk_action" value="delete" class="btn btn-outline-danger btn-sm" id="bulkDeleteBtn" disabled
+                onclick="return confirm('Delete the selected DRAFT payroll records? Approved/paid records will be skipped. This cannot be undone.');">
+          <i class="bi bi-trash me-1"></i>Bulk Delete
+        </button>
+        <span class="text-muted ms-auto" style="font-size:.73rem;">Only draft records can be approved or deleted.</span>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <span><i class="bi bi-cash-stack me-1" style="color:#1565C0;"></i>Payroll Records</span>
+      <span class="badge bg-primary rounded-pill">{{ records.count }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
+        <thead class="table-light">
           <tr>
-            <td class="ps-3">
-              <span class="fw-semibold" style="color:#0D1B2A;">{{ record.employee.full_name }}</span>
-              <div class="text-muted" style="font-size:.73rem;">
-                {{ record.employee.employee_id }}{% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
-              </div>
-            </td>
-            <td>
-              {{ record.payroll_period.name }}
-              <div class="text-muted" style="font-size:.73rem;">{{ record.company.name }}</div>
-            </td>
-            <td>PHP {{ record.basic_pay }}</td>
-            <td>PHP {{ record.gross_pay }}</td>
-            <td class="fw-semibold">PHP {{ record.net_pay }}</td>
-            <td>
-              {% if record.status == 'draft' %}
-                <span class="badge text-bg-secondary">Draft</span>
-              {% elif record.status == 'approved' %}
-                <span class="badge text-bg-success">Approved</span>
-              {% elif record.status == 'paid' %}
-                <span class="badge text-bg-primary">Paid</span>
-              {% else %}
-                <span class="badge text-bg-secondary">{{ record.get_status_display }}</span>
-              {% endif %}
-            </td>
-            <td class="text-end pe-3">
-              <a href="{% url 'payroll:payslip_view' record.pk %}"
-                 class="btn btn-sm btn-outline-secondary" title="View Payslip">
-                <i class="bi bi-file-earmark-text"></i>
-              </a>
+            {% if not license_read_only %}
+              <th class="ps-3" style="width:1%;">
+                <input type="checkbox" class="form-check-input" id="payrollSelectAll" title="Select all">
+              </th>
+            {% endif %}
+            <th{% if license_read_only %} class="ps-3"{% endif %}>Employee</th>
+            <th>Period</th>
+            <th>Basic Pay</th>
+            <th>Gross Pay</th>
+            <th>Net Pay</th>
+            <th>Status</th>
+            <th class="text-end pe-3">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records %}
+            <tr>
               {% if not license_read_only %}
-                <a href="{% url 'payroll:payroll_record_edit' record.pk %}"
-                   class="btn btn-sm btn-outline-primary ms-1" title="Edit">
-                  <i class="bi bi-pencil"></i>
-                </a>
-                <a href="{% url 'payroll:payroll_record_delete' record.pk %}"
-                   class="btn btn-sm btn-outline-danger ms-1" title="Delete">
-                  <i class="bi bi-trash"></i>
-                </a>
+                <td class="ps-3">
+                  <input type="checkbox" class="form-check-input payroll-select"
+                         name="selected_records" value="{{ record.pk }}"
+                         data-status="{{ record.status }}">
+                </td>
               {% endif %}
-            </td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="7" class="text-center py-5">
-              <i class="bi bi-cash-stack fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
-              <span class="text-muted">No payroll records found.</span>
-              {% if not payroll_period_filter and not employee_filter and not status_filter and not company_filter and not license_read_only %}
-                <div class="mt-2">
-                  <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-primary btn-sm">
-                    <i class="bi bi-plus-circle me-1"></i>Add First Payroll Record
-                  </a>
+              <td{% if license_read_only %} class="ps-3"{% endif %}>
+                <span class="fw-semibold" style="color:#0D1B2A;">{{ record.employee.full_name }}</span>
+                <div class="text-muted" style="font-size:.73rem;">
+                  {{ record.employee.employee_id }}{% if record.employee.department %} &bull; {{ record.employee.department.name }}{% endif %}
                 </div>
-              {% endif %}
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+              </td>
+              <td>
+                {{ record.payroll_period.name }}
+                <div class="text-muted" style="font-size:.73rem;">{{ record.company.name }}</div>
+              </td>
+              <td>PHP {{ record.basic_pay }}</td>
+              <td>PHP {{ record.gross_pay }}</td>
+              <td class="fw-semibold">PHP {{ record.net_pay }}</td>
+              <td>
+                {% if record.status == 'draft' %}
+                  <span class="badge text-bg-secondary">Draft</span>
+                {% elif record.status == 'approved' %}
+                  <span class="badge text-bg-success">Approved</span>
+                {% elif record.status == 'paid' %}
+                  <span class="badge text-bg-primary">Paid</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">{{ record.get_status_display }}</span>
+                {% endif %}
+              </td>
+              <td class="text-end pe-3">
+                <a href="{% url 'payroll:payslip_view' record.pk %}"
+                   class="btn btn-sm btn-outline-secondary" title="View Payslip">
+                  <i class="bi bi-file-earmark-text"></i>
+                </a>
+                {% if not license_read_only %}
+                  {% if record.status == 'draft' %}
+                    <button type="submit" formaction="{% url 'payroll:payroll_record_approve' record.pk %}"
+                            class="btn btn-sm btn-success ms-1" title="Approve">
+                      <i class="bi bi-check2-circle"></i>
+                    </button>
+                  {% endif %}
+                  <a href="{% url 'payroll:payroll_record_edit' record.pk %}"
+                     class="btn btn-sm btn-outline-primary ms-1" title="Edit">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <a href="{% url 'payroll:payroll_record_delete' record.pk %}"
+                     class="btn btn-sm btn-outline-danger ms-1" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </a>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="8" class="text-center py-5">
+                <i class="bi bi-cash-stack fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+                <span class="text-muted">No payroll records found.</span>
+                {% if not payroll_period_filter and not employee_filter and not status_filter and not company_filter and not license_read_only %}
+                  <div class="mt-2">
+                    <a href="{% url 'payroll:payroll_record_add' %}" class="btn btn-primary btn-sm">
+                      <i class="bi bi-plus-circle me-1"></i>Add First Payroll Record
+                    </a>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
-</div>
+</form>
+
+{% if not license_read_only %}
+<script>
+(function () {
+  const form = document.getElementById('payrollBulkForm');
+  if (!form) return;
+  const selectAll = document.getElementById('payrollSelectAll');
+  const rowBoxes = Array.from(form.querySelectorAll('.payroll-select'));
+  const countLabel = document.getElementById('payrollSelectedCount');
+  const approveBtn = document.getElementById('bulkApproveBtn');
+  const deleteBtn = document.getElementById('bulkDeleteBtn');
+
+  function refresh() {
+    const checked = rowBoxes.filter((b) => b.checked);
+    if (countLabel) countLabel.textContent = checked.length;
+    const none = checked.length === 0;
+    if (approveBtn) approveBtn.disabled = none;
+    if (deleteBtn) deleteBtn.disabled = none;
+    if (selectAll) {
+      selectAll.checked = rowBoxes.length > 0 && checked.length === rowBoxes.length;
+      selectAll.indeterminate = checked.length > 0 && checked.length < rowBoxes.length;
+    }
+  }
+
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      rowBoxes.forEach((b) => { b.checked = selectAll.checked; });
+      refresh();
+    });
+  }
+  rowBoxes.forEach((b) => b.addEventListener('change', refresh));
+  refresh();
+})();
+</script>
+{% endif %}
 
 {% endblock %}
