@@ -8,6 +8,8 @@ from accounts.company_access import (
     filter_queryset_by_user_companies,
     user_can_access_company,
 )
+from notifications.models import Notification
+from notifications.services import mark_notifications_read
 
 from .models import OvertimeRequest
 
@@ -39,6 +41,7 @@ def manage_overtime(request):
     if employee_filter:
         requests = requests.filter(employee_id=employee_filter)
 
+    mark_notifications_read(request.user, notification_type=Notification.TYPE_OVERTIME_REQUEST)
     return render(request, 'overtime/manage_overtime.html', {
         'requests': requests,
         'status_filter': status_filter,
@@ -57,6 +60,7 @@ def manage_overtime_detail(request, pk):
     )
     if not user_can_access_company(request.user, ot.company):
         raise PermissionDenied
+    mark_notifications_read(request.user, content_object=ot)
 
     if request.method == 'POST':
         action = request.POST.get('action')

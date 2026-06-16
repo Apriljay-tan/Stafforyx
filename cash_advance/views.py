@@ -8,6 +8,8 @@ from accounts.company_access import (
     filter_queryset_by_user_companies,
     user_can_access_company,
 )
+from notifications.models import Notification
+from notifications.services import mark_notifications_read
 
 from .models import CashAdvanceRequest
 
@@ -96,6 +98,7 @@ def manage_ca(request):
     if flt is not None:
         requests = requests.filter(**flt)
 
+    mark_notifications_read(request.user, notification_type=Notification.TYPE_CASH_ADVANCE_REQUEST)
     return render(request, 'cash_advance/manage_ca.html', {
         'requests': requests,
         'tab': tab,
@@ -113,6 +116,7 @@ def manage_ca_detail(request, pk):
     )
     if not user_can_access_company(request.user, ca.company):
         raise PermissionDenied
+    mark_notifications_read(request.user, content_object=ca)
 
     can_release = user_can_release_ca(request.user)
 

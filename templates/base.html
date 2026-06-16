@@ -209,6 +209,139 @@
       background: var(--gold);
       border: 1.5px solid #fff;
     }
+    .topbar-icon-btn .count-badge {
+      position: absolute;
+      top: -6px; right: -6px;
+      min-width: 18px; height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: #dc3545;
+      color: #fff;
+      border: 2px solid #fff;
+      font-size: 0.62rem;
+      font-weight: 700;
+      line-height: 15px;
+      text-align: center;
+    }
+
+    .sidebar-nav .sidebar-text {
+      flex: 1;
+      min-width: 0;
+    }
+    .sidebar-badge {
+      margin-left: auto;
+      min-width: 22px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: #dc3545;
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+
+    .admin-notif-menu {
+      width: 360px;
+      max-width: 92vw;
+      padding: 0;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.16);
+      overflow: hidden;
+    }
+    .admin-notif-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.7rem 0.95rem;
+      background: var(--navy);
+      color: #fff;
+    }
+    .admin-notif-head .title {
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .admin-notif-list {
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    .admin-notif-item {
+      display: block;
+      padding: 0.7rem 0.95rem;
+      border-bottom: 1px solid #f0f4f8;
+      color: #1a1a2e;
+      text-decoration: none;
+      background: rgba(21, 101, 192, 0.05);
+    }
+    .admin-notif-item:hover {
+      background: #f4f6fa;
+      color: #1a1a2e;
+    }
+    .admin-notif-item .item-top {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .admin-notif-item .item-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--blue);
+      flex-shrink: 0;
+    }
+    .admin-notif-item .item-title {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .admin-notif-item .item-time {
+      font-size: 0.66rem;
+      color: #94a3b8;
+      flex-shrink: 0;
+    }
+    .admin-notif-item .item-message {
+      margin-top: 2px;
+      font-size: 0.76rem;
+      color: #64748b;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .admin-notif-empty {
+      padding: 1.6rem 0.95rem;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.82rem;
+    }
+    .admin-notif-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.6rem 0.95rem;
+      background: #f8fafc;
+    }
+    .admin-notif-foot a,
+    .admin-notif-foot button {
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .notification-pulse {
+      animation: notificationPulse 0.7s ease;
+    }
+    @keyframes notificationPulse {
+      0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.35); }
+      70% { box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
 
     .avatar-btn {
       display: flex;
@@ -446,13 +579,17 @@
       <li class="nav-item">
         <a href="{% url 'leaves:leave_request_list' %}"
            class="nav-link {% if request.resolver_match.app_name == 'leaves' %}active{% endif %}">
-          <i class="bi bi-calendar2-check"></i> Leave Management
+          <i class="bi bi-calendar2-check"></i>
+          <span class="sidebar-text">Leave Management</span>
+          <span id="sidebarLeaveBadge" class="sidebar-badge" {% if not unread_leave_count %}style="display:none;"{% endif %}>{{ unread_leave_count|default:0 }}</span>
         </a>
       </li>
       <li class="nav-item">
         <a href="{% url 'overtime:manage_overtime' %}"
            class="nav-link {% if request.resolver_match.app_name == 'overtime' %}active{% endif %}">
-          <i class="bi bi-clock"></i> Overtime Requests
+          <i class="bi bi-clock"></i>
+          <span class="sidebar-text">Overtime Requests</span>
+          <span id="sidebarOvertimeBadge" class="sidebar-badge" {% if not unread_overtime_count %}style="display:none;"{% endif %}>{{ unread_overtime_count|default:0 }}</span>
         </a>
       </li>
     </ul>
@@ -468,7 +605,9 @@
       <li class="nav-item">
         <a href="{% url 'cash_advance:manage_ca' %}"
            class="nav-link {% if request.resolver_match.app_name == 'cash_advance' %}active{% endif %}">
-          <i class="bi bi-cash-coin"></i> CA Requests
+          <i class="bi bi-cash-coin"></i>
+          <span class="sidebar-text">CA Requests</span>
+          <span id="sidebarCashAdvanceBadge" class="sidebar-badge" {% if not unread_ca_count %}style="display:none;"{% endif %}>{{ unread_ca_count|default:0 }}</span>
         </a>
       </li>
       <li class="nav-item">
@@ -524,7 +663,47 @@
     </button>
     <span class="topbar-title">{% block page_title %}Dashboard{% endblock %}</span>
     <div class="topbar-actions">
-      {% block topbar_actions_pre %}{% endblock %}
+      {% block topbar_actions_pre %}
+        {% if show_admin_notifications %}
+          <div class="dropdown">
+            <button id="notificationBellButton" class="topbar-icon-btn" type="button" data-bs-toggle="dropdown"
+                    aria-expanded="false" aria-label="Request notifications" title="Request Notifications">
+              <i class="bi bi-bell"></i>
+              <span id="notificationBellBadge" class="count-badge" {% if not notification_unread_total %}style="display:none;"{% endif %}>{{ notification_unread_total|default:0 }}</span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end admin-notif-menu">
+              <div class="admin-notif-head">
+                <span class="title">Request Notifications</span>
+                <span id="notificationDropdownCountBadge" class="badge text-bg-danger rounded-pill" {% if not notification_unread_total %}style="display:none;"{% endif %}>{{ notification_unread_total|default:0 }}</span>
+              </div>
+              <div id="notificationDropdownList" class="admin-notif-list">
+                {% for notification in latest_unread_notifications %}
+                  <a class="admin-notif-item" href="{% url 'notifications:open' notification.pk %}">
+                    <div class="item-top">
+                      <span class="item-dot"></span>
+                      <span class="item-title">{{ notification.title }}</span>
+                      <span class="item-time">{{ notification.created_at|timesince }} ago</span>
+                    </div>
+                    <div class="item-message">{{ notification.message|truncatechars:100 }}</div>
+                  </a>
+                {% empty %}
+                  <div class="admin-notif-empty">
+                    <i class="bi bi-bell-slash d-block mb-1" style="font-size:1.3rem;"></i>
+                    No new notifications.
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="admin-notif-foot">
+                <a href="{% url 'notifications:list' %}">View all notifications</a>
+                <form method="post" action="{% url 'notifications:mark_all_read' %}">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-link p-0 text-decoration-none">Mark all as read</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      {% endblock %}
       <div class="dropdown">
         <button class="avatar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
           <div class="avatar-circle">
@@ -716,6 +895,108 @@
         });
       });
     }
+  </script>
+  <script>
+    (function () {
+      var dropdownList = document.getElementById('notificationDropdownList');
+      if (!dropdownList || !window.fetch) return;
+
+      var pollUrl = "{% url 'notifications:unread_api' %}";
+      var bellButton = document.getElementById('notificationBellButton');
+      var previousTotal = parseInt((document.getElementById('notificationBellBadge') || {}).textContent || '0', 10) || 0;
+      var polling = false;
+
+      function setBadge(id, count) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = count;
+        el.style.display = count > 0 ? '' : 'none';
+      }
+
+      function addText(parent, className, text) {
+        var el = document.createElement('span');
+        if (className) el.className = className;
+        el.textContent = text || '';
+        parent.appendChild(el);
+        return el;
+      }
+
+      function renderEmpty() {
+        var empty = document.createElement('div');
+        empty.className = 'admin-notif-empty';
+        empty.innerHTML = '<i class="bi bi-bell-slash d-block mb-1" style="font-size:1.3rem;"></i>No new notifications.';
+        dropdownList.appendChild(empty);
+      }
+
+      function renderLatest(items) {
+        dropdownList.replaceChildren();
+        if (!items || !items.length) {
+          renderEmpty();
+          return;
+        }
+
+        items.forEach(function (item) {
+          var link = document.createElement('a');
+          link.className = 'admin-notif-item';
+          link.href = item.url || '#';
+
+          var top = document.createElement('div');
+          top.className = 'item-top';
+          addText(top, 'item-dot', '');
+          addText(top, 'item-title', item.title);
+          addText(top, 'item-time', item.created_display);
+
+          var message = document.createElement('div');
+          message.className = 'item-message';
+          message.textContent = item.message || '';
+
+          link.appendChild(top);
+          link.appendChild(message);
+          dropdownList.appendChild(link);
+        });
+      }
+
+      function updateNotifications(payload) {
+        var total = Number(payload.total_unread || 0);
+        setBadge('notificationBellBadge', total);
+        setBadge('notificationDropdownCountBadge', total);
+        setBadge('sidebarLeaveBadge', Number(payload.leave_count || 0));
+        setBadge('sidebarOvertimeBadge', Number(payload.overtime_count || 0));
+        setBadge('sidebarCashAdvanceBadge', Number(payload.cash_advance_count || 0));
+        renderLatest(payload.latest || []);
+
+        if (total > previousTotal && bellButton) {
+          bellButton.classList.remove('notification-pulse');
+          void bellButton.offsetWidth;
+          bellButton.classList.add('notification-pulse');
+        }
+        previousTotal = total;
+      }
+
+      function pollNotifications() {
+        if (polling) return;
+        polling = true;
+        fetch(pollUrl, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' },
+        })
+          .then(function (response) {
+            if (!response.ok) return null;
+            return response.json();
+          })
+          .then(function (payload) {
+            if (payload) updateNotifications(payload);
+          })
+          .catch(function () {})
+          .finally(function () {
+            polling = false;
+          });
+      }
+
+      window.addEventListener('load', pollNotifications);
+      window.setInterval(pollNotifications, 20000);
+    })();
   </script>
   {% block extra_js %}{% endblock %}
 </body>

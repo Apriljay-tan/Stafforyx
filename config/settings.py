@@ -28,11 +28,29 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
 
-_allowed_hosts_env = os.environ.get(
-    'DJANGO_ALLOWED_HOSTS',
-    '127.0.0.1,localhost,192.168.1.61,192.168.1.64',
-)
-ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
+# Allowed hosts. Prefer the explicit env var. Otherwise fall back to safe
+# defaults: in DEBUG we include the local addresses plus Cloudflare quick
+# tunnels (.trycloudflare.com) for convenience; with DEBUG off we never add the
+# tunnel wildcard and rely solely on production hosts supplied via env.
+_allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
+if _allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]
+elif DEBUG:
+    ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '.trycloudflare.com']
+else:
+    ALLOWED_HOSTS = []
+
+# CSRF trusted origins. Prefer the explicit env var. In DEBUG, default to the
+# Cloudflare quick-tunnel wildcard (served over HTTPS) so login/POST works
+# through ephemeral tunnels without hardcoding a URL. With DEBUG off, default to
+# empty and require production origins to be set via env.
+_csrf_trusted_env = os.environ.get('DJANGO_CSRF_TRUSTED_ORIGINS', '')
+if _csrf_trusted_env:
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in _csrf_trusted_env.split(',') if o.strip()]
+elif DEBUG:
+    CSRF_TRUSTED_ORIGINS = ['https://*.trycloudflare.com']
+else:
+    CSRF_TRUSTED_ORIGINS = []
 
 
 # Application definition
@@ -60,6 +78,7 @@ INSTALLED_APPS = [
     "holidays",
     "overtime",
     "cash_advance",
+    "notifications",
 ]
 
 MIDDLEWARE = [
@@ -90,6 +109,7 @@ TEMPLATES = [
                 "licenses.context_processors.license_banner",
                 "accounts.context_processors.company_context",
                 "portal.context_processors.portal_notifications",
+                "notifications.context_processors.notification_context",
             ],
         },
     },

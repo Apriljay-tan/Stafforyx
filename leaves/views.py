@@ -5,6 +5,8 @@ from django.utils import timezone
 
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 from employees.models import Employee
+from notifications.models import Notification
+from notifications.services import mark_notifications_read
 
 from .forms import LeaveRequestForm, LeaveTypeForm
 from .models import LeaveRequest, LeaveType
@@ -56,6 +58,7 @@ def leave_request_list(request):
         'end_date_filter': end_date,
         'status_choices': LeaveRequest.STATUS_CHOICES,
     }
+    mark_notifications_read(request.user, notification_type=Notification.TYPE_LEAVE_REQUEST)
     return render(request, 'leaves/leave_request_list.html', context)
 
 
@@ -78,6 +81,7 @@ def leave_request_edit(request, pk):
     )
     if not user_can_access_company(request.user, leave_request.company):
         raise PermissionDenied
+    mark_notifications_read(request.user, content_object=leave_request)
     form = LeaveRequestForm(request.POST or None, instance=leave_request)
     if request.method == 'POST' and form.is_valid():
         form.save()

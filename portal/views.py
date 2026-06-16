@@ -14,6 +14,8 @@ from attendance.models import AttendanceRecord
 from attendance.schedule_services import resolve_expected_shift
 from documents.models import EmployeeDocument
 from leaves.models import LeaveRequest, LeaveType
+from notifications.models import Notification
+from notifications.services import create_request_notifications, request_notification_target_url
 from overtime.models import OvertimeRequest
 from payroll.models import PayrollRecord
 
@@ -273,6 +275,13 @@ def portal_leave_new(request):
             leave.company = employee.company
             leave.status = 'pending'
             leave.save()
+            create_request_notifications(
+                leave,
+                Notification.TYPE_LEAVE_REQUEST,
+                'New leave request',
+                f'{employee.full_name} submitted a leave request.',
+                request_notification_target_url(leave),
+            )
             messages.success(request, 'Leave request submitted. Waiting for approval.')
             return redirect('portal:leave_list')
     else:
@@ -410,6 +419,13 @@ def portal_overtime_new(request):
             ot.status = 'pending'
             ot.source = 'employee'
             ot.save()
+            create_request_notifications(
+                ot,
+                Notification.TYPE_OVERTIME_REQUEST,
+                'New overtime request',
+                f'{employee.full_name} requested {ot.requested_hours} overtime hours.',
+                request_notification_target_url(ot),
+            )
             messages.success(request, 'Overtime request submitted. Waiting for approval.')
             return redirect('portal:overtime_list')
     else:
@@ -454,6 +470,13 @@ def portal_ca_new(request):
             ca.company = employee.company
             ca.status = CashAdvanceRequest.STATUS_PENDING
             ca.save()
+            create_request_notifications(
+                ca,
+                Notification.TYPE_CASH_ADVANCE_REQUEST,
+                'New cash advance request',
+                f'{employee.full_name} requested a cash advance of PHP {ca.amount}.',
+                request_notification_target_url(ca),
+            )
             messages.success(request, 'Cash advance request submitted. Waiting for approval.')
             return redirect('portal:ca_list')
     else:
