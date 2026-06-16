@@ -592,6 +592,14 @@
           <span id="sidebarOvertimeBadge" class="sidebar-badge" {% if not unread_overtime_count %}style="display:none;"{% endif %}>{{ unread_overtime_count|default:0 }}</span>
         </a>
       </li>
+      <li class="nav-item">
+        <a href="{% url 'incident_reports:list' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'incident_reports' or request.resolver_match.url_name == 'manage_incidents' or request.resolver_match.url_name == 'manage_incident_detail' %}active{% endif %}">
+          <i class="bi bi-exclamation-triangle"></i>
+          <span class="sidebar-text">Incident Reports</span>
+          <span id="sidebarIncidentReportBadge" class="sidebar-badge" {% if not unread_incident_count %}style="display:none;"{% endif %}>{{ unread_incident_count|default:0 }}</span>
+        </a>
+      </li>
     </ul>
 
     <div class="sidebar-section-label">Finance</div>
@@ -963,6 +971,7 @@
         setBadge('sidebarLeaveBadge', Number(payload.leave_count || 0));
         setBadge('sidebarOvertimeBadge', Number(payload.overtime_count || 0));
         setBadge('sidebarCashAdvanceBadge', Number(payload.cash_advance_count || 0));
+        setBadge('sidebarIncidentReportBadge', Number(payload.incident_report_count || 0));
         renderLatest(payload.latest || []);
 
         if (total > previousTotal && bellButton) {

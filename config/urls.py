@@ -29,6 +29,7 @@ urlpatterns = [
     path('holidays/', include('holidays.urls')),
     path('overtime/', include('overtime.urls')),
     path('cash-advance/', include('cash_advance.urls')),
+    path('incident-reports/', include('portal.incident_urls')),
     path('notifications/', include('notifications.urls')),
 ]
 

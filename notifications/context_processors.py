@@ -26,6 +26,7 @@ def notification_context(request):
     leave_count = grouped_counts.get(Notification.TYPE_LEAVE_REQUEST, 0)
     overtime_count = grouped_counts.get(Notification.TYPE_OVERTIME_REQUEST, 0)
     ca_count = grouped_counts.get(Notification.TYPE_CASH_ADVANCE_REQUEST, 0)
+    incident_count = grouped_counts.get(Notification.TYPE_INCIDENT_REPORT, 0)
 
     return {
         'show_admin_notifications': True,
@@ -33,5 +34,6 @@ def notification_context(request):
         'unread_leave_count': leave_count,
         'unread_overtime_count': overtime_count,
         'unread_ca_count': ca_count,
+        'unread_incident_count': incident_count,
         'latest_unread_notifications': latest,
     }

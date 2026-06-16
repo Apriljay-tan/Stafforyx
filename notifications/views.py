@@ -45,6 +45,7 @@ def unread_api(request):
         'leave_count': grouped_counts.get(Notification.TYPE_LEAVE_REQUEST, 0),
         'overtime_count': grouped_counts.get(Notification.TYPE_OVERTIME_REQUEST, 0),
         'cash_advance_count': grouped_counts.get(Notification.TYPE_CASH_ADVANCE_REQUEST, 0),
+        'incident_report_count': grouped_counts.get(Notification.TYPE_INCIDENT_REPORT, 0),
         'latest': [
             {
                 'id': notification.pk,

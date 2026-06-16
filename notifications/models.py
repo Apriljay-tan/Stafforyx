@@ -10,6 +10,7 @@ class Notification(models.Model):
     TYPE_LEAVE_REQUEST = 'leave_request'
     TYPE_OVERTIME_REQUEST = 'overtime_request'
     TYPE_CASH_ADVANCE_REQUEST = 'cash_advance_request'
+    TYPE_INCIDENT_REPORT = 'incident_report'
     TYPE_PAYROLL = 'payroll'
     TYPE_ATTENDANCE = 'attendance'
     TYPE_DOCUMENT = 'document'
@@ -20,6 +21,7 @@ class Notification(models.Model):
         (TYPE_LEAVE_REQUEST, 'Leave request'),
         (TYPE_OVERTIME_REQUEST, 'Overtime request'),
         (TYPE_CASH_ADVANCE_REQUEST, 'Cash advance request'),
+        (TYPE_INCIDENT_REPORT, 'Incident report'),
         (TYPE_PAYROLL, 'Payroll'),
         (TYPE_ATTENDANCE, 'Attendance'),
         (TYPE_DOCUMENT, 'Document'),

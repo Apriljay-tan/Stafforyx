@@ -3,6 +3,7 @@ from decimal import Decimal
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
 from django.urls import reverse
 
@@ -10,6 +11,7 @@ from accounts.models import UserCompanyAccess, UserProfile
 from attendance.models import AttendanceRecord, WorkSchedule
 from companies.models import Company
 from employees.models import Employee
+from notifications.models import Notification
 from payroll.models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 from payroll.services import generate_payroll_for_period
 
@@ -262,6 +264,69 @@ class ManageCashAdvanceTests(TestCase):
             reverse('cash_advance:manage_ca_detail', args=[other_ca.pk])
         )
         self.assertEqual(resp.status_code, 403)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_history_single_delete_removes_visible_cash_advance_and_notification(self, _mock_license):
+        self.ca.status = CashAdvanceRequest.STATUS_REJECTED
+        self.ca.save(update_fields=['status'])
+        hr = _hr_user(self.company)
+        Notification.objects.create(
+            recipient=hr,
+            company=self.company,
+            notification_type=Notification.TYPE_CASH_ADVANCE_REQUEST,
+            title='Old CA',
+            message='Old cash advance.',
+            content_type=ContentType.objects.get_for_model(self.ca, for_concrete_model=False),
+            object_id=self.ca.pk,
+        )
+
+        self.client.force_login(hr)
+        response = self.client.post(
+            reverse('cash_advance:manage_ca') + '?tab=history',
+            {'action': 'delete_selected', 'selected_ids': [str(self.ca.pk)]},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse('cash_advance:manage_ca') + '?tab=history',
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(CashAdvanceRequest.objects.filter(pk=self.ca.pk).exists())
+        self.assertFalse(Notification.objects.filter(object_id=self.ca.pk).exists())
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_history_bulk_delete_is_scoped_to_accessible_companies(self, _mock_license):
+        other_emp = _employee(self.other)
+        other_ca = _ca(self.other, other_emp, status=CashAdvanceRequest.STATUS_REJECTED)
+        self.ca.status = CashAdvanceRequest.STATUS_CANCELLED
+        self.ca.save(update_fields=['status'])
+        hr = _hr_user(self.company)
+
+        self.client.force_login(hr)
+        response = self.client.post(
+            reverse('cash_advance:manage_ca') + '?tab=history',
+            {
+                'action': 'delete_selected',
+                'selected_ids': [str(self.ca.pk), str(other_ca.pk)],
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(CashAdvanceRequest.objects.filter(pk=self.ca.pk).exists())
+        self.assertTrue(CashAdvanceRequest.objects.filter(pk=other_ca.pk).exists())
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_cash_advance_delete_is_ignored_outside_history_tab(self, _mock_license):
+        hr = _hr_user(self.company)
+
+        self.client.force_login(hr)
+        response = self.client.post(
+            reverse('cash_advance:manage_ca') + '?tab=pending',
+            {'action': 'delete_selected', 'selected_ids': [str(self.ca.pk)]},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(CashAdvanceRequest.objects.filter(pk=self.ca.pk).exists())
 
 
 # ── Phase 6C: payroll deduction integration ───────────────────────────────────

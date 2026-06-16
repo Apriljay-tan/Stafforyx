@@ -7,15 +7,27 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
 
-from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
+from accounts.company_access import (
+    filter_queryset_by_user_companies,
+    get_accessible_companies,
+    user_can_access_company,
+)
 from announcements.models import Announcement
 from attendance.models import AttendanceRecord
 from attendance.schedule_services import resolve_expected_shift
 from documents.models import EmployeeDocument
+from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
 from notifications.models import Notification
-from notifications.services import create_request_notifications, request_notification_target_url
+from notifications.services import (
+    create_request_notifications,
+    delete_notifications_for_objects,
+    mark_notifications_read,
+    request_notification_target_url,
+)
 from overtime.models import OvertimeRequest
 from payroll.models import PayrollRecord
 
@@ -325,6 +337,13 @@ def portal_incident_new(request):
             incident.employee = employee
             incident.company = employee.company
             incident.save()
+            create_request_notifications(
+                incident,
+                Notification.TYPE_INCIDENT_REPORT,
+                'New incident report',
+                f'{employee.full_name} submitted an incident report: {incident.title}',
+                request_notification_target_url(incident),
+            )
             messages.success(request, 'Incident report submitted.')
             return redirect('portal:incident_list')
     else:
@@ -585,42 +604,167 @@ def portal_notifications_seen(request):
 
 # ── HR: Manage Incidents ──────────────────────────────────────────────────────
 
-@login_required
-def manage_incidents(request):
-    """HR/admin view — incident reports scoped to accessible companies."""
-    profile = getattr(request.user, 'stafforyx_profile', None)
-    is_hr = request.user.is_superuser or (profile and profile.can_manage_employees)
-    if not is_hr:
+INCIDENT_REPORT_ROLES = {'owner', 'company_admin', 'hr_admin', 'attendance_officer'}
+INCIDENT_HISTORY_STATUSES = ['resolved', 'rejected']
+INCIDENT_TAB_DEFS = [
+    ('submitted', 'Submitted', {'status': 'submitted'}),
+    ('under_review', 'Under Review', {'status': 'under_review'}),
+    ('resolved', 'Resolved', {'status': 'resolved'}),
+    ('rejected', 'Rejected', {'status': 'rejected'}),
+    ('history', 'History', {'status__in': INCIDENT_HISTORY_STATUSES}),
+]
+INCIDENT_TAB_FILTERS = {key: filters for key, _label, filters in INCIDENT_TAB_DEFS}
+
+
+def _user_can_manage_incident_reports(user):
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+
+    profile = getattr(user, 'stafforyx_profile', None)
+    if profile and profile.role == 'super_admin':
+        return True
+
+    has_role_access = user.company_accesses.filter(
+        is_active=True,
+        role__in=INCIDENT_REPORT_ROLES,
+    ).exists()
+    if has_role_access:
+        return True
+
+    return bool(
+        profile
+        and profile.is_active_stafforyx
+        and (profile.can_manage_employees or profile.can_manage_attendance)
+        and get_accessible_companies(user).exists()
+    )
+
+
+def _require_incident_report_access(user):
+    if not _user_can_manage_incident_reports(user):
         raise PermissionDenied
 
-    incidents = filter_queryset_by_user_companies(
-        IncidentReport.objects.select_related('employee', 'company').order_by('-created_at'),
-        request.user,
+
+def _scoped_incident_queryset(user):
+    return filter_queryset_by_user_companies(
+        IncidentReport.objects.select_related(
+            'employee',
+            'company',
+            'reviewed_by',
+        ).order_by('-created_at'),
+        user,
     )
+
+
+def _selected_ids(request):
+    return [
+        int(value)
+        for value in request.POST.getlist('selected_ids')
+        if str(value).isdigit()
+    ]
+
+
+def _incident_history_redirect():
+    return redirect(f"{reverse('incident_reports:list')}?tab=history")
+
+
+@login_required
+def manage_incidents(request):
+    _require_incident_report_access(request.user)
+
+    tab = request.GET.get('tab', 'submitted')
+    if tab not in INCIDENT_TAB_FILTERS:
+        tab = 'submitted'
+
+    if request.method == 'POST':
+        if request.POST.get('action') == 'delete_selected':
+            if tab != 'history':
+                messages.warning(request, 'Incident reports can only be deleted from History.')
+                return redirect(f"{reverse('incident_reports:list')}?tab={tab}")
+
+            selected_ids = _selected_ids(request)
+            delete_queryset = _scoped_incident_queryset(request.user).filter(
+                pk__in=selected_ids,
+                status__in=INCIDENT_HISTORY_STATUSES,
+            )
+            delete_ids = list(delete_queryset.values_list('pk', flat=True))
+            if delete_ids:
+                delete_notifications_for_objects(IncidentReport, delete_ids)
+                deleted_count, _details = delete_queryset.delete()
+                messages.success(request, f'Deleted {deleted_count} incident report(s).')
+            else:
+                messages.info(request, 'No closed incident reports were selected for deletion.')
+            return _incident_history_redirect()
+
+        incident = get_object_or_404(
+            _scoped_incident_queryset(request.user),
+            pk=request.POST.get('incident_id'),
+        )
+        if not user_can_access_company(request.user, incident.company):
+            raise PermissionDenied
+        new_status = request.POST.get('status', incident.status)
+        if new_status in dict(IncidentReport.STATUS_CHOICES):
+            incident.status = new_status
+            incident.reviewed_by = request.user
+            incident.reviewed_at = timezone.now()
+            incident.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'updated_at'])
+            messages.success(request, 'Incident report updated.')
+        return redirect('incident_reports:list')
+
+    incidents = _scoped_incident_queryset(request.user)
+    company_filter = request.GET.get('company', '')
+    employee_filter = request.GET.get('employee', '')
     status_filter = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if company_filter:
+        incidents = incidents.filter(company_id=company_filter)
+    if employee_filter:
+        incidents = incidents.filter(employee_id=employee_filter)
     if status_filter:
         incidents = incidents.filter(status=status_filter)
+    else:
+        incidents = incidents.filter(**INCIDENT_TAB_FILTERS[tab])
+    if start_date:
+        incidents = incidents.filter(incident_date__gte=start_date)
+    if end_date:
+        incidents = incidents.filter(incident_date__lte=end_date)
+
+    mark_notifications_read(request.user, notification_type=Notification.TYPE_INCIDENT_REPORT)
+
+    filter_employees = filter_queryset_by_user_companies(
+        Employee.objects.select_related('company').order_by('last_name', 'first_name'),
+        request.user,
+    )
 
     return render(request, 'portal/manage_incidents.html', {
         'incidents': incidents,
+        'company_filter': company_filter,
+        'employee_filter': employee_filter,
         'status_filter': status_filter,
+        'start_date_filter': start_date,
+        'end_date_filter': end_date,
         'status_choices': IncidentReport.STATUS_CHOICES,
+        'tab': tab,
+        'tabs': [(key, label) for key, label, _filters in INCIDENT_TAB_DEFS],
+        'filter_companies': get_accessible_companies(request.user).order_by('name'),
+        'filter_employees': filter_employees,
     })
-
-
+    """HR/admin view — incident reports scoped to accessible companies."""
 @login_required
 def manage_incident_detail(request, pk):
-    """HR can view and update an incident's status and notes."""
-    profile = getattr(request.user, 'stafforyx_profile', None)
-    is_hr = request.user.is_superuser or (profile and profile.can_manage_employees)
-    if not is_hr:
-        raise PermissionDenied
+    _require_incident_report_access(request.user)
 
     incident = get_object_or_404(
-        IncidentReport.objects.select_related('employee', 'company'), pk=pk
+        IncidentReport.objects.select_related('employee', 'company', 'reviewed_by'),
+        pk=pk,
     )
     if not user_can_access_company(request.user, incident.company):
         raise PermissionDenied
+
+    mark_notifications_read(request.user, content_object=incident)
 
     if request.method == 'POST':
         new_status = request.POST.get('status', incident.status)
@@ -628,11 +772,20 @@ def manage_incident_detail(request, pk):
         if new_status in dict(IncidentReport.STATUS_CHOICES):
             incident.status = new_status
             incident.admin_notes = admin_notes
-            incident.save(update_fields=['status', 'admin_notes', 'updated_at'])
+            incident.reviewed_by = request.user
+            incident.reviewed_at = timezone.now()
+            incident.save(update_fields=[
+                'status',
+                'admin_notes',
+                'reviewed_by',
+                'reviewed_at',
+                'updated_at',
+            ])
             messages.success(request, 'Incident report updated.')
-        return redirect('portal:manage_incidents')
+        return redirect('incident_reports:list')
 
     return render(request, 'portal/manage_incident_detail.html', {
         'incident': incident,
         'status_choices': IncidentReport.STATUS_CHOICES,
     })
+    """HR can view and update an incident's status and notes."""

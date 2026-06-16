@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 
 from accounts.company_access import (
@@ -9,7 +10,7 @@ from accounts.company_access import (
     user_can_access_company,
 )
 from notifications.models import Notification
-from notifications.services import mark_notifications_read
+from notifications.services import delete_notifications_for_objects, mark_notifications_read
 
 from .models import CashAdvanceRequest
 
@@ -60,6 +61,18 @@ def _require_ca_manager(request):
         raise PermissionDenied
 
 
+def _selected_ids(request):
+    return [
+        int(value)
+        for value in request.POST.getlist('selected_ids')
+        if str(value).isdigit()
+    ]
+
+
+def _history_redirect():
+    return redirect(f"{reverse('cash_advance:manage_ca')}?tab=history")
+
+
 # ── HR/Admin: manage cash-advance requests ────────────────────────────────────
 
 # Ordered tabs shown on the management page. Each maps to a queryset filter.
@@ -93,6 +106,25 @@ def manage_ca(request):
         CashAdvanceRequest.objects.select_related('employee', 'company'),
         request.user,
     )
+
+    if request.method == 'POST':
+        if request.POST.get('action') != 'delete_selected':
+            messages.error(request, 'Unknown action.')
+            return redirect('cash_advance:manage_ca')
+        if tab != 'history':
+            messages.warning(request, 'Cash advance records can only be deleted from History.')
+            return redirect(f"{reverse('cash_advance:manage_ca')}?tab={tab}")
+
+        selected_ids = _selected_ids(request)
+        delete_queryset = requests.filter(pk__in=selected_ids)
+        delete_ids = list(delete_queryset.values_list('pk', flat=True))
+        if delete_ids:
+            delete_notifications_for_objects(CashAdvanceRequest, delete_ids)
+            deleted_count, _details = delete_queryset.delete()
+            messages.success(request, f'Deleted {deleted_count} cash advance record(s).')
+        else:
+            messages.info(request, 'No cash advance records were selected for deletion.')
+        return _history_redirect()
 
     flt = TAB_FILTERS[tab]
     if flt is not None:

@@ -12,6 +12,7 @@ from companies.models import Company
 from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
 from overtime.models import OvertimeRequest
+from portal.models import IncidentReport
 
 from .models import Notification
 from .services import create_request_notifications
@@ -56,6 +57,14 @@ class NotificationReadStateTests(TestCase):
             employee=self.employee,
             amount=Decimal('1000.00'),
             reason='Emergency',
+        )
+        self.incident = IncidentReport.objects.create(
+            company=self.company,
+            employee=self.employee,
+            incident_date=datetime.date(2026, 7, 4),
+            title='Warehouse near miss',
+            description='A pallet nearly fell from a rack.',
+            location='Warehouse',
         )
         self.admin = self._manager(
             'admin',
@@ -114,16 +123,23 @@ class NotificationReadStateTests(TestCase):
             Notification.TYPE_CASH_ADVANCE_REQUEST,
             reverse('cash_advance:manage_ca_detail', args=[self.ca.pk]),
         )
+        self._notify(
+            self.incident,
+            Notification.TYPE_INCIDENT_REPORT,
+            reverse('incident_reports:detail', args=[self.incident.pk]),
+        )
 
         self.client.force_login(self.admin)
         response = self.client.get(reverse('dashboard_home'))
 
-        self.assertEqual(response.context['notification_unread_total'], 3)
+        self.assertEqual(response.context['notification_unread_total'], 4)
         self.assertEqual(response.context['unread_leave_count'], 1)
         self.assertEqual(response.context['unread_overtime_count'], 1)
         self.assertEqual(response.context['unread_ca_count'], 1)
+        self.assertEqual(response.context['unread_incident_count'], 1)
         self.assertContains(response, 'View all notifications')
         self.assertContains(response, 'CA Requests')
+        self.assertContains(response, 'Incident Reports')
 
     def test_opening_leave_list_marks_only_current_users_leave_notifications_read(self):
         self._notify(
@@ -273,17 +289,23 @@ class NotificationReadStateTests(TestCase):
             Notification.TYPE_CASH_ADVANCE_REQUEST,
             reverse('cash_advance:manage_ca_detail', args=[self.ca.pk]),
         )
+        self._notify(
+            self.incident,
+            Notification.TYPE_INCIDENT_REPORT,
+            reverse('incident_reports:detail', args=[self.incident.pk]),
+        )
 
         self.client.force_login(self.admin)
         response = self.client.get(reverse('notifications:unread_api'))
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        self.assertEqual(payload['total_unread'], 3)
+        self.assertEqual(payload['total_unread'], 4)
         self.assertEqual(payload['leave_count'], 1)
         self.assertEqual(payload['overtime_count'], 1)
         self.assertEqual(payload['cash_advance_count'], 1)
-        self.assertEqual(len(payload['latest']), 3)
+        self.assertEqual(payload['incident_report_count'], 1)
+        self.assertEqual(len(payload['latest']), 4)
         self.assertIn('created_display', payload['latest'][0])
         self.assertTrue(payload['latest'][0]['url'].startswith('/notifications/'))
 

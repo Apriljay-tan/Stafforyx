@@ -24,6 +24,12 @@ REQUEST_NOTIFICATION_ROLES = {
         'hr_admin',
         'payroll_officer',
     },
+    Notification.TYPE_INCIDENT_REPORT: {
+        'owner',
+        'company_admin',
+        'hr_admin',
+        'attendance_officer',
+    },
 }
 
 
@@ -144,6 +150,17 @@ def mark_all_notifications_read(user):
     return mark_notifications_read(user)
 
 
+def delete_notifications_for_objects(model, object_ids):
+    ids = [int(object_id) for object_id in object_ids if str(object_id).isdigit()]
+    if not ids:
+        return (0, {})
+    content_type = ContentType.objects.get_for_model(model, for_concrete_model=False)
+    return Notification.objects.filter(
+        content_type=content_type,
+        object_id__in=ids,
+    ).delete()
+
+
 def request_notification_target_url(request_obj):
     if request_obj.__class__.__name__ == 'LeaveRequest':
         return reverse('leaves:leave_request_edit', args=[request_obj.pk])
@@ -151,4 +168,6 @@ def request_notification_target_url(request_obj):
         return reverse('overtime:manage_overtime_detail', args=[request_obj.pk])
     if request_obj.__class__.__name__ == 'CashAdvanceRequest':
         return reverse('cash_advance:manage_ca_detail', args=[request_obj.pk])
+    if request_obj.__class__.__name__ == 'IncidentReport':
+        return reverse('incident_reports:detail', args=[request_obj.pk])
     return ''

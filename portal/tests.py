@@ -1,6 +1,8 @@
 import datetime
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
@@ -12,6 +14,7 @@ from companies.models import Company
 from documents.models import EmployeeDocument
 from employees.models import Employee
 from leaves.models import LeaveRequest, LeaveType
+from notifications.models import Notification
 from payroll.models import PayrollAdjustment, PayrollPeriod, PayrollRecord
 
 from .models import IncidentReport
@@ -347,6 +350,354 @@ class IncidentManagementScopeTests(TestCase):
 
         forbidden = self.client.get(reverse("portal:manage_incident_detail", args=[self.incident_b.pk]))
         self.assertEqual(forbidden.status_code, 403)
+
+
+class IncidentReportMainPanelTests(TestCase):
+    def setUp(self):
+        self.company = _make_company("Incident Co")
+        self.other_company = _make_company("Other Incident Co")
+        self.employee_user = _make_user("incident_employee")
+        self.employee = _make_employee(self.company, self.employee_user, "INC-EMP")
+        UserProfile.objects.create(
+            user=self.employee_user,
+            company=self.company,
+            employee=self.employee,
+            role="employee",
+            is_active_stafforyx=True,
+        )
+        self.owner = self._authorized_user(
+            "incident_owner",
+            self.company,
+            "owner",
+            can_manage_employees=True,
+        )
+        self.company_admin = self._authorized_user(
+            "incident_company_admin",
+            self.company,
+            "company_admin",
+            can_manage_employees=True,
+        )
+        self.hr = self._authorized_user(
+            "incident_hr",
+            self.company,
+            "hr_admin",
+            can_manage_employees=True,
+        )
+        self.attendance = self._authorized_user(
+            "incident_attendance",
+            self.company,
+            "attendance_officer",
+            can_manage_attendance=True,
+        )
+        self.viewer = self._authorized_user("incident_viewer", self.company, "viewer")
+        self.other_hr = self._authorized_user(
+            "incident_other_hr",
+            self.other_company,
+            "hr_admin",
+            can_manage_employees=True,
+        )
+        self.superuser = User.objects.create_superuser(
+            "incident_root",
+            "incident-root@example.com",
+            "testpass123",
+        )
+
+    def _authorized_user(self, username, company, role, **profile_flags):
+        user = _make_user(username)
+        UserProfile.objects.create(
+            user=user,
+            role="hr_admin" if role != "viewer" else "manager",
+            is_active_stafforyx=True,
+            can_access_dashboard=True,
+            **profile_flags,
+        )
+        UserCompanyAccess.objects.create(
+            user=user,
+            company=company,
+            role=role,
+            is_active=True,
+        )
+        return user
+
+    def _incident_payload(self, title="Forklift near miss"):
+        return {
+            "incident_date": "2026-06-15",
+            "incident_time": "09:30",
+            "title": title,
+            "description": "A forklift passed too close to the loading bay.",
+            "location": "Warehouse A",
+            "witnesses": "Shift lead",
+        }
+
+    def _create_incident(self, **overrides):
+        data = {
+            "company": self.company,
+            "employee": self.employee,
+            "incident_date": datetime.date(2026, 6, 15),
+            "title": "Forklift near miss",
+            "description": "A forklift passed too close to the loading bay.",
+            "location": "Warehouse A",
+        }
+        data.update(overrides)
+        return IncidentReport.objects.create(**data)
+
+    def _submit_incident(self, title="Forklift near miss"):
+        self.client.force_login(self.employee_user)
+        return self.client.post(reverse("portal:incident_new"), self._incident_payload(title))
+
+    def test_direct_incident_model_create_does_not_create_surprise_notifications(self):
+        self._create_incident()
+
+        self.assertFalse(Notification.objects.exists())
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_employee_portal_incident_submission_notifies_authorized_company_users_only(self, _mock_license):
+        response = self._submit_incident()
+
+        self.assertEqual(response.status_code, 302)
+        incident = IncidentReport.objects.get(title="Forklift near miss")
+        recipients = set(
+            Notification.objects
+            .filter(notification_type=Notification.TYPE_INCIDENT_REPORT)
+            .values_list("recipient__username", flat=True)
+        )
+        self.assertEqual(
+            recipients,
+            {
+                "incident_owner",
+                "incident_company_admin",
+                "incident_hr",
+                "incident_attendance",
+                "incident_root",
+            },
+        )
+        self.assertNotIn("incident_viewer", recipients)
+        self.assertNotIn("incident_other_hr", recipients)
+
+        notification = Notification.objects.get(
+            recipient=self.hr,
+            notification_type=Notification.TYPE_INCIDENT_REPORT,
+        )
+        self.assertFalse(notification.is_read)
+        self.assertEqual(notification.company, self.company)
+        self.assertEqual(notification.content_object, incident)
+        self.assertEqual(notification.title, "New incident report")
+        self.assertIn("Forklift near miss", notification.message)
+        self.assertEqual(
+            notification.target_url,
+            reverse("incident_reports:detail", args=[incident.pk]),
+        )
+
+    def test_incident_report_appears_in_main_panel_list_and_detail(self):
+        incident = self._create_incident()
+        other_employee = _make_employee(
+            self.other_company,
+            _make_user("other_incident_employee"),
+            "OTHER-INC",
+        )
+        IncidentReport.objects.create(
+            company=self.other_company,
+            employee=other_employee,
+            incident_date=datetime.date(2026, 6, 16),
+            title="Other company incident",
+            description="Out of scope.",
+            location="Other site",
+        )
+
+        self.client.force_login(self.hr)
+        list_response = self.client.get(reverse("incident_reports:list"))
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertContains(list_response, "Forklift near miss")
+        self.assertNotContains(list_response, "Other company incident")
+        self.assertContains(list_response, "Reported Date")
+        self.assertContains(list_response, "Created At")
+
+        detail_response = self.client.get(reverse("incident_reports:detail", args=[incident.pk]))
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertContains(detail_response, "Forklift near miss")
+        self.assertContains(detail_response, "Review Action")
+
+    def test_incident_report_list_filters_by_company_employee_status_and_date_range(self):
+        submitted = self._create_incident(title="Submitted incident")
+        resolved = self._create_incident(
+            title="Resolved incident",
+            status="resolved",
+            incident_date=datetime.date(2026, 6, 20),
+        )
+
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("incident_reports:list"), {
+            "company": str(self.company.pk),
+            "employee": str(self.employee.pk),
+            "status": "resolved",
+            "start_date": "2026-06-18",
+            "end_date": "2026-06-30",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, resolved.title)
+        self.assertNotContains(response, submitted.title)
+
+    def test_attendance_officer_can_access_main_incident_reports(self):
+        self._create_incident()
+
+        self.client.force_login(self.attendance)
+        response = self.client.get(reverse("incident_reports:list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Forklift near miss")
+
+    def test_employee_cannot_access_main_incident_report_management_page(self):
+        self.client.force_login(self.employee_user)
+
+        response = self.client.get(reverse("incident_reports:list"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("portal:dashboard"))
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_incident_detail_post_updates_status_notes_and_reviewer(self, _mock_license):
+        incident = self._create_incident()
+
+        self.client.force_login(self.hr)
+        response = self.client.post(reverse("incident_reports:detail", args=[incident.pk]), {
+            "status": "resolved",
+            "admin_notes": "Reviewed and closed.",
+        })
+
+        self.assertRedirects(response, reverse("incident_reports:list"))
+        incident.refresh_from_db()
+        self.assertEqual(incident.status, "resolved")
+        self.assertEqual(incident.admin_notes, "Reviewed and closed.")
+        self.assertEqual(incident.reviewed_by, self.hr)
+        self.assertIsNotNone(incident.reviewed_at)
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_opening_incident_detail_marks_only_current_users_notification_read(self, _mock_license):
+        self._submit_incident()
+        incident = IncidentReport.objects.get(title="Forklift near miss")
+
+        self.client.force_login(self.hr)
+        response = self.client.get(reverse("incident_reports:detail", args=[incident.pk]))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            Notification.objects.get(
+                recipient=self.hr,
+                notification_type=Notification.TYPE_INCIDENT_REPORT,
+            ).is_read
+        )
+        self.assertFalse(
+            Notification.objects.get(
+                recipient=self.attendance,
+                notification_type=Notification.TYPE_INCIDENT_REPORT,
+            ).is_read
+        )
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_sidebar_count_and_unread_api_are_per_current_user(self, _mock_license):
+        self._submit_incident()
+
+        self.client.force_login(self.hr)
+        dashboard = self.client.get(reverse("dashboard_home"))
+        self.assertEqual(dashboard.status_code, 200)
+        self.assertEqual(dashboard.context["unread_incident_count"], 1)
+        self.assertContains(dashboard, "sidebarIncidentReportBadge")
+
+        response = self.client.get(reverse("notifications:unread_api"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["total_unread"], 1)
+        self.assertEqual(payload["incident_report_count"], 1)
+        self.assertEqual(payload["latest"][0]["type"], Notification.TYPE_INCIDENT_REPORT)
+        self.assertEqual(payload["latest"][0]["title"], "New incident report")
+
+    def test_incident_tabs_show_status_categories_and_history(self):
+        submitted = self._create_incident(title="Submitted incident")
+        under_review = self._create_incident(
+            title="Under review incident",
+            status="under_review",
+        )
+        resolved = self._create_incident(title="Resolved incident", status="resolved")
+        rejected = self._create_incident(title="Rejected incident", status="rejected")
+
+        self.client.force_login(self.hr)
+        under_review_response = self.client.get(
+            reverse("incident_reports:list") + "?tab=under_review"
+        )
+        history_response = self.client.get(reverse("incident_reports:list") + "?tab=history")
+
+        self.assertContains(under_review_response, under_review.title)
+        self.assertNotContains(under_review_response, submitted.title)
+        self.assertContains(history_response, resolved.title)
+        self.assertContains(history_response, rejected.title)
+        self.assertNotContains(history_response, submitted.title)
+        self.assertContains(history_response, "Delete selected")
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_incident_history_bulk_delete_removes_only_closed_scoped_reports(self, _mock_license):
+        resolved = self._create_incident(title="Resolved incident", status="resolved")
+        under_review = self._create_incident(
+            title="Under review incident",
+            status="under_review",
+        )
+        other_employee = _make_employee(
+            self.other_company,
+            _make_user("delete_other_incident_employee"),
+            "OTHER-DEL",
+        )
+        other_resolved = IncidentReport.objects.create(
+            company=self.other_company,
+            employee=other_employee,
+            incident_date=datetime.date(2026, 6, 16),
+            title="Other resolved incident",
+            description="Out of scope.",
+            location="Other site",
+            status="resolved",
+        )
+        Notification.objects.create(
+            recipient=self.hr,
+            company=self.company,
+            notification_type=Notification.TYPE_INCIDENT_REPORT,
+            title="Old incident",
+            message="Old incident.",
+            content_type=ContentType.objects.get_for_model(resolved, for_concrete_model=False),
+            object_id=resolved.pk,
+        )
+
+        self.client.force_login(self.hr)
+        response = self.client.post(reverse("incident_reports:list") + "?tab=history", {
+            "action": "delete_selected",
+            "selected_ids": [
+                str(resolved.pk),
+                str(under_review.pk),
+                str(other_resolved.pk),
+            ],
+        })
+
+        self.assertRedirects(
+            response,
+            reverse("incident_reports:list") + "?tab=history",
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(IncidentReport.objects.filter(pk=resolved.pk).exists())
+        self.assertTrue(IncidentReport.objects.filter(pk=under_review.pk).exists())
+        self.assertTrue(IncidentReport.objects.filter(pk=other_resolved.pk).exists())
+        self.assertFalse(Notification.objects.filter(object_id=resolved.pk).exists())
+
+    @patch("licenses.middleware.is_license_active", return_value=True)
+    def test_incident_delete_is_ignored_outside_history_tab(self, _mock_license):
+        rejected = self._create_incident(title="Rejected incident", status="rejected")
+
+        self.client.force_login(self.hr)
+        response = self.client.post(reverse("incident_reports:list") + "?tab=rejected", {
+            "action": "delete_selected",
+            "selected_ids": [str(rejected.pk)],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(IncidentReport.objects.filter(pk=rejected.pk).exists())
 
 
 class PortalDraftPayslipVisibilityTests(TestCase):

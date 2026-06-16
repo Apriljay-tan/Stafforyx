@@ -1,18 +1,47 @@
 {% extends 'base.html' %}
 
-{% block title %}Manage Incident Reports{% endblock %}
-{% block page_title %}Manage Incident Reports{% endblock %}
+{% block title %}Incident Reports{% endblock %}
+{% block page_title %}Incident Reports{% endblock %}
 
 {% block content %}
 <div class="page-header mb-3">
   <h1>Incident Reports</h1>
-  <p>HR/Admin review queue scoped to your accessible companies.</p>
+  <p>Review and resolve employee incident reports across your accessible companies.</p>
 </div>
+
+<ul class="nav nav-pills mb-3 flex-wrap gap-1">
+  {% for key, label in tabs %}
+  <li class="nav-item">
+    <a class="nav-link {% if tab == key %}active{% endif %}" href="?tab={{ key }}">{{ label }}</a>
+  </li>
+  {% endfor %}
+</ul>
 
 <div class="card mb-3">
   <div class="card-body">
     <form method="get" class="row g-2 align-items-end">
-      <div class="col-12 col-md-4">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <div class="col-12 col-md-3">
+        <label class="form-label">Company</label>
+        <select name="company" class="form-select form-select-sm">
+          <option value="">All companies</option>
+          {% for company in filter_companies %}
+          <option value="{{ company.pk }}" {% if company_filter == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-3">
+        <label class="form-label">Employee</label>
+        <select name="employee" class="form-select form-select-sm">
+          <option value="">All employees</option>
+          {% for employee in filter_employees %}
+          <option value="{{ employee.pk }}" {% if employee_filter == employee.pk|stringformat:"s" %}selected{% endif %}>
+            {{ employee.full_name }} - {{ employee.company.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-md-2">
         <label class="form-label">Status</label>
         <select name="status" class="form-select form-select-sm">
           <option value="">All statuses</option>
@@ -21,17 +50,36 @@
           {% endfor %}
         </select>
       </div>
-      <div class="col-12 col-md-8 d-flex gap-2">
+      <div class="col-6 col-md-2">
+        <label class="form-label">From</label>
+        <input type="date" name="start_date" value="{{ start_date_filter }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label">To</label>
+        <input type="date" name="end_date" value="{{ end_date_filter }}" class="form-control form-control-sm">
+      </div>
+      <div class="col-12 d-flex gap-2">
         <button class="btn btn-primary btn-sm" type="submit">
           <i class="bi bi-funnel me-1"></i>Filter
         </button>
-        <a href="{% url 'portal:manage_incidents' %}" class="btn btn-outline-secondary btn-sm">
-          Clear
-        </a>
+        <a href="{% url 'incident_reports:list' %}" class="btn btn-outline-secondary btn-sm">Clear</a>
       </div>
     </form>
   </div>
 </div>
+
+{% if tab == 'history' %}
+<form id="incidentHistoryDeleteForm" method="post" action="?tab=history"
+      onsubmit="return confirm('Delete selected incident report history records? This cannot be undone.');">
+  {% csrf_token %}
+  <input type="hidden" name="action" value="delete_selected">
+</form>
+<div class="d-flex justify-content-end mb-2">
+  <button type="submit" form="incidentHistoryDeleteForm" class="btn btn-sm btn-outline-danger">
+    <i class="bi bi-trash me-1"></i>Delete selected
+  </button>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="card-header d-flex justify-content-between align-items-center">
@@ -42,31 +90,78 @@
     <table class="table table-hover mb-0 align-middle" style="font-size:.875rem;">
       <thead class="table-light">
         <tr>
-          <th class="ps-3">Date</th>
+          {% if tab == 'history' %}
+          <th class="ps-3" style="width:42px;">
+            <input type="checkbox" class="form-check-input" aria-label="Select all incident history records"
+                   onclick="document.querySelectorAll('.incident-history-check').forEach(function (box) { box.checked = this.checked; }, this);">
+          </th>
+          {% endif %}
+          <th class="ps-3">Reported Date</th>
           <th>Employee</th>
           <th>Company</th>
           <th>Title</th>
           <th>Status</th>
-          <th class="text-end pe-3"></th>
+          <th>Created At</th>
+          <th class="text-end pe-3">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for incident in incidents %}
         <tr>
+          {% if tab == 'history' %}
+          <td class="ps-3">
+            <input type="checkbox" form="incidentHistoryDeleteForm" name="selected_ids" value="{{ incident.pk }}"
+                   class="form-check-input incident-history-check" aria-label="Select incident report {{ incident.pk }}">
+          </td>
+          {% endif %}
           <td class="ps-3">{{ incident.incident_date|date:"M d, Y" }}</td>
           <td class="fw-semibold">{{ incident.employee.full_name }}</td>
           <td>{{ incident.company.name }}</td>
           <td>{{ incident.title }}</td>
           <td>{{ incident.get_status_display }}</td>
+          <td>{{ incident.created_at|date:"M d, Y g:i A" }}</td>
           <td class="text-end pe-3">
-            <a href="{% url 'portal:manage_incident_detail' incident.pk %}" class="btn btn-sm btn-outline-primary">
-              <i class="bi bi-eye me-1"></i>Open
-            </a>
+            <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+              <a href="{% url 'incident_reports:detail' incident.pk %}" class="btn btn-sm btn-outline-primary">
+                <i class="bi bi-eye me-1"></i>Open
+              </a>
+              {% if tab == 'history' %}
+              <button type="submit" form="incidentHistoryDeleteForm" name="selected_ids" value="{{ incident.pk }}"
+                      class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash me-1"></i>Delete
+              </button>
+              {% else %}
+              {% if incident.status != 'under_review' %}
+              <form method="post" action="{% url 'incident_reports:list' %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="incident_id" value="{{ incident.pk }}">
+                <input type="hidden" name="status" value="under_review">
+                <button type="submit" class="btn btn-sm btn-outline-warning">Under Review</button>
+              </form>
+              {% endif %}
+              {% if incident.status != 'resolved' %}
+              <form method="post" action="{% url 'incident_reports:list' %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="incident_id" value="{{ incident.pk }}">
+                <input type="hidden" name="status" value="resolved">
+                <button type="submit" class="btn btn-sm btn-outline-success">Resolve</button>
+              </form>
+              {% endif %}
+              {% if incident.status != 'rejected' %}
+              <form method="post" action="{% url 'incident_reports:list' %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="incident_id" value="{{ incident.pk }}">
+                <input type="hidden" name="status" value="rejected">
+                <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="6" class="text-center py-5 text-muted">
+          <td colspan="{% if tab == 'history' %}8{% else %}7{% endif %}" class="text-center py-5 text-muted">
             No incident reports found for your scope.
           </td>
         </tr>
@@ -76,4 +171,3 @@
   </div>
 </div>
 {% endblock %}
-
