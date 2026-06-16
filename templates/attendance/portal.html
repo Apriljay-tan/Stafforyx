@@ -267,6 +267,9 @@
           {% endif %}
         </div>
         <div class="d-flex flex-wrap gap-2">
+          {% if qr_validation_enabled %}
+            <span class="badge text-bg-primary">Branch QR Required</span>
+          {% endif %}
           {% if require_selfie %}
             <span class="badge text-bg-warning">Selfie Required</span>
           {% else %}
@@ -308,8 +311,38 @@
         <input type="hidden" name="gps_latitude" id="gpsLatitudeInput">
         <input type="hidden" name="gps_longitude" id="gpsLongitudeInput">
         <input type="hidden" name="gps_accuracy" id="gpsAccuracyInput">
+        <input type="hidden" name="qr_token" id="qrTokenInput">
 
-        {% if require_selfie %}
+        {% if qr_validation_enabled %}
+          <div class="card mb-3 border-primary-subtle">
+            <div class="card-body p-3">
+              <div class="fw-semibold mb-2" style="font-size:.86rem;">
+                <i class="bi bi-qr-code-scan me-1"></i>Branch QR Verification
+              </div>
+              <div id="qrStatus" class="text-muted mb-2" style="font-size:.8rem;">
+                Scan the live branch QR before submitting.
+              </div>
+              <div id="qrError" class="alert alert-danger py-2 mb-2 d-none" style="font-size:.8rem;"></div>
+              <video id="qrVideo" class="w-100 rounded border mb-2" autoplay playsinline muted style="display:none;max-height:240px;"></video>
+              <div class="input-group input-group-sm mb-2">
+                <input type="text" class="form-control" id="qrManualInput" autocomplete="off" placeholder="Enter QR code manually">
+                <button type="button" class="btn btn-outline-primary" id="validateQrBtn">
+                  <i class="bi bi-check2-circle me-1"></i>Validate
+                </button>
+              </div>
+              <div class="d-flex gap-2 flex-wrap">
+                <button type="button" class="btn btn-outline-primary btn-sm" id="startQrScannerBtn">
+                  <i class="bi bi-camera-video me-1"></i>Scan Branch QR
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm d-none" id="stopQrScannerBtn">
+                  <i class="bi bi-x-circle me-1"></i>Stop Scanner
+                </button>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+
+        {% if show_selfie_capture %}
           <div class="card mb-3 border-warning-subtle">
             <div class="card-body p-3">
               <div class="fw-semibold mb-2" style="font-size:.86rem;">
@@ -318,7 +351,7 @@
               <video id="selfieVideo" class="w-100 rounded border mb-2" autoplay playsinline muted style="display:none;max-height:240px;"></video>
               <canvas id="selfieCanvas" class="w-100 rounded border mb-2" style="display:none;max-height:240px;"></canvas>
               <div id="selfieStatus" class="text-muted mb-2" style="font-size:.8rem;">
-                Selfie is required before you can submit.
+                {% if require_selfie %}Selfie is required before you can submit.{% else %}Selfie may be required after QR validation.{% endif %}
               </div>
               <div id="selfieError" class="alert alert-danger py-2 mb-2 d-none" style="font-size:.8rem;"></div>
               <div class="d-flex gap-2 flex-wrap">
@@ -336,14 +369,14 @@
           </div>
         {% endif %}
 
-        {% if require_gps %}
+        {% if show_gps_capture %}
           <div class="card mb-3 border-warning-subtle">
             <div class="card-body p-3">
               <div class="fw-semibold mb-2" style="font-size:.86rem;">
                 <i class="bi bi-geo-alt me-1"></i>GPS Verification
               </div>
               <div id="gpsStatus" class="text-muted mb-2" style="font-size:.8rem;">
-                GPS is required before you can submit.
+                {% if require_gps %}GPS is required before you can submit.{% else %}GPS may be required after QR validation.{% endif %}
               </div>
               <div id="gpsError" class="alert alert-danger py-2 mb-2 d-none" style="font-size:.8rem;"></div>
               <button type="button" class="btn btn-outline-primary btn-sm" id="captureGpsBtn">
@@ -357,14 +390,18 @@
 
         <div class="d-grid gap-3">
           <button type="submit" name="action" value="time_in"
+                  id="timeInBtn"
                   class="btn btn-success btn-lg py-3"
-                  {% if not allowed or today_record and today_record.time_in %}disabled{% endif %}>
+                  data-static-disabled="{% if not allowed or today_record and today_record.time_in %}true{% else %}false{% endif %}"
+                  {% if not allowed or today_record and today_record.time_in or qr_validation_enabled %}disabled{% endif %}>
             <i class="bi bi-box-arrow-in-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
             Time In
           </button>
           <button type="submit" name="action" value="time_out"
+                  id="timeOutBtn"
                   class="btn btn-danger btn-lg py-3"
-                  {% if not allowed or not today_record or not today_record.time_in or today_record.time_out %}disabled{% endif %}>
+                  data-static-disabled="{% if not allowed or not today_record or not today_record.time_in or today_record.time_out %}true{% else %}false{% endif %}"
+                  {% if not allowed or not today_record or not today_record.time_in or today_record.time_out or qr_validation_enabled %}disabled{% endif %}>
             <i class="bi bi-box-arrow-right me-2" style="font-size:1.25rem;vertical-align:-.15em;"></i>
             Time Out
           </button>
@@ -383,8 +420,13 @@
 
 <script>
 (function () {
-  const requireSelfie = {{ require_selfie|yesno:"true,false" }};
-  const requireGps = {{ require_gps|yesno:"true,false" }};
+  const qrRequired = {{ qr_validation_enabled|yesno:"true,false" }};
+  const qrValidateUrl = "{{ qr_validate_url|default:'' }}";
+  const initialRequireSelfie = {{ require_selfie|yesno:"true,false" }};
+  const initialRequireGps = {{ require_gps|yesno:"true,false" }};
+  let effectiveRequireSelfie = initialRequireSelfie;
+  let effectiveRequireGps = initialRequireGps;
+  let qrValidated = !qrRequired;
 
   const form = document.getElementById('portalClockForm');
   if (!form) return;
@@ -394,6 +436,7 @@
   const gpsLatitudeInput = document.getElementById('gpsLatitudeInput');
   const gpsLongitudeInput = document.getElementById('gpsLongitudeInput');
   const gpsAccuracyInput = document.getElementById('gpsAccuracyInput');
+  const qrTokenInput = document.getElementById('qrTokenInput');
 
   const selfieVideo = document.getElementById('selfieVideo');
   const selfieCanvas = document.getElementById('selfieCanvas');
@@ -407,7 +450,19 @@
   const gpsError = document.getElementById('gpsError');
   const captureGpsBtn = document.getElementById('captureGpsBtn');
 
+  const qrStatus = document.getElementById('qrStatus');
+  const qrError = document.getElementById('qrError');
+  const qrVideo = document.getElementById('qrVideo');
+  const qrManualInput = document.getElementById('qrManualInput');
+  const validateQrBtn = document.getElementById('validateQrBtn');
+  const startQrScannerBtn = document.getElementById('startQrScannerBtn');
+  const stopQrScannerBtn = document.getElementById('stopQrScannerBtn');
+  const timeInBtn = document.getElementById('timeInBtn');
+  const timeOutBtn = document.getElementById('timeOutBtn');
+
   let selfieStream = null;
+  let qrStream = null;
+  let qrScanTimer = null;
 
   function showClientError(message) {
     if (!clientError) return;
@@ -421,6 +476,33 @@
     clientError.classList.add('d-none');
   }
 
+  function updateSubmitButtons() {
+    const qrReady = !qrRequired || qrValidated;
+    [timeInBtn, timeOutBtn].forEach((button) => {
+      if (!button) return;
+      const staticDisabled = button.dataset.staticDisabled === 'true';
+      button.disabled = staticDisabled || !qrReady;
+    });
+  }
+
+  function setQrStatus(message, isError) {
+    if (qrStatus) {
+      qrStatus.textContent = message;
+      qrStatus.classList.toggle('text-danger', Boolean(isError));
+      qrStatus.classList.toggle('text-success', !isError && qrValidated);
+      qrStatus.classList.toggle('text-muted', !isError && !qrValidated);
+    }
+    if (qrError) {
+      if (isError) {
+        qrError.textContent = message;
+        qrError.classList.remove('d-none');
+      } else {
+        qrError.textContent = '';
+        qrError.classList.add('d-none');
+      }
+    }
+  }
+
   function stopSelfieStream() {
     if (selfieStream) {
       selfieStream.getTracks().forEach((track) => track.stop());
@@ -429,8 +511,8 @@
   }
 
   async function startCamera() {
-    if (!requireSelfie || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      if (requireSelfie && selfieError) {
+    if (!effectiveRequireSelfie || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (effectiveRequireSelfie && selfieError) {
         selfieError.textContent = 'Camera is not available on this device/browser.';
         selfieError.classList.remove('d-none');
       }
@@ -501,7 +583,7 @@
   }
 
   function captureGps() {
-    if (!requireGps) return;
+    if (!effectiveRequireGps) return;
     if (!navigator.geolocation) {
       setGpsError('GPS is not supported by this browser/device.');
       return;
@@ -535,14 +617,142 @@
     );
   }
 
+  function stopQrScanner() {
+    if (qrScanTimer) {
+      window.clearTimeout(qrScanTimer);
+      qrScanTimer = null;
+    }
+    if (qrStream) {
+      qrStream.getTracks().forEach((track) => track.stop());
+      qrStream = null;
+    }
+    if (qrVideo) {
+      qrVideo.srcObject = null;
+      qrVideo.style.display = 'none';
+    }
+    if (startQrScannerBtn) startQrScannerBtn.classList.remove('d-none');
+    if (stopQrScannerBtn) stopQrScannerBtn.classList.add('d-none');
+  }
+
+  async function validateQrToken(rawToken) {
+    const token = (rawToken || '').trim();
+    if (!token) {
+      qrValidated = false;
+      if (qrTokenInput) qrTokenInput.value = '';
+      setQrStatus('Enter or scan the live branch QR code.', true);
+      updateSubmitButtons();
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('qr_token', token);
+    const csrfInput = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) formData.append('csrfmiddlewaretoken', csrfInput.value);
+
+    setQrStatus('Validating branch QR...', false);
+    const response = await fetch(qrValidateUrl, {
+      method: 'POST',
+      body: formData,
+      credentials: 'same-origin'
+    });
+    const data = await response.json();
+
+    if (!response.ok || !data.ok) {
+      qrValidated = false;
+      if (qrTokenInput) qrTokenInput.value = '';
+      setQrStatus(data.message || 'Branch QR validation failed.', true);
+      updateSubmitButtons();
+      return;
+    }
+
+    qrValidated = true;
+    if (qrTokenInput) qrTokenInput.value = token;
+    effectiveRequireSelfie = Boolean(data.require_selfie);
+    effectiveRequireGps = Boolean(data.require_gps);
+    setQrStatus(`QR validated: ${data.attendance_location}`, false);
+    updateSubmitButtons();
+
+    if (effectiveRequireSelfie) {
+      startCamera();
+    }
+    if (effectiveRequireGps) {
+      captureGps();
+    }
+  }
+
+  async function startQrScanner() {
+    if (!qrRequired) return;
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setQrStatus('Camera QR scanning is not available. Enter the QR code manually.', true);
+      return;
+    }
+
+    try {
+      stopQrScanner();
+      const detector = new BarcodeDetector({formats: ['qr_code']});
+      qrStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
+      });
+      qrVideo.srcObject = qrStream;
+      qrVideo.style.display = 'block';
+      if (startQrScannerBtn) startQrScannerBtn.classList.add('d-none');
+      if (stopQrScannerBtn) stopQrScannerBtn.classList.remove('d-none');
+      setQrStatus('Scanning for branch QR...', false);
+
+      async function scanFrame() {
+        if (!qrStream || !qrVideo) return;
+        try {
+          const codes = await detector.detect(qrVideo);
+          if (codes && codes.length && codes[0].rawValue) {
+            const scanned = codes[0].rawValue;
+            if (qrManualInput) qrManualInput.value = scanned;
+            stopQrScanner();
+            validateQrToken(scanned);
+            return;
+          }
+        } catch (error) {
+          setQrStatus('QR scanner could not read the camera frame.', true);
+        }
+        qrScanTimer = window.setTimeout(scanFrame, 500);
+      }
+
+      qrScanTimer = window.setTimeout(scanFrame, 500);
+    } catch (error) {
+      stopQrScanner();
+      setQrStatus('Camera permission is required to scan QR. You can enter the code manually.', true);
+    }
+  }
+
   if (startCameraBtn) startCameraBtn.addEventListener('click', startCamera);
   if (captureSelfieBtn) captureSelfieBtn.addEventListener('click', captureSelfie);
   if (retakeSelfieBtn) retakeSelfieBtn.addEventListener('click', retakeSelfie);
   if (captureGpsBtn) captureGpsBtn.addEventListener('click', captureGps);
+  if (validateQrBtn) {
+    validateQrBtn.addEventListener('click', () => validateQrToken(qrManualInput ? qrManualInput.value : ''));
+  }
+  if (startQrScannerBtn) startQrScannerBtn.addEventListener('click', startQrScanner);
+  if (stopQrScannerBtn) stopQrScannerBtn.addEventListener('click', stopQrScanner);
+  if (qrManualInput) {
+    qrManualInput.addEventListener('input', () => {
+      if (!qrRequired) return;
+      if (qrTokenInput && qrManualInput.value.trim() !== qrTokenInput.value) {
+        qrValidated = false;
+        qrTokenInput.value = '';
+        updateSubmitButtons();
+      }
+    });
+  }
 
   form.addEventListener('submit', function (event) {
     clearClientError();
-    if (requireSelfie && !selfieDataInput.value) {
+    if (qrRequired && !qrValidated) {
+      event.preventDefault();
+      showClientError('Branch QR validation is required before submitting Time In/Out.');
+      setQrStatus('Validate the live branch QR before submitting.', true);
+      return;
+    }
+    if (effectiveRequireSelfie && !selfieDataInput.value) {
       event.preventDefault();
       showClientError('Selfie is required before submitting Time In/Out.');
       if (selfieError) {
@@ -551,7 +761,7 @@
       }
       return;
     }
-    if (requireGps && (!gpsLatitudeInput.value || !gpsLongitudeInput.value)) {
+    if (effectiveRequireGps && (!gpsLatitudeInput.value || !gpsLongitudeInput.value)) {
       event.preventDefault();
       showClientError('GPS location is required before submitting Time In/Out.');
       setGpsError('Please capture your location first.');
@@ -559,10 +769,12 @@
     }
   });
 
-  if (requireSelfie) {
+  updateSubmitButtons();
+
+  if (effectiveRequireSelfie) {
     startCamera();
   }
-  if (requireGps) {
+  if (effectiveRequireGps) {
     captureGps();
   }
 })();

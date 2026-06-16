@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Attendance QR Kiosk{% endblock %}
+{% block page_title %}Attendance QR Kiosk{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12 col-md-8 col-lg-5">
+    <div class="card">
+      <div class="card-body text-center p-4">
+        <div class="text-muted small mb-1">{{ company.name }}</div>
+        <h1 class="h4 mb-1">{{ attendance_location.name }}</h1>
+        <div class="text-muted mb-3" id="kioskClock"></div>
+
+        {% if not device.is_active %}
+          <div class="alert alert-danger mb-0">This kiosk device is inactive.</div>
+        {% elif not attendance_location.is_active %}
+          <div class="alert alert-danger mb-0">This attendance location is inactive.</div>
+        {% else %}
+          <div class="mx-auto mb-3 p-3 bg-white border rounded" style="max-width:320px;">
+            <img id="qrImage" src="" alt="Attendance QR code" class="img-fluid" style="min-height:260px;object-fit:contain;">
+          </div>
+
+          <div class="d-flex justify-content-center gap-2 mb-2">
+            <span class="badge text-bg-primary">Live QR</span>
+            <span class="badge text-bg-light border">Refresh in <span id="countdown">--</span>s</span>
+          </div>
+
+          <div id="qrStatus" class="text-muted small">Loading QR...</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if device.is_active and attendance_location.is_active %}
+<script>
+(function () {
+  const tokenUrl = "{% url 'attendance:attendance_kiosk_qr_token' device.device_code %}";
+  const csrfToken = "{{ csrf_token }}";
+  const qrImage = document.getElementById('qrImage');
+  const countdown = document.getElementById('countdown');
+  const status = document.getElementById('qrStatus');
+  const clock = document.getElementById('kioskClock');
+  let expiresAt = null;
+  let refreshTimer = null;
+
+  function updateClock() {
+    if (!clock) return;
+    clock.textContent = new Date().toLocaleString([], {
+      weekday: 'long',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
+
+  function setStatus(message, isError) {
+    status.textContent = message;
+    status.classList.toggle('text-danger', Boolean(isError));
+    status.classList.toggle('text-muted', !isError);
+  }
+
+  function tick() {
+    updateClock();
+    if (!expiresAt) {
+      countdown.textContent = '--';
+      return;
+    }
+    const remaining = Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / 1000));
+    countdown.textContent = remaining;
+    if (remaining <= 0) {
+      loadToken();
+    }
+  }
+
+  async function loadToken() {
+    window.clearTimeout(refreshTimer);
+    try {
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {'X-CSRFToken': csrfToken},
+        credentials: 'same-origin'
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || 'Unable to refresh QR.');
+      }
+      qrImage.src = data.qr_data_uri;
+      expiresAt = new Date(data.expires_at);
+      setStatus('QR active. Keep this screen open for attendance scans.', false);
+      refreshTimer = window.setTimeout(loadToken, Math.max(5000, (data.lifetime_seconds - 2) * 1000));
+      tick();
+    } catch (error) {
+      expiresAt = null;
+      setStatus(error.message || 'Unable to refresh QR.', true);
+      refreshTimer = window.setTimeout(loadToken, 10000);
+    }
+  }
+
+  updateClock();
+  window.setInterval(tick, 1000);
+  loadToken();
+})();
+</script>
+{% endif %}
+{% endblock %}

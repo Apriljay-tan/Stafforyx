@@ -194,7 +194,9 @@ def portal_payslip_detail(request, pk):
         'gross_pay': record.display_gross_pay,
         'total_deductions': record.display_total_deductions,
         'net_pay': record.display_net_pay,
-        'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
+        'regular_ot_rate': (
+            hourly_rate * Decimal(str(record.overtime_multiplier or '1.25'))
+        ).quantize(q2),
         'rest_day_ot_rate': (hourly_rate * Decimal('1.30')).quantize(q2),
         'holiday_ot_rate': (hourly_rate * Decimal('2.60')).quantize(q2),
     })

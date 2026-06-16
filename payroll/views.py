@@ -293,7 +293,9 @@ def payslip_view(request, pk):
         'earning_adjs': earning_adjs,
         'deduction_adjs': deduction_adjs,
         'company': record.company,
-        'regular_ot_rate': (hourly_rate * Decimal('1.25')).quantize(q2),
+        'regular_ot_rate': (
+            hourly_rate * Decimal(str(record.overtime_multiplier or '1.25'))
+        ).quantize(q2),
         'night_diff_rate': (
             hourly_rate
             * Decimal(str(record.night_differential_percentage or 0))

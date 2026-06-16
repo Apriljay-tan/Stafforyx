@@ -23,16 +23,12 @@
       padding-left: 1rem;
       padding-right: 1rem;
       gap: 0.6rem;
-      align-items: center;
-      /* Use the LARGER of a 28px fallback (Android / PWA often report env()=0,
-         so a flat fallback is required) or the real device safe-area inset
-         (notched iPhones). Never rely on env() alone. */
-      padding-top: max(28px, env(safe-area-inset-top, 0px));
-      min-height: calc(48px + max(28px, env(safe-area-inset-top, 0px)));
+      /* breathing room (12px) PLUS the device safe-area inset */
+      padding-top: calc(12px + env(safe-area-inset-top, 0px));
+      min-height: calc(64px + env(safe-area-inset-top, 0px));
     }
     #main-content {
-      /* Must match the taller topbar so content starts just below it. */
-      padding-top: calc(48px + max(28px, env(safe-area-inset-top, 0px)));
+      padding-top: calc(64px + env(safe-area-inset-top, 0px));
       padding-left: 12px !important;
       padding-right: 12px !important;
       overflow-x: hidden;
@@ -47,14 +43,7 @@
       overflow: hidden;
       text-overflow: ellipsis;
       min-width: 0;            /* allow the flex item to shrink and truncate */
-      line-height: 1.2;
     }
-    /* Keep the hamburger, notification bell and profile button from being
-       squeezed/wrapped under the status-bar icons. */
-    .sidebar-toggle,
-    .topbar-actions,
-    .notif-btn,
-    .avatar-btn { flex-shrink: 0; }
   }
   /* Very narrow (iPhone SE ~375px): collapse profile to just the avatar so
      it never overlaps the title or runs under the status-bar icons. */
@@ -195,20 +184,6 @@
         <a href="{% url 'portal:incident_list' %}"
            class="nav-link {% if 'incident' in request.resolver_match.url_name and 'manage' not in request.resolver_match.url_name %}active{% endif %}">
           <i class="bi bi-exclamation-triangle"></i> Incident Reports
-        </a>
-      </li>
-      {% if employee.can_request_overtime %}
-      <li class="nav-item">
-        <a href="{% url 'portal:overtime_list' %}"
-           class="nav-link {% if 'overtime' in request.resolver_match.url_name %}active{% endif %}">
-          <i class="bi bi-clock"></i> Overtime Requests
-        </a>
-      </li>
-      {% endif %}
-      <li class="nav-item">
-        <a href="{% url 'portal:ca_list' %}"
-           class="nav-link {% if 'ca_' in request.resolver_match.url_name %}active{% endif %}">
-          <i class="bi bi-cash-coin"></i> Cash Advance
         </a>
       </li>
       <li class="nav-item">

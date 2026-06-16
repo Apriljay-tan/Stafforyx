@@ -3,7 +3,7 @@ from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from companies.models import Company
 
@@ -167,6 +167,17 @@ class Employee(models.Model):
             'No OT = never pay overtime. Request Required = employee requests, '
             'HR approves, and attendance caps payable OT. Automatic = pay actual '
             'computed overtime automatically.'
+        ),
+    )
+    overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('1.0')), MaxValueValidator(Decimal('5.0'))],
+        help_text=(
+            'Ordinary-day overtime rate for this employee (1.25 = 125%). '
+            'Leave blank to use the company default overtime multiplier.'
         ),
     )
     flexible_schedule_enabled = models.BooleanField(

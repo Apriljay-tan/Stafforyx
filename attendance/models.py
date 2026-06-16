@@ -321,6 +321,139 @@ class AttendanceLocation(models.Model):
                 raise ValidationError({'cidr_range': 'Enter a valid CIDR range, e.g. 192.168.1.0/24.'})
 
 
+class AttendanceKioskDevice(models.Model):
+    """
+    Approved branch phone/tablet that displays rotating attendance QR codes.
+    """
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='attendance_kiosk_devices'
+    )
+    attendance_location = models.ForeignKey(
+        AttendanceLocation, on_delete=models.CASCADE, related_name='qr_kiosk_devices'
+    )
+    name = models.CharField(max_length=100)
+    device_code = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['company', 'attendance_location', 'name']
+        indexes = [
+            models.Index(fields=['company', 'is_active']),
+            models.Index(fields=['attendance_location', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.company.name} — {self.attendance_location.name} — {self.name}'
+
+    def clean(self):
+        if (
+            self.attendance_location_id
+            and self.company_id
+            and self.attendance_location.company_id != self.company_id
+        ):
+            raise ValidationError({
+                'attendance_location': 'Kiosk location must belong to the selected company.'
+            })
+
+
+class AttendanceQRToken(models.Model):
+    """
+    Short-lived server-issued token for a kiosk display.
+    The raw token is never stored; only the SHA-256 hash is persisted.
+    """
+    kiosk_device = models.ForeignKey(
+        AttendanceKioskDevice, on_delete=models.CASCADE, related_name='qr_tokens'
+    )
+    attendance_location = models.ForeignKey(
+        AttendanceLocation, on_delete=models.CASCADE, related_name='qr_tokens'
+    )
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='attendance_qr_tokens'
+    )
+    token_hash = models.CharField(max_length=64, unique=True)
+    issued_at = models.DateTimeField()
+    expires_at = models.DateTimeField(db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-issued_at']
+        indexes = [
+            models.Index(fields=['company', 'expires_at']),
+            models.Index(fields=['kiosk_device', 'expires_at']),
+            models.Index(fields=['attendance_location', 'expires_at']),
+            models.Index(fields=['is_active', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f'{self.company.name} — {self.attendance_location.name} QR @ {self.issued_at:%Y-%m-%d %H:%M:%S}'
+
+
+class AttendanceQRScanLog(models.Model):
+    ACTION_CHOICES = [
+        ('validate', 'Validate'),
+        ('time_in', 'Time In'),
+        ('time_out', 'Time Out'),
+    ]
+    RESULT_CHOICES = [
+        ('success', 'Success'),
+        ('missing', 'Missing'),
+        ('expired', 'Expired'),
+        ('invalid', 'Invalid'),
+        ('inactive_device', 'Inactive Device'),
+        ('inactive_location', 'Inactive Location'),
+        ('unauthorized', 'Unauthorized'),
+        ('rate_limited', 'Rate Limited'),
+    ]
+
+    employee = models.ForeignKey(
+        Employee, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='qr_scan_logs'
+    )
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='attendance_qr_scan_logs'
+    )
+    attendance_location = models.ForeignKey(
+        AttendanceLocation, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='qr_scan_logs'
+    )
+    kiosk_device = models.ForeignKey(
+        AttendanceKioskDevice, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='qr_scan_logs'
+    )
+    qr_token = models.ForeignKey(
+        AttendanceQRToken, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='scan_logs'
+    )
+    token_hash = models.CharField(max_length=64, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, default='validate')
+    result = models.CharField(max_length=30, choices=RESULT_CHOICES, db_index=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    gps_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    gps_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    gps_accuracy = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['company', 'created_at']),
+            models.Index(fields=['employee', 'created_at']),
+            models.Index(fields=['result', 'created_at']),
+            models.Index(fields=['token_hash']),
+        ]
+
+    def __str__(self):
+        emp = self.employee or 'unknown'
+        return f'{emp} — QR {self.action} — {self.result} @ {self.created_at:%Y-%m-%d %H:%M}'
+
+
 class AttendanceRecord(models.Model):
     STATUS_CHOICES = [
         ('present', 'Present'),
@@ -396,9 +529,20 @@ class AttendancePortalLog(models.Model):
     ]
     VALIDATION_METHOD_CHOICES = [
         ('IP',                     'IP Match'),
+        ('QR',                     'QR Match'),
+        ('QR_GPS',                 'QR + GPS'),
+        ('QR_SELFIE',              'QR + Selfie'),
+        ('QR_GPS_SELFIE',          'QR + GPS + Selfie'),
+        ('QR_IP_DISABLED_GPS_SELFIE', 'QR + IP Disabled + GPS/Selfie'),
         ('GPS_SELFIE',             'GPS + Selfie'),
         ('IP_DISABLED_GPS_SELFIE', 'IP Disabled — GPS/Selfie'),
         ('BLOCKED',                'Blocked'),
+        ('BLOCKED_QR_MISSING',     'Blocked - QR Missing'),
+        ('BLOCKED_QR_EXPIRED',     'Blocked - QR Expired'),
+        ('BLOCKED_QR_INVALID',     'Blocked - QR Invalid'),
+        ('BLOCKED_QR_UNAUTHORIZED', 'Blocked - QR Unauthorized'),
+        ('BLOCKED_GPS_MISSING',    'Blocked - GPS Missing'),
+        ('BLOCKED_SELFIE_MISSING', 'Blocked - Selfie Missing'),
     ]
 
     company = models.ForeignKey(

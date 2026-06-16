@@ -53,6 +53,11 @@ urlpatterns = [
     path('portal-logs/<int:pk>/', attendance_access(views.portal_log_detail), name='portal_log_detail'),
     path('portal-logs/<int:pk>/selfie/', attendance_access(views.portal_log_selfie), name='portal_log_selfie'),
 
+    # Rotating QR kiosk display and employee validation
+    path('kiosk/<uuid:device_code>/qr/', views.attendance_kiosk_qr, name='attendance_kiosk_qr'),
+    path('kiosk/<uuid:device_code>/qr/token/', views.attendance_kiosk_qr_token, name='attendance_kiosk_qr_token'),
+    path('portal/qr/validate/', login_required(views.attendance_portal_validate_qr), name='attendance_portal_validate_qr'),
+
     # Employee WiFi/IP portal
     path('portal/', login_required(views.attendance_portal), name='attendance_portal'),
 ]

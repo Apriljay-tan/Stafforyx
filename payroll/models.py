@@ -60,6 +60,7 @@ class PayrollRecord(models.Model):
     late_minutes = models.PositiveIntegerField(default=0)
     undertime_minutes = models.PositiveIntegerField(default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
+    overtime_multiplier = models.DecimalField(max_digits=4, decimal_places=2, default=Decimal('1.25'))
     night_differential_minutes = models.PositiveIntegerField(default=0)
     night_differential_percentage = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     daily_rate = models.DecimalField(max_digits=10, decimal_places=4, default=0)

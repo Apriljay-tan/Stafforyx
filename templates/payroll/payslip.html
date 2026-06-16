@@ -416,7 +416,7 @@
           {% if company.payslip_show_overtime_breakdown %}
           {% if record.overtime_pay %}
           <tr>
-            <td class="label">Regular O.T. Pay ({{ record.overtime_minutes }}min)</td>
+            <td class="label">Regular O.T. Pay ({{ record.overtime_minutes }}min &times;{{ record.overtime_multiplier|floatformat:2 }})</td>
             <td class="amount">&#8369;{{ record.overtime_pay|floatformat:2 }}</td>
           </tr>
           {% endif %}

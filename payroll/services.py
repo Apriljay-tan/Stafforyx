@@ -50,7 +50,9 @@ from overtime.services import build_overtime_approval_index, payable_overtime_mi
 
 _DAILY_DIVISOR = Decimal('26')
 _HOURS_PER_DAY = Decimal('8')
-_OT_MULTIPLIER = Decimal('1.25')
+_OT_MULTIPLIER_DEFAULT = Decimal('1.25')
+_OT_MULTIPLIER_MIN = Decimal('1.0')
+_OT_MULTIPLIER_MAX = Decimal('5.0')
 _Q2 = Decimal('0.01')
 _Q4 = Decimal('0.0001')
 
@@ -219,6 +221,25 @@ def _night_differential_percentage(emp):
     return percentage.quantize(_Q2, rounding=ROUND_HALF_UP)
 
 
+def _overtime_multiplier(emp):
+    """
+    Resolve the ordinary-day overtime multiplier for an employee.
+
+    Resolution order: employee override -> company default -> 1.25.
+    The result is clamped to the supported range so a bad persisted value can
+    never produce absurd overtime pay.
+    """
+    override = getattr(emp, 'overtime_multiplier', None)
+    if override is not None:
+        value = Decimal(str(override))
+    else:
+        company = getattr(emp, 'company', None)
+        company_default = getattr(company, 'default_overtime_multiplier', None)
+        value = Decimal(str(company_default)) if company_default is not None else _OT_MULTIPLIER_DEFAULT
+    value = max(_OT_MULTIPLIER_MIN, min(value, _OT_MULTIPLIER_MAX))
+    return value.quantize(_Q2, rounding=ROUND_HALF_UP)
+
+
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
@@ -337,8 +358,9 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     undertime_ded = (
         Decimal(undertime_min) / Decimal(60) * hourly_rate
     ).quantize(_Q2, rounding=ROUND_HALF_UP)
+    ot_multiplier = _overtime_multiplier(emp)
     ot_pay = (
-        Decimal(overtime_min) / Decimal(60) * hourly_rate * _OT_MULTIPLIER
+        Decimal(overtime_min) / Decimal(60) * hourly_rate * ot_multiplier
     ).quantize(_Q2, rounding=ROUND_HALF_UP)
     night_diff_pct = _night_differential_percentage(emp)
     night_diff_pay = (
@@ -368,6 +390,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
         late_minutes=late_min,
         undertime_minutes=undertime_min,
         overtime_minutes=overtime_min,
+        overtime_multiplier=ot_multiplier,
         night_differential_minutes=night_diff_min,
         night_differential_percentage=night_diff_pct,
         daily_rate=daily_rate,

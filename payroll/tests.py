@@ -1113,3 +1113,125 @@ class AdjustmentDeductionTotalTest(PayrollV2TestCase):
         self._generate()
         rec.refresh_from_db()
         self.assertEqual(rec.net_pay, Decimal('4700.00'))
+
+
+# ── Configurable overtime multiplier ───────────────────────────────────────────
+
+class OvertimeMultiplierResolverTests(TestCase):
+    """Unit tests for _overtime_multiplier resolution and clamping."""
+
+    def setUp(self):
+        self.company = Company.objects.create(
+            name='OT Co', email='ot@test.com',
+            default_overtime_multiplier=Decimal('2.00'),
+        )
+        self.emp = Employee.objects.create(
+            company=self.company, employee_id='OTM001',
+            first_name='Ana', last_name='Reyes', email='ana@test.com',
+            date_hired=datetime.date(2020, 1, 1), basic_salary=_SALARY, status='active',
+        )
+
+    def test_employee_override_wins(self):
+        from payroll.services import _overtime_multiplier
+        self.emp.overtime_multiplier = Decimal('1.75')
+        self.assertEqual(_overtime_multiplier(self.emp), Decimal('1.75'))
+
+    def test_falls_back_to_company_default(self):
+        from payroll.services import _overtime_multiplier
+        self.emp.overtime_multiplier = None
+        self.assertEqual(_overtime_multiplier(self.emp), Decimal('2.00'))
+
+    def test_falls_back_to_default_when_company_missing(self):
+        from payroll.services import _overtime_multiplier
+
+        class _Stub:
+            overtime_multiplier = None
+            company = None
+
+        self.assertEqual(_overtime_multiplier(_Stub()), Decimal('1.25'))
+
+    def test_clamps_out_of_range_persisted_value(self):
+        from payroll.services import _overtime_multiplier
+        # Bypass validators with a raw update to simulate a bad DB value.
+        Employee.objects.filter(pk=self.emp.pk).update(overtime_multiplier=Decimal('99.00'))
+        self.emp.refresh_from_db()
+        self.assertEqual(_overtime_multiplier(self.emp), Decimal('5.00'))
+        Employee.objects.filter(pk=self.emp.pk).update(overtime_multiplier=Decimal('0.10'))
+        self.emp.refresh_from_db()
+        self.assertEqual(_overtime_multiplier(self.emp), Decimal('1.00'))
+
+
+class OvertimeMultiplierPayrollTests(PayrollV2TestCase):
+    """Payroll generation applies the resolved multiplier and snapshots it."""
+
+    def _setup_ot(self):
+        self.emp.overtime_policy = 'automatic'
+        self.emp.save(update_fields=['overtime_policy'])
+        self._clock_in(_MAY_19, overtime_min=120)
+        for d in (_MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+    def test_employee_override_applies_and_is_persisted(self):
+        self._setup_ot()
+        self.emp.overtime_multiplier = Decimal('1.50')
+        self.emp.save(update_fields=['overtime_multiplier'])
+
+        self._generate()
+        rec = self._record()
+
+        # (120/60) * 125 * 1.50 = 375.00
+        self.assertEqual(rec.overtime_multiplier, Decimal('1.50'))
+        self.assertEqual(rec.overtime_pay, Decimal('375.00'))
+
+    def test_company_default_applies_when_no_override(self):
+        self._setup_ot()
+        self.company.default_overtime_multiplier = Decimal('2.00')
+        self.company.save(update_fields=['default_overtime_multiplier'])
+
+        self._generate()
+        rec = self._record()
+
+        # (120/60) * 125 * 2.00 = 500.00
+        self.assertEqual(rec.overtime_multiplier, Decimal('2.00'))
+        self.assertEqual(rec.overtime_pay, Decimal('500.00'))
+
+    def test_default_125_preserved_when_unset(self):
+        self._setup_ot()
+        self._generate()
+        rec = self._record()
+        self.assertEqual(rec.overtime_multiplier, Decimal('1.25'))
+        self.assertEqual(rec.overtime_pay, Decimal('312.50'))
+
+
+class OvertimeMultiplierValidationTests(TestCase):
+    """Model validation enforces the 1.0–5.0 range."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name='Val Co', email='val@test.com')
+        self.emp = Employee.objects.create(
+            company=self.company, employee_id='VAL001',
+            first_name='Bea', last_name='Cruz', email='bea@test.com',
+            date_hired=datetime.date(2020, 1, 1), basic_salary=_SALARY, status='active',
+        )
+
+    def test_company_rejects_below_minimum(self):
+        from django.core.exceptions import ValidationError
+        self.company.default_overtime_multiplier = Decimal('0.50')
+        with self.assertRaises(ValidationError):
+            self.company.full_clean()
+
+    def test_company_rejects_above_maximum(self):
+        from django.core.exceptions import ValidationError
+        self.company.default_overtime_multiplier = Decimal('6.00')
+        with self.assertRaises(ValidationError):
+            self.company.full_clean()
+
+    def test_employee_rejects_out_of_range(self):
+        from django.core.exceptions import ValidationError
+        self.emp.overtime_multiplier = Decimal('5.50')
+        with self.assertRaises(ValidationError):
+            self.emp.full_clean()
+
+    def test_employee_blank_override_is_valid(self):
+        self.emp.overtime_multiplier = None
+        self.emp.full_clean()  # should not raise

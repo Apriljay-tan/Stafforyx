@@ -56,7 +56,8 @@ class EmployeeForm(forms.ModelForm):
             'employment_type', 'status', 'pay_basis', 'basic_salary', 'daily_rate',
             'work_schedule',
             'attendance_policy_type', 'required_daily_hours', 'default_break_minutes',
-            'flexible_overtime_grace_minutes', 'overtime_policy', 'flexible_day_offs',
+            'flexible_overtime_grace_minutes', 'overtime_policy', 'overtime_multiplier',
+            'flexible_day_offs',
             'night_differential_enabled',
             'night_differential_percentage', 'night_differential_start_time',
             'night_differential_end_time', 'allow_other_registered_locations',
@@ -71,6 +72,7 @@ class EmployeeForm(forms.ModelForm):
             'address': forms.Textarea(attrs={'rows': 3}),
             'night_differential_start_time': forms.TimeInput(attrs={'type': 'time'}),
             'night_differential_end_time': forms.TimeInput(attrs={'type': 'time'}),
+            'overtime_multiplier': forms.NumberInput(attrs={'min': '1.0', 'max': '5.0', 'step': '0.05'}),
         }
 
     def __init__(self, *args, **kwargs):

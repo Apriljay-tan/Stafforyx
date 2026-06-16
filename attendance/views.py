@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_date
+from django.views.decorators.http import require_POST
 from PIL import Image, UnidentifiedImageError
 
 from accounts.company_access import (
@@ -33,10 +34,12 @@ from .forms import (
     BulkRosterForm, EmployeeDailyScheduleForm, ShiftTemplateForm, WorkScheduleForm,
 )
 from .models import (
-    AttendanceLocation, AttendancePortalLog, AttendanceRecord,
+    AttendanceKioskDevice, AttendanceLocation, AttendancePortalLog,
+    AttendanceRecord,
     EmployeeDailySchedule, ShiftTemplate, WorkSchedule,
 )
 from .portal_services import can_employee_clock_from_request
+from .qr_services import create_qr_token, validate_qr_token_for_employee
 from .schedule_services import resolve_expected_shift
 from .services import compute_attendance
 
@@ -53,6 +56,64 @@ _PORTAL_ALLOWED_SELFIE_TYPES = {
     'image/png': 'png',
     'image/webp': 'webp',
 }
+
+
+def _resolve_portal_employee(user):
+    employee = None
+    try:
+        employee = user.employee_profile
+    except Exception:
+        pass
+
+    if employee is None:
+        profile = getattr(user, 'stafforyx_profile', None)
+        if profile:
+            employee = profile.employee
+    return employee
+
+
+def _qr_result_validation_method(result):
+    if result == 'missing':
+        return 'BLOCKED_QR_MISSING'
+    if result == 'expired':
+        return 'BLOCKED_QR_EXPIRED'
+    if result in ('invalid', 'rate_limited'):
+        return 'BLOCKED_QR_INVALID'
+    return 'BLOCKED_QR_UNAUTHORIZED'
+
+
+def _portal_success_validation_method(qr_enabled, ip_validation_enabled, require_gps, require_selfie):
+    if qr_enabled:
+        if require_gps and require_selfie:
+            if not ip_validation_enabled:
+                return 'QR_IP_DISABLED_GPS_SELFIE'
+            return 'QR_GPS_SELFIE'
+        if require_gps:
+            return 'QR_GPS'
+        if require_selfie:
+            return 'QR_SELFIE'
+        return 'QR'
+    if not ip_validation_enabled:
+        return 'IP_DISABLED_GPS_SELFIE'
+    return 'IP'
+
+
+def _portal_blocked_evidence_method(require_gps, require_selfie, gps_latitude, gps_longitude, selfie_image):
+    if require_selfie and not selfie_image:
+        return 'BLOCKED_SELFIE_MISSING'
+    if require_gps and (gps_latitude is None or gps_longitude is None):
+        return 'BLOCKED_GPS_MISSING'
+    return 'BLOCKED'
+
+
+def _qr_data_uri(raw_token):
+    import qrcode
+
+    image = qrcode.make(raw_token)
+    output = io.BytesIO()
+    image.save(output, format='PNG')
+    encoded = base64.b64encode(output.getvalue()).decode('ascii')
+    return f'data:image/png;base64,{encoded}'
 
 
 def _parse_portal_decimal(value, *, field_name):
@@ -998,6 +1059,91 @@ def portal_log_selfie(request, pk):
     )
 
 
+def attendance_kiosk_qr(request, device_code):
+    device = get_object_or_404(
+        AttendanceKioskDevice.objects.select_related('company', 'attendance_location'),
+        device_code=device_code,
+    )
+    return render(request, 'attendance/kiosk_qr.html', {
+        'device': device,
+        'company': device.company,
+        'attendance_location': device.attendance_location,
+    })
+
+
+@require_POST
+def attendance_kiosk_qr_token(request, device_code):
+    device = get_object_or_404(
+        AttendanceKioskDevice.objects.select_related('company', 'attendance_location'),
+        device_code=device_code,
+    )
+
+    if not device.is_active:
+        return JsonResponse({'ok': False, 'error': 'inactive_device'}, status=403)
+    if not device.attendance_location.is_active:
+        return JsonResponse({'ok': False, 'error': 'inactive_location'}, status=403)
+
+    issued = create_qr_token(device)
+    now = timezone.now()
+    AttendanceKioskDevice.objects.filter(pk=device.pk).update(last_seen_at=now)
+    lifetime = max(0, int((issued.token.expires_at - now).total_seconds()))
+
+    return JsonResponse({
+        'ok': True,
+        'token': issued.raw_token,
+        'qr_payload': issued.raw_token,
+        'qr_data_uri': _qr_data_uri(issued.raw_token),
+        'issued_at': issued.token.issued_at.isoformat(),
+        'expires_at': issued.token.expires_at.isoformat(),
+        'lifetime_seconds': lifetime,
+        'company': device.company.name,
+        'attendance_location': device.attendance_location.name,
+    })
+
+
+@require_POST
+def attendance_portal_validate_qr(request):
+    employee = _resolve_portal_employee(request.user)
+    if employee is None:
+        return JsonResponse({'ok': False, 'error': 'no_employee'}, status=403)
+
+    company = employee.company
+    if not getattr(company, 'attendance_qr_validation_enabled', False):
+        return JsonResponse({'ok': True, 'required': False})
+
+    result = validate_qr_token_for_employee(
+        employee,
+        request.POST.get('qr_token'),
+        action='validate',
+        request=request,
+    )
+    if not result.allowed:
+        return JsonResponse({
+            'ok': False,
+            'required': True,
+            'result': result.result,
+            'message': result.message,
+        })
+
+    require_selfie = bool(result.attendance_location.require_selfie)
+    require_gps = bool(result.attendance_location.require_gps)
+    if not getattr(company, 'attendance_ip_validation_enabled', True):
+        require_selfie = require_selfie or bool(company.require_attendance_selfie_when_ip_disabled)
+        require_gps = require_gps or bool(company.require_attendance_gps_when_ip_disabled)
+
+    return JsonResponse({
+        'ok': True,
+        'required': True,
+        'result': result.result,
+        'message': result.message,
+        'company': result.company.name,
+        'attendance_location': result.attendance_location.name,
+        'kiosk_device': result.kiosk_device.name,
+        'require_selfie': require_selfie,
+        'require_gps': require_gps,
+    })
+
+
 def attendance_portal(request):
     """
     Employee self-service clock-in/out portal.
@@ -1012,18 +1158,7 @@ def attendance_portal(request):
     """
     today = _date.today()
 
-    # Resolve employee linked to this user
-    employee = None
-    try:
-        employee = request.user.employee_profile  # Employee.user OneToOneField
-    except Exception:
-        pass
-
-    if employee is None:
-        profile = getattr(request.user, 'stafforyx_profile', None)
-        if profile:
-            employee = profile.employee
-
+    employee = _resolve_portal_employee(request.user)
     if employee is None:
         return render(request, 'attendance/portal_no_employee.html', {
             'message': (
@@ -1043,6 +1178,7 @@ def attendance_portal(request):
     ip_validation_enabled = clock_check['ip_validation_enabled']
     company_require_gps = clock_check['company_require_gps']
     company_require_selfie = clock_check['company_require_selfie']
+    qr_validation_enabled = bool(getattr(employee.company, 'attendance_qr_validation_enabled', False))
 
     # Record lookup — must precede the schedule/allowed check so that an open
     # overnight carry-over record can influence whether time-out is permitted
@@ -1102,10 +1238,13 @@ def attendance_portal(request):
         blocked_reason = ''
 
     # Determine which validation path is active for audit logging.
-    if not ip_validation_enabled:
-        validation_method = 'IP_DISABLED_GPS_SELFIE'
-    elif ip_allowed:
-        validation_method = 'IP'
+    if allowed:
+        validation_method = _portal_success_validation_method(
+            qr_validation_enabled,
+            ip_validation_enabled,
+            require_gps,
+            require_selfie,
+        )
     else:
         validation_method = 'BLOCKED'
 
@@ -1168,6 +1307,79 @@ def attendance_portal(request):
             messages.error(request, blocked_reason)
             return redirect('attendance:attendance_portal')
 
+        if qr_validation_enabled:
+            qr_action = action if action in ('time_in', 'time_out') else 'validate'
+            qr_result = validate_qr_token_for_employee(
+                employee,
+                request.POST.get('qr_token'),
+                action=qr_action,
+                request=request,
+                gps_latitude=gps_latitude,
+                gps_longitude=gps_longitude,
+                gps_accuracy=gps_accuracy,
+            )
+            if not qr_result.allowed:
+                qr_validation_method = _qr_result_validation_method(qr_result.result)
+                if log_blocked_attempts:
+                    AttendancePortalLog.objects.create(
+                        company=employee.company,
+                        employee=employee,
+                        attendance_location=qr_result.attendance_location or matched_location,
+                        action=action_key,
+                        ip_address=ip or None,
+                        user_agent=user_agent,
+                        status='blocked',
+                        blocked_reason=qr_result.message,
+                        gps_latitude=gps_latitude,
+                        gps_longitude=gps_longitude,
+                        gps_accuracy=gps_accuracy,
+                        selfie_image=selfie_image,
+                        validation_method=qr_validation_method,
+                    )
+                messages.error(request, qr_result.message)
+                return redirect('attendance:attendance_portal')
+
+            if (
+                ip_validation_enabled
+                and matched_location
+                and qr_result.attendance_location
+                and qr_result.attendance_location.pk != matched_location.pk
+            ):
+                qr_location_error = (
+                    'The branch QR code does not match your approved network location.'
+                )
+                if log_blocked_attempts:
+                    AttendancePortalLog.objects.create(
+                        company=employee.company,
+                        employee=employee,
+                        attendance_location=qr_result.attendance_location,
+                        action=action_key,
+                        ip_address=ip or None,
+                        user_agent=user_agent,
+                        status='blocked',
+                        blocked_reason=qr_location_error,
+                        gps_latitude=gps_latitude,
+                        gps_longitude=gps_longitude,
+                        gps_accuracy=gps_accuracy,
+                        selfie_image=selfie_image,
+                        validation_method='BLOCKED_QR_UNAUTHORIZED',
+                    )
+                messages.error(request, qr_location_error)
+                return redirect('attendance:attendance_portal')
+
+            matched_location = qr_result.attendance_location
+            require_selfie = bool(matched_location and matched_location.require_selfie)
+            require_gps = bool(matched_location and matched_location.require_gps)
+            if not ip_validation_enabled:
+                require_selfie = require_selfie or company_require_selfie
+                require_gps = require_gps or company_require_gps
+            validation_method = _portal_success_validation_method(
+                True,
+                ip_validation_enabled,
+                require_gps,
+                require_selfie,
+            )
+
         verification_error = ''
         if require_selfie and not selfie_image:
             verification_error = selfie_error or (
@@ -1193,7 +1405,13 @@ def attendance_portal(request):
                     gps_longitude=gps_longitude,
                     gps_accuracy=gps_accuracy,
                     selfie_image=selfie_image,
-                    validation_method='BLOCKED',
+                    validation_method=_portal_blocked_evidence_method(
+                        require_gps,
+                        require_selfie,
+                        gps_latitude,
+                        gps_longitude,
+                        selfie_image,
+                    ),
                 )
             messages.error(request, verification_error)
             return redirect('attendance:attendance_portal')
@@ -1275,6 +1493,9 @@ def attendance_portal(request):
     else:
         clock_state = 'timed_in'
 
+    show_selfie_capture = require_selfie or qr_validation_enabled
+    show_gps_capture = require_gps or qr_validation_enabled
+
     return render(request, 'attendance/portal.html', {
         'employee': employee,
         'today': today,
@@ -1295,6 +1516,10 @@ def attendance_portal(request):
         'schedule_blocked_reason': schedule_blocked_reason,
         'require_selfie': require_selfie,
         'require_gps': require_gps,
+        'show_selfie_capture': show_selfie_capture,
+        'show_gps_capture': show_gps_capture,
+        'qr_validation_enabled': qr_validation_enabled,
+        'qr_validate_url': reverse('attendance:attendance_portal_validate_qr'),
         'clock_state': clock_state,
     })
 

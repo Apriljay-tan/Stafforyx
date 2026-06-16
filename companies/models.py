@@ -1,4 +1,6 @@
-from django.core.validators import MinValueValidator
+from decimal import Decimal
+
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -113,6 +115,60 @@ class Company(models.Model):
     require_attendance_selfie_when_ip_disabled = models.BooleanField(
         default=True,
         help_text='When IP validation is disabled, require a selfie from employees before clocking.',
+    )
+    default_overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal('1.25'),
+        verbose_name='Default overtime multiplier',
+        validators=[MinValueValidator(Decimal('1.0')), MaxValueValidator(Decimal('5.0'))],
+        help_text=(
+            'Ordinary-day overtime rate applied to employees without their own '
+            'override (1.25 = 125%). Holiday and night-differential rates are '
+            'configured separately.'
+        ),
+    )
+    attendance_qr_validation_enabled = models.BooleanField(
+        default=False,
+        verbose_name='Require rotating QR code for attendance',
+        help_text=(
+            'Require employees to scan a live branch QR code before clocking in/out. '
+            'This validates physical presence at an approved attendance location.'
+        ),
+    )
+    attendance_qr_token_lifetime_seconds = models.PositiveIntegerField(
+        default=60,
+        verbose_name='QR token lifetime seconds',
+        validators=[MinValueValidator(30), MaxValueValidator(300)],
+        help_text='How long each rotating QR code remains valid before it refreshes.',
+    )
+    attendance_qr_token_retention_days = models.PositiveIntegerField(
+        default=1,
+        verbose_name='QR token retention days',
+        validators=[MinValueValidator(1)],
+        help_text=(
+            'Expired QR tokens older than this can be deleted safely. '
+            'This does not delete attendance records.'
+        ),
+    )
+    attendance_auto_delete_qr_tokens = models.BooleanField(
+        default=True,
+        verbose_name='Auto delete expired QR tokens',
+        help_text='Allows cleanup command to remove expired QR token records.',
+    )
+    attendance_qr_scan_log_retention_days = models.PositiveIntegerField(
+        default=90,
+        verbose_name='QR scan log retention days',
+        validators=[MinValueValidator(1)],
+        help_text='How long QR scan audit logs are kept.',
+    )
+    attendance_auto_delete_qr_scan_logs = models.BooleanField(
+        default=False,
+        verbose_name='Auto delete old QR scan logs',
+        help_text=(
+            'Allows cleanup command to remove old QR scan audit log records. '
+            'QR scan logs are audit records, so keep this disabled if your policy requires review.'
+        ),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

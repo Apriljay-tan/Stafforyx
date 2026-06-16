@@ -50,7 +50,7 @@ class EmployeeAdmin(admin.ModelAdmin):
             'fields': (
                 'work_schedule', 'attendance_policy_type', 'required_daily_hours',
                 'default_break_minutes', 'flexible_overtime_grace_minutes',
-                'overtime_policy',
+                'overtime_policy', 'overtime_multiplier',
                 'flexible_day_offs',
                 'flexible_schedule_enabled', 'allowed_clock_in_from',
                 'allowed_clock_in_until',

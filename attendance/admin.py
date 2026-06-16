@@ -3,7 +3,8 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 from .models import (
-    AttendanceLocation, AttendancePortalLog, AttendanceRecord,
+    AttendanceKioskDevice, AttendanceLocation, AttendancePortalLog,
+    AttendanceQRScanLog, AttendanceQRToken, AttendanceRecord,
     BiometricDevice, BiometricLog,
     EmployeeDailySchedule, ShiftTemplate, WorkSchedule,
 )
@@ -129,6 +130,106 @@ class BiometricLogAdmin(admin.ModelAdmin):
             'fields': ('created_at',),
         }),
     )
+
+
+@admin.register(AttendanceKioskDevice)
+class AttendanceKioskDeviceAdmin(admin.ModelAdmin):
+    list_display = (
+        'company', 'attendance_location', 'name',
+        'device_code', 'is_active', 'last_seen_at',
+    )
+    list_filter = ('company', 'attendance_location', 'is_active')
+    search_fields = (
+        'company__name', 'attendance_location__name',
+        'name', 'device_code', 'notes',
+    )
+    readonly_fields = ('device_code', 'last_seen_at', 'created_at', 'updated_at')
+    fieldsets = (
+        ('Device', {
+            'fields': ('company', 'attendance_location', 'name', 'device_code'),
+        }),
+        ('Status', {
+            'fields': ('is_active', 'last_seen_at', 'notes'),
+        }),
+        ('Timestamps', {
+            'classes': ('collapse',),
+            'fields': ('created_at', 'updated_at'),
+        }),
+    )
+
+
+@admin.register(AttendanceQRToken)
+class AttendanceQRTokenAdmin(admin.ModelAdmin):
+    list_display = (
+        'created_at', 'company', 'attendance_location',
+        'kiosk_device', 'token_reference', 'expires_at', 'is_active',
+    )
+    list_filter = ('company', 'attendance_location', 'kiosk_device', 'is_active')
+    search_fields = (
+        'company__name', 'attendance_location__name',
+        'kiosk_device__name', 'token_hash',
+    )
+    readonly_fields = (
+        'company', 'attendance_location', 'kiosk_device',
+        'token_reference', 'token_hash', 'issued_at', 'expires_at',
+        'is_active', 'created_at',
+    )
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Token hash')
+    def token_reference(self, obj):
+        return f'{obj.token_hash[:12]}...'
+
+
+@admin.register(AttendanceQRScanLog)
+class AttendanceQRScanLogAdmin(admin.ModelAdmin):
+    list_display = (
+        'created_at', 'employee', 'company', 'attendance_location',
+        'kiosk_device', 'action', 'result', 'ip_address',
+    )
+    list_filter = ('company', 'attendance_location', 'kiosk_device', 'result', 'action')
+    search_fields = (
+        'employee__first_name', 'employee__last_name', 'employee__employee_id',
+        'company__name', 'attendance_location__name', 'kiosk_device__name',
+        'token_hash', 'ip_address',
+    )
+    readonly_fields = (
+        'employee', 'company', 'attendance_location', 'kiosk_device',
+        'qr_token', 'token_reference', 'token_hash', 'action', 'result',
+        'ip_address', 'gps_latitude', 'gps_longitude', 'gps_accuracy',
+        'user_agent', 'created_at',
+    )
+    date_hierarchy = 'created_at'
+    fieldsets = (
+        ('Who & Where', {
+            'fields': ('employee', 'company', 'attendance_location', 'kiosk_device', 'created_at'),
+        }),
+        ('Result', {
+            'fields': ('action', 'result', 'qr_token', 'token_reference', 'token_hash'),
+        }),
+        ('Request Evidence', {
+            'fields': (
+                'ip_address', 'gps_latitude', 'gps_longitude',
+                'gps_accuracy', 'user_agent',
+            ),
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Token hash')
+    def token_reference(self, obj):
+        return f'{obj.token_hash[:12]}...' if obj.token_hash else '-'
 
 
 @admin.register(AttendanceLocation)

@@ -202,6 +202,12 @@
             {{ form.payslip_show_received_by }} <label class="form-check-label">{{ form.payslip_show_received_by.label }}</label>
           </div>
         </div>
+        <div class="mt-3" style="max-width:240px;">
+          <label class="form-label">{{ form.default_overtime_multiplier.label }}</label>
+          {{ form.default_overtime_multiplier }}
+          <div class="form-text">{{ form.default_overtime_multiplier.help_text }}</div>
+          {{ form.default_overtime_multiplier.errors }}
+        </div>
       </div>
 
       <!-- ── Prepared By / Signature ─────────────────────────────────────── -->
@@ -334,6 +340,52 @@
             {{ form.attendance_auto_delete_portal_logs.errors }}
           </div>
         </div>
+      </div>
+
+      <div class="col-12">
+        <hr class="my-1">
+        <h6 class="mb-2 mt-2" style="color:#0D1B2A;">
+          <i class="bi bi-qr-code me-1"></i>Rotating QR Attendance
+        </h6>
+        <div class="form-text">
+          QR tokens are temporary validation records. QR scan logs are audit records and may need longer retention.
+        </div>
+      </div>
+      <div class="col-12 col-md-6 form-check">
+        {{ form.attendance_qr_validation_enabled }}
+        <label class="form-check-label">{{ form.attendance_qr_validation_enabled.label }}</label>
+        <div class="form-text">{{ form.attendance_qr_validation_enabled.help_text }}</div>
+        {{ form.attendance_qr_validation_enabled.errors }}
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">{{ form.attendance_qr_token_lifetime_seconds.label }}</label>
+        {{ form.attendance_qr_token_lifetime_seconds }}
+        <div class="form-text">{{ form.attendance_qr_token_lifetime_seconds.help_text }}</div>
+        {{ form.attendance_qr_token_lifetime_seconds.errors }}
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">{{ form.attendance_qr_token_retention_days.label }}</label>
+        {{ form.attendance_qr_token_retention_days }}
+        <div class="form-text">{{ form.attendance_qr_token_retention_days.help_text }}</div>
+        {{ form.attendance_qr_token_retention_days.errors }}
+      </div>
+      <div class="col-12 col-md-6 form-check">
+        {{ form.attendance_auto_delete_qr_tokens }}
+        <label class="form-check-label">{{ form.attendance_auto_delete_qr_tokens.label }}</label>
+        <div class="form-text">{{ form.attendance_auto_delete_qr_tokens.help_text }}</div>
+        {{ form.attendance_auto_delete_qr_tokens.errors }}
+      </div>
+      <div class="col-12 col-md-6">
+        <label class="form-label">{{ form.attendance_qr_scan_log_retention_days.label }}</label>
+        {{ form.attendance_qr_scan_log_retention_days }}
+        <div class="form-text">{{ form.attendance_qr_scan_log_retention_days.help_text }}</div>
+        {{ form.attendance_qr_scan_log_retention_days.errors }}
+      </div>
+      <div class="col-12 col-md-6 form-check">
+        {{ form.attendance_auto_delete_qr_scan_logs }}
+        <label class="form-check-label">{{ form.attendance_auto_delete_qr_scan_logs.label }}</label>
+        <div class="form-text">{{ form.attendance_auto_delete_qr_scan_logs.help_text }}</div>
+        {{ form.attendance_auto_delete_qr_scan_logs.errors }}
       </div>
 
       <div class="col-12 d-flex justify-content-end">
