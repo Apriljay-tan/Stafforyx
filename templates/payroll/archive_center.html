@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% block title %}Archive & Cleanup{% endblock %}
+{% block page_title %}Archive & Cleanup{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-3">
+  <h1>Data Archive Center</h1>
+  <p>Export old payroll-related data to Excel, then safely clear it from the server.</p>
+</div>
+
+<div class="alert alert-warning d-flex align-items-start gap-2" role="alert">
+  <i class="bi bi-exclamation-triangle-fill mt-1"></i>
+  <div>
+    <strong>Please download and verify the Excel archive before clearing server records.</strong>
+    Clearing permanently deletes the exported records. Employees, companies, users,
+    settings, attendance locations, and payroll periods are never deleted.
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <i class="bi bi-funnel me-1" style="color:#1565C0;"></i>Select Data to Archive
+  </div>
+  <div class="card-body">
+    <form method="post" novalidate>
+      {% csrf_token %}
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <div class="row g-3">
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold mb-1">Company</label>
+          {{ form.company }}
+          {{ form.company.errors }}
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small fw-semibold mb-1">Payroll Period <span class="text-muted">(optional)</span></label>
+          {{ form.payroll_period }}
+          <div class="form-text">{{ form.payroll_period.help_text }}</div>
+          {{ form.payroll_period.errors }}
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small fw-semibold mb-1">Date From</label>
+          {{ form.date_from }}
+          {{ form.date_from.errors }}
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small fw-semibold mb-1">Date To</label>
+          {{ form.date_to }}
+          {{ form.date_to.errors }}
+        </div>
+      </div>
+      <div class="d-flex gap-2 flex-wrap mt-3">
+        <button type="submit" name="action" value="preview" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-search me-1"></i>Preview
+        </button>
+        {% if not license_read_only %}
+          <button type="submit" name="action" value="export" class="btn btn-primary btn-sm">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Archive (Excel)
+          </button>
+        {% else %}
+          <span class="text-muted small align-self-center"><i class="bi bi-lock me-1"></i>Read-only mode — exporting is disabled.</span>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if preview %}
+<div class="card mb-3 border-primary-subtle">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-list-check me-1" style="color:#1565C0;"></i>Preview — records that will be exported &amp; can be cleared</span>
+    <span class="badge bg-primary rounded-pill">{{ preview.total }}</span>
+  </div>
+  <div class="card-body">
+    <div class="text-muted small mb-2">
+      {{ preview.company.name }} &bull; {{ preview.date_from }} to {{ preview.date_to }}
+      {% if preview.period %} &bull; Period: {{ preview.period.name }}{% endif %}
+    </div>
+    <div class="row g-2">
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">Payroll Records</div><div class="fw-semibold">{{ preview.counts.payroll_records }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">Attendance Records</div><div class="fw-semibold">{{ preview.counts.attendance_records }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">Portal Logs</div><div class="fw-semibold">{{ preview.counts.portal_logs }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">QR Scan Logs</div><div class="fw-semibold">{{ preview.counts.qr_logs }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">Overtime Requests</div><div class="fw-semibold">{{ preview.counts.overtime_requests }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">Leave Requests</div><div class="fw-semibold">{{ preview.counts.leave_requests }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="border rounded p-2"><div class="text-muted" style="font-size:.72rem;">CA Requests</div><div class="fw-semibold">{{ preview.counts.ca_requests }}</div></div></div>
+    </div>
+    <div class="text-muted small mt-3">
+      <i class="bi bi-info-circle me-1"></i>Preview does not change anything. Click
+      <strong>Export Archive</strong> above to generate the Excel file before clearing.
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-archive me-1" style="color:#1565C0;"></i>Archive History</span>
+    <span class="badge bg-secondary rounded-pill">{{ batches|length }}</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0" style="font-size:.85rem;">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Company</th>
+          <th>Range</th>
+          <th>Exported</th>
+          <th>Generated</th>
+          <th>Status</th>
+          <th class="text-end pe-3">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for batch in batches %}
+          <tr>
+            <td class="ps-3 fw-semibold" style="color:#0D1B2A;">{{ batch.company.name }}</td>
+            <td>
+              {{ batch.date_from }} &rarr; {{ batch.date_to }}
+              {% if batch.payroll_period %}<div class="text-muted" style="font-size:.72rem;">{{ batch.payroll_period.name }}</div>{% endif %}
+            </td>
+            <td>
+              <span title="Payroll / Attendance / Portal / QR / OT / Leave / CA">{{ batch.total_exported }}</span>
+              <div class="text-muted" style="font-size:.72rem;">{{ batch.file_name }}</div>
+            </td>
+            <td>
+              {{ batch.generated_at|date:"M d, Y H:i" }}
+              <div class="text-muted" style="font-size:.72rem;">{% if batch.generated_by %}{{ batch.generated_by.username }}{% endif %}</div>
+            </td>
+            <td>
+              {% if batch.is_cleared %}
+                <span class="badge text-bg-secondary">Cleared</span>
+                <div class="text-muted" style="font-size:.7rem;">{{ batch.cleared_at|date:"M d, Y" }} ({{ batch.total_cleared }})</div>
+              {% else %}
+                <span class="badge text-bg-success">Exported</span>
+              {% endif %}
+            </td>
+            <td class="text-end pe-3">
+              <a href="{% url 'payroll:archive_download' batch.pk %}" class="btn btn-sm btn-outline-secondary" title="Download Excel">
+                <i class="bi bi-download"></i>
+              </a>
+              {% if not batch.is_cleared and not license_read_only %}
+                {% if batch.date_to < today %}
+                  <a href="{% url 'payroll:archive_clear' batch.pk %}" class="btn btn-sm btn-outline-danger ms-1" title="Clear exported records">
+                    <i class="bi bi-trash me-1"></i>Clear
+                  </a>
+                {% else %}
+                  <span class="text-muted ms-1" style="font-size:.72rem;" title="Range includes today/future">Active period</span>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="6" class="text-center py-5">
+              <i class="bi bi-archive fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
+              <span class="text-muted">No archives yet. Preview and export a date range to begin.</span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

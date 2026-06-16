@@ -477,6 +477,12 @@
           <i class="bi bi-calendar-event"></i> Holidays
         </a>
       </li>
+      <li class="nav-item">
+        <a href="{% url 'payroll:archive_center' %}"
+           class="nav-link {% if request.resolver_match.url_name == 'archive_center' or request.resolver_match.url_name == 'archive_clear' %}active{% endif %}">
+          <i class="bi bi-archive"></i> Archive &amp; Cleanup
+        </a>
+      </li>
     </ul>
 
     <div class="sidebar-section-label">Admin / Management</div>

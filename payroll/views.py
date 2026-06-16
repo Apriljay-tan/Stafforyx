@@ -1,7 +1,13 @@
+import os
+from datetime import date as _date
+
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
+from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -9,8 +15,14 @@ from accounts.company_access import filter_queryset_by_user_companies, user_can_
 from companies.models import Company
 from employees.models import Department, Employee
 
-from .forms import PayrollAdjustmentForm, PayrollPeriodForm, PayrollRecordForm
-from .models import PayrollAdjustment, PayrollPeriod, PayrollRecord
+from .archive_services import (
+    build_archive_workbook, collect_archive_querysets, count_archive_records,
+    perform_cleanup, save_workbook,
+)
+from .forms import (
+    ArchiveFilterForm, PayrollAdjustmentForm, PayrollPeriodForm, PayrollRecordForm,
+)
+from .models import ArchiveBatch, PayrollAdjustment, PayrollPeriod, PayrollRecord
 
 
 def _attach_payroll_display(record):
@@ -498,3 +510,159 @@ def adjustment_delete(request, pk):
         return redirect('payroll:payroll_record_edit', pk=record_pk)
 
     return render(request, 'payroll/adjustment_confirm_delete.html', {'adj': adj})
+
+
+# ── Payroll Archive & Cleanup ───────────────────────────────────────────────────
+
+CONFIRM_PHRASE = 'DELETE ARCHIVED DATA'
+
+
+def _archive_accessible_companies(user):
+    return filter_queryset_by_user_companies(Company.objects.all(), user)
+
+
+def _scoped_batches(user):
+    return filter_queryset_by_user_companies(
+        ArchiveBatch.objects.select_related(
+            'company', 'payroll_period', 'generated_by', 'cleared_by'
+        ),
+        user,
+    )
+
+
+def archive_center(request):
+    """Archive & Cleanup home: filter form, preview counts, export, batch history."""
+    accessible = _archive_accessible_companies(request.user)
+    form = ArchiveFilterForm(request.POST or None, accessible_companies=accessible)
+    preview = None
+
+    if request.method == 'POST' and form.is_valid():
+        company = form.cleaned_data['company']
+        if not user_can_access_company(request.user, company):
+            raise PermissionDenied
+        period = form.cleaned_data.get('payroll_period')
+        date_from = form.cleaned_data['date_from']
+        date_to = form.cleaned_data['date_to']
+
+        querysets = collect_archive_querysets(company, date_from, date_to, period)
+        counts = count_archive_records(querysets)
+        action = request.POST.get('action')
+
+        if action == 'export':
+            workbook = build_archive_workbook(
+                querysets, company=company, date_from=date_from, date_to=date_to,
+                generated_by=request.user, counts=counts,
+            )
+            file_name, rel_path, _abs_path = save_workbook(
+                workbook, company, date_from, date_to
+            )
+            batch = ArchiveBatch.objects.create(
+                company=company, payroll_period=period,
+                date_from=date_from, date_to=date_to,
+                file_name=file_name, file_path=rel_path,
+                payroll_count=counts.get('payroll_records', 0),
+                attendance_count=counts.get('attendance_records', 0),
+                portal_log_count=counts.get('portal_logs', 0),
+                qr_log_count=counts.get('qr_logs', 0),
+                overtime_count=counts.get('overtime_requests', 0),
+                leave_count=counts.get('leave_requests', 0),
+                ca_count=counts.get('ca_requests', 0),
+                generated_by=request.user,
+            )
+            messages.success(
+                request,
+                f'Archive exported: {file_name}. Download and verify it before '
+                f'clearing any server records.',
+            )
+            return redirect('payroll:archive_download', pk=batch.pk)
+
+        # Default action: preview only (never deletes).
+        preview = {
+            'company': company, 'period': period,
+            'date_from': date_from, 'date_to': date_to,
+            'counts': counts, 'total': sum(counts.values()),
+        }
+
+    return render(request, 'payroll/archive_center.html', {
+        'form': form,
+        'preview': preview,
+        'batches': _scoped_batches(request.user)[:50],
+        'today': _date.today(),
+        'confirm_phrase': CONFIRM_PHRASE,
+    })
+
+
+def archive_download(request, pk):
+    batch = get_object_or_404(_scoped_batches(request.user), pk=pk)
+    if not user_can_access_company(request.user, batch.company):
+        raise PermissionDenied
+
+    abs_path = (
+        os.path.join(settings.MEDIA_ROOT, batch.file_path) if batch.file_path else None
+    )
+    if not abs_path or not os.path.exists(abs_path):
+        messages.error(
+            request,
+            'The archive file is no longer on the server. Its batch metadata is '
+            'still retained for audit history.',
+        )
+        return redirect('payroll:archive_center')
+
+    return FileResponse(open(abs_path, 'rb'), as_attachment=True, filename=batch.file_name)
+
+
+def archive_clear(request, pk):
+    """Confirm + delete only the records covered by an exported ArchiveBatch."""
+    batch = get_object_or_404(_scoped_batches(request.user), pk=pk)
+    if not user_can_access_company(request.user, batch.company):
+        raise PermissionDenied
+
+    today = _date.today()
+    blocks = []
+    if batch.is_cleared:
+        blocks.append('This archive batch has already been cleared.')
+    if batch.date_to >= today:
+        blocks.append(
+            'This range includes today or a future date. Only fully past periods '
+            'can be cleared, to protect the active payroll period.'
+        )
+
+    if request.method == 'POST':
+        if blocks:
+            for message in blocks:
+                messages.error(request, message)
+            return redirect('payroll:archive_center')
+
+        confirm_text = (request.POST.get('confirm_text') or '').strip()
+        if confirm_text != CONFIRM_PHRASE:
+            messages.error(
+                request, f'Confirmation text did not match. Type "{CONFIRM_PHRASE}" to proceed.'
+            )
+            return redirect('payroll:archive_clear', pk=batch.pk)
+
+        cleared = perform_cleanup(batch)
+        batch.cleared_counts = cleared
+        batch.is_cleared = True
+        batch.cleared_by = request.user
+        batch.cleared_at = timezone.now()
+        batch.save(update_fields=[
+            'cleared_counts', 'is_cleared', 'cleared_by', 'cleared_at',
+        ])
+        messages.success(
+            request,
+            f'Cleared {sum(cleared.values())} archived record(s) for {batch.company.name}. '
+            f'Employees, settings, and payroll periods were preserved.',
+        )
+        return redirect('payroll:archive_center')
+
+    querysets = collect_archive_querysets(
+        batch.company, batch.date_from, batch.date_to, batch.payroll_period
+    )
+    counts = count_archive_records(querysets)
+    return render(request, 'payroll/archive_clear_confirm.html', {
+        'batch': batch,
+        'counts': counts,
+        'total': sum(counts.values()),
+        'blocks': blocks,
+        'confirm_phrase': CONFIRM_PHRASE,
+    })

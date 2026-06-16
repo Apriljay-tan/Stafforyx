@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Clear Archived Data{% endblock %}
+{% block page_title %}Clear Archived Data{% endblock %}
+
+{% block content %}
+
+<div class="page-header mb-3">
+  <h1>Clear Exported Records</h1>
+  <p>Permanently delete the records included in this archive batch.</p>
+</div>
+
+<div class="row justify-content-center">
+  <div class="col-12 col-lg-8">
+    <div class="card border-danger-subtle">
+      <div class="card-header bg-danger-subtle">
+        <i class="bi bi-exclamation-octagon-fill me-1 text-danger"></i>Confirm Permanent Deletion
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <div class="fw-semibold" style="color:#0D1B2A;">{{ batch.company.name }}</div>
+          <div class="text-muted small">
+            {{ batch.date_from }} &rarr; {{ batch.date_to }}
+            {% if batch.payroll_period %} &bull; {{ batch.payroll_period.name }}{% endif %}
+            &bull; Archive file: {{ batch.file_name }}
+          </div>
+        </div>
+
+        {% if blocks %}
+          {% for message in blocks %}
+            <div class="alert alert-danger py-2"><i class="bi bi-x-octagon me-1"></i>{{ message }}</div>
+          {% endfor %}
+          <a href="{% url 'payroll:archive_center' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left me-1"></i>Back to Archive Center
+          </a>
+        {% else %}
+          <p class="mb-2">The following records (currently matching this batch's range) will be
+            <strong class="text-danger">permanently deleted</strong>:</p>
+          <ul class="mb-3" style="font-size:.9rem;">
+            <li>Payroll records: <strong>{{ counts.payroll_records }}</strong></li>
+            <li>Attendance records: <strong>{{ counts.attendance_records }}</strong></li>
+            <li>Portal logs: <strong>{{ counts.portal_logs }}</strong></li>
+            <li>QR scan logs: <strong>{{ counts.qr_logs }}</strong></li>
+            <li>Overtime requests: <strong>{{ counts.overtime_requests }}</strong></li>
+            <li>Leave requests: <strong>{{ counts.leave_requests }}</strong></li>
+            <li>Cash advance requests: <strong>{{ counts.ca_requests }}</strong></li>
+          </ul>
+
+          <div class="alert alert-warning py-2" style="font-size:.85rem;">
+            <i class="bi bi-shield-check me-1"></i>Employees, companies, users, company &amp;
+            payroll settings, attendance locations, and payroll periods will <strong>not</strong> be deleted.
+            Make sure you have downloaded and verified the Excel archive first.
+          </div>
+
+          <form method="post" novalidate>
+            {% csrf_token %}
+            <label class="form-label small fw-semibold mb-1">
+              Type <code>{{ confirm_phrase }}</code> to confirm:
+            </label>
+            <input type="text" name="confirm_text" class="form-control mb-3" autocomplete="off"
+                   placeholder="{{ confirm_phrase }}">
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-danger btn-sm"
+                      onclick="return confirm('This permanently deletes the listed records. Continue?');">
+                <i class="bi bi-trash me-1"></i>Clear Exported Records
+              </button>
+              <a href="{% url 'payroll:archive_center' %}" class="btn btn-outline-secondary btn-sm">Cancel</a>
+            </div>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

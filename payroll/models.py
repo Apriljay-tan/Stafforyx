@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.auth.models import User
 from django.db import models
 
 from companies.models import Company
@@ -239,3 +240,78 @@ class PayrollAdjustment(models.Model):
         if source_ca is not None:
             source_ca.reconcile_deductions()
         return result
+
+
+class ArchiveBatch(models.Model):
+    """
+    Audit record for a Payroll Archive & Cleanup operation.
+
+    An ArchiveBatch is created when an admin exports payroll-related data for a
+    company + date range to an Excel file. It records what was exported and,
+    later, what was cleared. The metadata is retained even if the exported
+    Excel file is deleted from disk, so the archive history stays auditable.
+    """
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, related_name='archive_batches'
+    )
+    payroll_period = models.ForeignKey(
+        PayrollPeriod, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='archive_batches',
+    )
+    date_from = models.DateField()
+    date_to = models.DateField()
+
+    file_name = models.CharField(max_length=255)
+    # Path relative to MEDIA_ROOT. The metadata below is kept even if the file
+    # is later removed from disk.
+    file_path = models.CharField(max_length=500, blank=True)
+
+    # Snapshot of how many records were included in the export.
+    payroll_count = models.PositiveIntegerField(default=0)
+    attendance_count = models.PositiveIntegerField(default=0)
+    portal_log_count = models.PositiveIntegerField(default=0)
+    qr_log_count = models.PositiveIntegerField(default=0)
+    overtime_count = models.PositiveIntegerField(default=0)
+    leave_count = models.PositiveIntegerField(default=0)
+    ca_count = models.PositiveIntegerField(default=0)
+
+    # Per-model counts actually deleted during cleanup (populated on clear).
+    cleared_counts = models.JSONField(default=dict, blank=True)
+
+    generated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='generated_archive_batches',
+    )
+    generated_at = models.DateTimeField(auto_now_add=True)
+    cleared_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cleared_archive_batches',
+    )
+    cleared_at = models.DateTimeField(null=True, blank=True)
+    is_cleared = models.BooleanField(default=False)
+    notes = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-generated_at']
+        indexes = [
+            models.Index(fields=['company', 'generated_at']),
+            models.Index(fields=['is_cleared']),
+        ]
+
+    def __str__(self):
+        return f'{self.company.name} archive {self.date_from}–{self.date_to}'
+
+    @property
+    def total_exported(self):
+        return (
+            self.payroll_count + self.attendance_count + self.portal_log_count
+            + self.qr_log_count + self.overtime_count + self.leave_count
+            + self.ca_count
+        )
+
+    @property
+    def total_cleared(self):
+        try:
+            return sum(int(v) for v in (self.cleared_counts or {}).values())
+        except (TypeError, ValueError):
+            return 0
