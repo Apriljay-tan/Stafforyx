@@ -265,9 +265,13 @@
             </td>
             <td>
               {% if record.overtime_minutes %}
-                <span class="badge text-bg-primary">{{ record.overtime_minutes }} min</span>
-              {% elif record.overtime_hours %}
-                <span class="badge text-bg-primary">{{ record.overtime_hours }} h</span>
+                <span class="badge text-bg-primary">{{ record.overtime_counted_display }} counted</span>
+                {% if record.overtime_counting_reduced %}
+                  <div class="text-muted small mt-1">Actual: {{ record.actual_overtime_display }}</div>
+                {% endif %}
+              {% elif record.actual_overtime_minutes %}
+                <span class="badge text-bg-secondary">0m counted</span>
+                <div class="text-muted small mt-1">Actual: {{ record.actual_overtime_display }}</div>
               {% else %}
                 <span class="text-muted">—</span>
               {% endif %}

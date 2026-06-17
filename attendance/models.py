@@ -488,7 +488,14 @@ class AttendanceRecord(models.Model):
     late_minutes = models.PositiveIntegerField(default=0)
     undertime_minutes = models.PositiveIntegerField(default=0)
     overtime_hours = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # overtime_minutes holds the COUNTED/payable overtime after applying the
+    # company/employee overtime counting rule. actual_overtime_minutes preserves
+    # the raw detected overtime for audit, regardless of any rounding rule.
     overtime_minutes = models.PositiveIntegerField(default=0)
+    actual_overtime_minutes = models.PositiveIntegerField(
+        default=0,
+        help_text='Raw detected overtime before the counting/rounding rule is applied.',
+    )
     total_work_minutes = models.PositiveIntegerField(default=0)
     night_differential_minutes = models.PositiveIntegerField(default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='present')
@@ -508,6 +515,31 @@ class AttendanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.employee} — {self.date} ({self.get_status_display()})"
+
+    @staticmethod
+    def _format_minutes(total_minutes):
+        total = int(total_minutes or 0)
+        hours, minutes = divmod(total, 60)
+        if hours and minutes:
+            return f'{hours}h {minutes}m'
+        if hours:
+            return f'{hours}h'
+        return f'{minutes}m'
+
+    @property
+    def overtime_counted_display(self):
+        """Counted/payable overtime formatted as e.g. '1h 30m'."""
+        return self._format_minutes(self.overtime_minutes)
+
+    @property
+    def actual_overtime_display(self):
+        """Raw detected overtime formatted as e.g. '1h 45m'."""
+        return self._format_minutes(self.actual_overtime_minutes)
+
+    @property
+    def overtime_counting_reduced(self):
+        """True when the counting rule reduced the payable overtime below actual."""
+        return (self.actual_overtime_minutes or 0) > (self.overtime_minutes or 0)
 
 
 class AttendancePortalLog(models.Model):

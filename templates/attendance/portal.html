@@ -110,7 +110,10 @@
             {% elif today_record.computed_status == 'undertime' %}
               <span class="badge" style="background:#f97316;color:#fff;">Undertime ({{ today_record.undertime_minutes }} min)</span>
             {% elif today_record.computed_status == 'overtime' %}
-              <span class="badge text-bg-primary">Overtime ({{ today_record.overtime_minutes }} min)</span>
+              <span class="badge text-bg-primary">Overtime ({{ today_record.overtime_counted_display }} counted)</span>
+              {% if today_record.overtime_counting_reduced %}
+                <span class="text-muted small ms-1">Actual: {{ today_record.actual_overtime_display }}</span>
+              {% endif %}
             {% elif today_record.computed_status == 'incomplete' %}
               <span class="badge text-bg-secondary">Incomplete — time out pending</span>
             {% elif today_record.computed_status == 'rest_day' %}

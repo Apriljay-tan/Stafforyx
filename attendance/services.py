@@ -8,9 +8,42 @@ attendance date and populates derived attendance fields.
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 
+from companies.models import OVERTIME_COUNTING_RULE_EXACT
 from .schedule_services import resolve_expected_shift
 
 _60 = Decimal(60)
+
+# Block size in minutes for each overtime counting rule value.
+_OVERTIME_BLOCK_MINUTES = {'30': 30, '60': 60, '120': 120}
+
+
+def resolve_overtime_rule(employee):
+    """
+    Resolve the effective overtime counting rule for an employee.
+
+    Priority: employee override → employee's company default → 'exact'.
+    A blank employee override means "inherit from company".
+    """
+    override = (getattr(employee, 'overtime_counting_rule', '') or '').strip()
+    if override:
+        return override
+    company = getattr(employee, 'company', None)
+    company_rule = (getattr(company, 'default_overtime_counting_rule', '') or '').strip()
+    return company_rule or OVERTIME_COUNTING_RULE_EXACT
+
+
+def apply_overtime_rule(actual_minutes, rule):
+    """
+    Count overtime minutes by completed blocks, flooring DOWN.
+
+    'exact' (or blank/unknown) returns the actual minutes unchanged. Block rules
+    return the largest multiple of the block size that does not exceed
+    ``actual_minutes`` (e.g. 59 under the '30' rule → 30; 29 → 0).
+    """
+    block = _OVERTIME_BLOCK_MINUTES.get(rule)
+    if not block:
+        return actual_minutes
+    return (actual_minutes // block) * block
 
 
 def _to_min(t):
@@ -206,16 +239,23 @@ def compute_attendance(record):
 
     night_diff_min = calculate_night_differential_minutes(record, record.employee)
 
+    # overtime_min is the raw detected overtime. Preserve it as the audit value
+    # and apply the effective counting rule to derive the counted/payable value.
+    actual_overtime_min = overtime_min
+    overtime_rule = resolve_overtime_rule(record.employee)
+    counted_overtime_min = apply_overtime_rule(actual_overtime_min, overtime_rule)
+
     record.late_minutes = late_min
     record.undertime_minutes = undertime_min
-    record.overtime_minutes = overtime_min
+    record.actual_overtime_minutes = actual_overtime_min
+    record.overtime_minutes = counted_overtime_min
     record.total_work_minutes = total_work_min
     record.night_differential_minutes = night_diff_min
     record.total_hours = _minutes_to_hours(total_work_min)
-    record.overtime_hours = _minutes_to_hours(overtime_min)
+    record.overtime_hours = _minutes_to_hours(counted_overtime_min)
     record.computed_status = computed
     record.save(update_fields=[
-        'late_minutes', 'undertime_minutes', 'overtime_minutes',
-        'total_work_minutes', 'night_differential_minutes', 'total_hours',
-        'overtime_hours', 'computed_status',
+        'late_minutes', 'undertime_minutes', 'actual_overtime_minutes',
+        'overtime_minutes', 'total_work_minutes', 'night_differential_minutes',
+        'total_hours', 'overtime_hours', 'computed_status',
     ])

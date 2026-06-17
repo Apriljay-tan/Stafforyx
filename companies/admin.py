@@ -19,7 +19,7 @@ class CompanyAdmin(admin.ModelAdmin):
                 'payslip_template_style', 'payslip_accent_color',
                 'payslip_show_company_logo', 'payslip_show_rates',
                 'payslip_show_attendance_summary', 'payslip_show_overtime_breakdown',
-                'default_overtime_multiplier',
+                'default_overtime_multiplier', 'default_overtime_counting_rule',
                 'payslip_show_received_by', 'payslip_footer_note',
             ),
         }),

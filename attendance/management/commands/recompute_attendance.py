@@ -2,9 +2,11 @@
 python manage.py recompute_attendance
 
 Recompute derived attendance fields (total_hours, overtime_hours,
-late_minutes, undertime_minutes, overtime_minutes, total_work_minutes,
-computed_status) for existing AttendanceRecord rows using the current
-attendance calculation logic.
+late_minutes, undertime_minutes, overtime_minutes, actual_overtime_minutes,
+total_work_minutes, computed_status) for existing AttendanceRecord rows using
+the current attendance calculation logic. This re-applies the company/employee
+overtime counting rule, so old records get counted overtime and a preserved
+actual_overtime_minutes value.
 
 Options
 -------
@@ -26,6 +28,7 @@ from attendance.services import compute_attendance
 _TRACKED = [
     'late_minutes',
     'undertime_minutes',
+    'actual_overtime_minutes',
     'overtime_minutes',
     'total_work_minutes',
     'total_hours',

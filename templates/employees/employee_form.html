@@ -257,6 +257,16 @@
             <div class="text-danger small mt-1">{{ form.overtime_policy.errors.as_text }}</div>
           {% endif %}
         </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label fw-semibold small">Overtime counting rule</label>
+          {{ form.overtime_counting_rule }}
+          {% if form.overtime_counting_rule.help_text %}
+            <div class="form-text">{{ form.overtime_counting_rule.help_text }}</div>
+          {% endif %}
+          {% if form.overtime_counting_rule.errors %}
+            <div class="text-danger small mt-1">{{ form.overtime_counting_rule.errors.as_text }}</div>
+          {% endif %}
+        </div>
         <div class="col-12">
           <label class="form-label fw-semibold small d-block">{{ form.flexible_day_offs.label }}</label>
           <div class="d-flex flex-wrap gap-3">

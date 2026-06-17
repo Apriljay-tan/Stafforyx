@@ -5,7 +5,7 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from companies.models import Company
+from companies.models import Company, EMPLOYEE_OVERTIME_COUNTING_RULE_CHOICES
 
 
 class Department(models.Model):
@@ -178,6 +178,19 @@ class Employee(models.Model):
         help_text=(
             'Ordinary-day overtime rate for this employee (1.25 = 125%). '
             'Leave blank to use the company default overtime multiplier.'
+        ),
+    )
+    overtime_counting_rule = models.CharField(
+        max_length=10,
+        choices=EMPLOYEE_OVERTIME_COUNTING_RULE_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='Overtime counting rule',
+        help_text=(
+            'How this employee\'s detected overtime is counted for pay. Leave '
+            'blank to inherit the company default. Block rules floor DOWN to the '
+            'last completed block (e.g. 59 min of OT counts as 30 under the '
+            '30-minute rule).'
         ),
     )
     flexible_schedule_enabled = models.BooleanField(

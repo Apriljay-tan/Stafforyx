@@ -4,6 +4,22 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
+# ── Overtime counting / rounding rule ────────────────────────────────────────
+# Values are the block size in minutes ('exact' = no rounding). Counting always
+# floors DOWN to the last completed block (e.g. 59 min under the 30 rule = 30).
+OVERTIME_COUNTING_RULE_EXACT = 'exact'
+OVERTIME_COUNTING_RULE_CHOICES = [
+    (OVERTIME_COUNTING_RULE_EXACT, 'Exact minutes (no rounding)'),
+    ('30', '30-minute blocks'),
+    ('60', '1-hour blocks'),
+    ('120', '2-hour blocks'),
+]
+# Employee-level choices add a blank "inherit from company" option.
+EMPLOYEE_OVERTIME_COUNTING_RULE_CHOICES = (
+    [('', 'Inherit from company default')] + OVERTIME_COUNTING_RULE_CHOICES
+)
+
+
 class Company(models.Model):
     STATUS_CHOICES = [
         ('trial', 'Trial'),
@@ -126,6 +142,18 @@ class Company(models.Model):
             'Ordinary-day overtime rate applied to employees without their own '
             'override (1.25 = 125%). Holiday and night-differential rates are '
             'configured separately.'
+        ),
+    )
+    default_overtime_counting_rule = models.CharField(
+        max_length=10,
+        choices=OVERTIME_COUNTING_RULE_CHOICES,
+        default=OVERTIME_COUNTING_RULE_EXACT,
+        verbose_name='Default overtime counting rule',
+        help_text=(
+            'How detected overtime is counted for pay. Exact = pay every minute. '
+            'Block rules floor DOWN to the last completed block (e.g. under the '
+            '30-minute rule, 59 min of OT counts as 30 min). Useful for flexible '
+            'employees who accumulate many small overtime minutes.'
         ),
     )
     attendance_qr_validation_enabled = models.BooleanField(
