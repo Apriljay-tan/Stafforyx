@@ -1,7 +1,7 @@
 import datetime
 
 from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -51,7 +51,7 @@ def _make_employee(company, user=None, **kwargs):
 
 def _make_chat_admin(username, company):
     user = _make_user(username)
-    UserProfile.objects.create(user=user, can_manage_chat=True)
+    UserProfile.objects.create(user=user, can_manage_chat=True, role='hr_admin')
     UserCompanyAccess.objects.create(user=user, company=company, role='hr_admin', is_active=True)
     return user
 
@@ -67,7 +67,7 @@ def _gif_file(name='anim.gif', content=b'gif-bytes'):
 class SendMessageAttachmentTests(TestCase):
     def setUp(self):
         self.company = _make_company()
-        self.admin = _make_chat_admin('admin', self.company)
+        self.admin = _make_chat_admin('chat_admin', self.company)
         self.emp_user = _make_user('emp')
         UserProfile.objects.create(user=self.emp_user, role='employee')
         self.employee = _make_employee(self.company, user=self.emp_user)
@@ -122,7 +122,7 @@ class SendMessageAttachmentTests(TestCase):
 class AttachmentAccessTests(TestCase):
     def setUp(self):
         self.company = _make_company()
-        self.admin = _make_chat_admin('admin', self.company)
+        self.admin = _make_chat_admin('chat_admin', self.company)
         self.emp_user = _make_user('emp')
         UserProfile.objects.create(user=self.emp_user, role='employee')
         self.employee = _make_employee(self.company, user=self.emp_user)
@@ -130,8 +130,7 @@ class AttachmentAccessTests(TestCase):
         self.msg = send_message(self.conv, self.admin, 'Pic', attachment=_image_file())
         self.attachment = self.msg.attachments.get()
 
-        self.outsider = _make_user('outsider')
-        UserProfile.objects.create(user=self.outsider, role='employee')
+        self.outsider = _make_chat_admin('other_admin', _make_company('OtherCo'))
 
     def test_participant_can_access_attachment(self):
         self.client.login(username='emp', password='testpass123')
@@ -140,9 +139,9 @@ class AttachmentAccessTests(TestCase):
         self.assertEqual(response['Content-Type'], 'image/jpeg')
 
     def test_non_participant_denied(self):
-        self.client.login(username='outsider', password='testpass123')
-        with self.assertRaises(PermissionDenied):
-            self.client.get(reverse('messaging:attachment_view', args=[self.attachment.pk]))
+        self.client.login(username='other_admin', password='testpass123')
+        response = self.client.get(reverse('messaging:attachment_view', args=[self.attachment.pk]))
+        self.assertEqual(response.status_code, 403)
 
     def test_admin_support_attachment_masks_sender_for_employee(self):
         data = serialize_message_for_user(self.msg, self.emp_user)
@@ -154,7 +153,7 @@ class AttachmentAccessTests(TestCase):
 class AttachmentViewHttpTests(TestCase):
     def setUp(self):
         self.company = _make_company()
-        self.admin = _make_chat_admin('admin', self.company)
+        self.admin = _make_chat_admin('chat_admin', self.company)
         self.emp_user = _make_user('emp')
         UserProfile.objects.create(user=self.emp_user, role='employee')
         self.employee = _make_employee(self.company, user=self.emp_user)
@@ -162,7 +161,7 @@ class AttachmentViewHttpTests(TestCase):
 
     @patch('licenses.middleware.is_license_active', return_value=True)
     def test_admin_thread_post_text_and_attachment(self, _mock):
-        self.client.login(username='admin', password='testpass123')
+        self.client.login(username='chat_admin', password='testpass123')
         response = self.client.post(reverse('messaging:thread', args=[self.conv.pk]), {
             'body': 'Check this out',
             'attachment': _image_file(),
@@ -185,7 +184,7 @@ class AttachmentViewHttpTests(TestCase):
         self.assertEqual(msg.attachments.count(), 1)
 
     def test_thread_page_renders_attachment_ui(self):
-        self.client.login(username='admin', password='testpass123')
+        self.client.login(username='chat_admin', password='testpass123')
         response = self.client.get(reverse('messaging:thread', args=[self.conv.pk]))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'msgChatAttachmentInput')
@@ -196,7 +195,7 @@ class AttachmentViewHttpTests(TestCase):
 class AttachmentPollingApiTests(TestCase):
     def setUp(self):
         self.company = _make_company()
-        self.admin = _make_chat_admin('admin', self.company)
+        self.admin = _make_chat_admin('chat_admin', self.company)
         self.emp_user = _make_user('emp')
         UserProfile.objects.create(user=self.emp_user, role='employee')
         self.employee = _make_employee(self.company, user=self.emp_user)

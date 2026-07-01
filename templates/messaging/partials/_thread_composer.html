@@ -1,3 +1,4 @@
+{% load static %}
 <div class="msg-chat-composer">
   <form method="post"
         action="{% url thread_url_name conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
@@ -10,133 +11,30 @@
              name="attachment"
              id="msgChatAttachmentInput"
              class="d-none"
-             accept="image/jpeg,image/png,image/webp,image/gif">
+             accept="image/jpeg,image/png,image/webp,image/gif,audio/webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg,video/webm,.mp3,.m4a,.wav,.ogg">
+      <input type="file"
+             id="msgChatVoiceUploadInput"
+             class="d-none"
+             accept="audio/webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg,video/webm,.webm,.mp3,.m4a,.wav,.ogg">
       <button type="button" class="msg-chat-attach-btn" id="msgChatAttachBtn" title="Attach image or GIF">
         <i class="bi bi-image"></i>
       </button>
+      <button type="button" class="msg-chat-voice-btn" id="msgChatVoiceBtn" title="Record voice message (or upload audio file)">
+        <i class="bi bi-mic"></i>
+      </button>
+      <span id="msgChatVoiceTimer" class="msg-chat-voice-timer d-none" aria-live="polite"></span>
       <textarea name="body" id="msgChatComposerInput" rows="1" maxlength="5000" placeholder="Type a message…"></textarea>
       <button type="submit" class="msg-chat-send-btn" id="msgChatSendBtn">
         <i class="bi bi-send-fill"></i> Send
+      </button>
+    </div>
+    <div class="msg-chat-composer-hint">
+      <button type="button" class="btn btn-link btn-sm p-0 msg-chat-voice-upload-link" onclick="document.getElementById('msgChatVoiceUploadInput').click()">
+        Upload audio file
       </button>
     </div>
   </form>
 </div>
 
 {% include 'messaging/partials/_chat_poll.html' %}
-
-<script>
-  (function () {
-    var box = document.getElementById('msgChatMessages');
-    if (box) {
-      box.scrollTop = box.scrollHeight;
-    }
-
-    var input = document.getElementById('msgChatComposerInput');
-    var form = document.getElementById('msgChatComposerForm');
-    var sendBtn = document.getElementById('msgChatSendBtn');
-    var attachBtn = document.getElementById('msgChatAttachBtn');
-    var attachInput = document.getElementById('msgChatAttachmentInput');
-    var attachPreview = document.getElementById('msgChatAttachmentPreview');
-
-    function hasComposerContent() {
-      var text = input ? input.value.trim() : '';
-      var file = attachInput && attachInput.files && attachInput.files[0];
-      return !!(text || file);
-    }
-
-    function clearAttachmentPreview() {
-      if (!attachPreview) return;
-      attachPreview.innerHTML = '';
-      attachPreview.classList.add('d-none');
-      if (attachInput) attachInput.value = '';
-    }
-
-    function showAttachmentPreview(file) {
-      if (!attachPreview || !file) return;
-      attachPreview.innerHTML = '';
-      attachPreview.classList.remove('d-none');
-
-      var row = document.createElement('div');
-      row.className = 'msg-chat-attachment-preview-item';
-
-      var thumb = document.createElement('img');
-      thumb.className = 'msg-chat-attachment-preview-thumb';
-      thumb.alt = '';
-      row.appendChild(thumb);
-
-      var meta = document.createElement('div');
-      meta.className = 'msg-chat-attachment-preview-meta';
-      var name = document.createElement('div');
-      name.className = 'msg-chat-attachment-preview-name';
-      name.textContent = file.name;
-      meta.appendChild(name);
-      var hint = document.createElement('div');
-      hint.className = 'msg-chat-attachment-preview-hint';
-      hint.textContent = 'Ready to send with your message';
-      meta.appendChild(hint);
-      row.appendChild(meta);
-
-      var removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn btn-sm btn-outline-secondary msg-chat-attachment-preview-remove';
-      removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-      removeBtn.addEventListener('click', clearAttachmentPreview);
-      row.appendChild(removeBtn);
-
-      attachPreview.appendChild(row);
-
-      var reader = new FileReader();
-      reader.onload = function (e) {
-        thumb.src = e.target.result;
-      };
-      reader.readAsDataURL(file);
-    }
-
-    if (attachBtn && attachInput) {
-      attachBtn.addEventListener('click', function () {
-        attachInput.click();
-      });
-      attachInput.addEventListener('change', function () {
-        var file = attachInput.files && attachInput.files[0];
-        if (!file) {
-          clearAttachmentPreview();
-          return;
-        }
-        var allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-        if (allowed.indexOf(file.type) === -1) {
-          alert('Please choose a JPG, PNG, WebP, or GIF image.');
-          clearAttachmentPreview();
-          return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-          alert('Attachment must be 10 MB or smaller.');
-          clearAttachmentPreview();
-          return;
-        }
-        showAttachmentPreview(file);
-      });
-    }
-
-    if (input && form) {
-      input.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          if (hasComposerContent()) {
-            form.requestSubmit();
-          }
-        }
-      });
-    }
-
-    if (form && sendBtn) {
-      form.addEventListener('submit', function (e) {
-        if (!hasComposerContent()) {
-          e.preventDefault();
-          return;
-        }
-        sendBtn.disabled = true;
-        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-      });
-    }
-  })();
-</script>
+<script src="{% static 'js/chat-composer.js' %}"></script>

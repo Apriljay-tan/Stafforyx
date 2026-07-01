@@ -101,18 +101,27 @@
       var attachments = document.createElement('div');
       attachments.className = 'msg-chat-attachments' + (msg.body ? ' msg-chat-attachments--with-text' : '');
       msg.attachments.forEach(function (att) {
-        var link = document.createElement('a');
-        link.href = att.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.className = 'msg-chat-attachment-link';
-        var img = document.createElement('img');
-        img.src = att.url;
-        img.alt = att.original_filename || '';
-        img.className = 'msg-chat-attachment-img' + (att.attachment_type === 'gif' ? ' msg-chat-attachment-img--gif' : '');
-        img.loading = 'lazy';
-        link.appendChild(img);
-        attachments.appendChild(link);
+        if (att.attachment_type === 'voice') {
+          var audio = document.createElement('audio');
+          audio.controls = true;
+          audio.preload = 'metadata';
+          audio.className = 'msg-chat-voice-player';
+          audio.src = att.url;
+          attachments.appendChild(audio);
+        } else {
+          var link = document.createElement('a');
+          link.href = att.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'msg-chat-attachment-link';
+          var img = document.createElement('img');
+          img.src = att.url;
+          img.alt = att.original_filename || '';
+          img.className = 'msg-chat-attachment-img' + (att.attachment_type === 'gif' ? ' msg-chat-attachment-img--gif' : '');
+          img.loading = 'lazy';
+          link.appendChild(img);
+          attachments.appendChild(link);
+        }
       });
       bubble.appendChild(attachments);
     }

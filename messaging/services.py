@@ -218,7 +218,7 @@ def _ensure_sender_can_message(conversation, sender):
 def send_message(conversation, sender, body, *, attachment=None):
     body = (body or '').strip()
     if not body and not attachment:
-        raise ValidationError('Message must include text or an image attachment.')
+        raise ValidationError('Message must include text or an attachment.')
     if body and len(body) > MAX_MESSAGE_BODY_LENGTH:
         raise ValidationError(f'Message body cannot exceed {MAX_MESSAGE_BODY_LENGTH} characters.')
     if attachment:
@@ -428,8 +428,11 @@ def message_preview_text(message, viewer_user) -> str:
     body = (data.get('body') or '').strip()
     attachments = data.get('attachments') or []
     if attachments and not body:
-        if attachments[0]['attachment_type'] == 'gif':
+        attachment_type = attachments[0]['attachment_type']
+        if attachment_type == 'gif':
             return 'GIF'
+        if attachment_type == 'voice':
+            return 'Voice message'
         return 'Photo'
     if body:
         return body[:80]
