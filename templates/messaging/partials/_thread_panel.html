@@ -1,0 +1,57 @@
+<header class="msg-chat-thread-header">
+  <div class="msg-chat-thread-heading">
+    {% if conversation.conversation_type == 'group' %}
+      {% include 'messaging/partials/_group_avatar.html' with conversation=conversation size='md' %}
+    {% endif %}
+    <div class="min-w-0">
+      <h3 class="msg-chat-thread-title text-truncate">{{ conversation_title }}</h3>
+      <div class="msg-chat-thread-sub text-truncate">
+        {{ conversation.company.name }}
+        {% if participant_names %}
+          · {{ participant_names|join:", " }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <form method="post" action="{% url 'messaging:archive' conversation.pk %}" class="flex-shrink-0">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-secondary btn-sm"
+            onclick="return confirm('Archive this conversation?');" title="Archive">
+      <i class="bi bi-archive"></i>
+    </button>
+  </form>
+</header>
+
+<div class="msg-chat-messages" id="msgChatMessages">
+  {% for message in chat_messages %}
+    <div class="msg-chat-row {% if message.is_mine %}mine{% else %}theirs{% endif %}">
+      <div class="msg-chat-bubble-wrap">
+        <div class="msg-chat-sender">{{ message.sender_display }}</div>
+        <div class="msg-chat-bubble{% if message.is_deleted %} deleted{% endif %}">{{ message.body }}</div>
+        <div class="msg-chat-time">{{ message.time_display }}</div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="msg-chat-empty" style="min-height: 200px;">
+      <i class="bi bi-chat"></i>
+      <p class="mb-0 small">No messages yet. Say hello below.</p>
+    </div>
+  {% endfor %}
+</div>
+
+<div class="msg-chat-composer">
+  <form method="post">
+    {% csrf_token %}
+    <textarea name="body" rows="1" maxlength="5000" required placeholder="Type a message…"></textarea>
+    <button type="submit" class="msg-chat-send-btn">Send</button>
+  </form>
+</div>
+
+<script>
+  (function () {
+    var box = document.getElementById('msgChatMessages');
+    if (box) {
+      box.scrollTop = box.scrollHeight;
+    }
+  })();
+</script>

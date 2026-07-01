@@ -2,6 +2,7 @@ import datetime
 
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
@@ -258,6 +259,38 @@ class GroupConversationTests(TestCase):
                 [self.peer1_user, outsider],
                 self.company,
             )
+
+    def test_create_group_with_avatar(self):
+        avatar = SimpleUploadedFile('team.png', b'fake-image-bytes', content_type='image/png')
+        conv = create_group_conversation(
+            self.creator,
+            'Team Chat',
+            [self.peer1_user, self.peer2_user],
+            self.company,
+            group_avatar=avatar,
+        )
+        conv.refresh_from_db()
+        self.assertTrue(conv.group_avatar.name)
+        self.assertIn('group_avatars/', conv.group_avatar.name)
+
+    def test_create_group_without_avatar_uses_initial(self):
+        conv = create_group_conversation(
+            self.creator,
+            'Team Chat',
+            [self.peer1_user, self.peer2_user],
+            self.company,
+        )
+        self.assertFalse(conv.group_avatar)
+        self.assertEqual(conv.get_group_avatar_initial(), 'T')
+
+    def test_group_avatar_initial_fallback_g(self):
+        conv = Conversation(
+            company=self.company,
+            conversation_type=TYPE_GROUP,
+            title='',
+            created_by=self.creator,
+        )
+        self.assertEqual(conv.get_group_avatar_initial(), 'G')
 
 
 class InboxTests(TestCase):

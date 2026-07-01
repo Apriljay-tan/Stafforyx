@@ -149,7 +149,7 @@ def get_or_create_direct_conversation(user_a, user_b):
 
 
 @transaction.atomic
-def create_group_conversation(creator, title, participant_users, company):
+def create_group_conversation(creator, title, participant_users, company, *, group_avatar=None):
     title = (title or '').strip()
     if not title:
         raise ValidationError('Title is required for group conversations.')
@@ -181,6 +181,9 @@ def create_group_conversation(creator, title, participant_users, company):
         title=title,
         created_by=creator,
     )
+    if group_avatar:
+        conversation.group_avatar = group_avatar
+        conversation.save(update_fields=['group_avatar'])
     _ensure_participant(
         conversation, creator,
         role=ROLE_GROUP_CREATOR,

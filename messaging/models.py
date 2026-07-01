@@ -8,6 +8,7 @@ from .constants import (
     CONVERSATION_TYPE_CHOICES,
     MAX_MESSAGE_BODY_LENGTH,
     PARTICIPANT_ROLE_CHOICES,
+    TYPE_GROUP,
 )
 
 
@@ -15,6 +16,12 @@ class Conversation(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='conversations')
     conversation_type = models.CharField(max_length=20, choices=CONVERSATION_TYPE_CHOICES)
     title = models.CharField(max_length=150, blank=True, default='')
+    group_avatar = models.ImageField(
+        upload_to='messaging/group_avatars/',
+        blank=True,
+        null=True,
+        help_text='Optional logo for official group conversations.',
+    )
     created_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='created_conversations')
     is_archived = models.BooleanField(default=False)
     archived_at = models.DateTimeField(null=True, blank=True)
@@ -35,6 +42,14 @@ class Conversation(models.Model):
 
     def __str__(self):
         return self.title or f'{self.get_conversation_type_display()} #{self.pk}'
+
+    def get_group_avatar_initial(self):
+        if self.conversation_type != TYPE_GROUP:
+            return ''
+        title = (self.title or '').strip()
+        if not title:
+            return 'G'
+        return title[0].upper()
 
 
 class ConversationParticipant(models.Model):

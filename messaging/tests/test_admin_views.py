@@ -2,13 +2,15 @@ import datetime
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import UserCompanyAccess, UserProfile
 from companies.models import Company
 from employees.models import Employee
-from messaging.services import get_or_create_admin_support_conversation, send_message
+from messaging.models import Conversation
+from messaging.services import create_group_conversation, get_or_create_admin_support_conversation, send_message
 
 
 def _make_company(name='Acme'):
@@ -129,3 +131,59 @@ class AdminMessagingViewTests(TestCase):
         self.client.login(username='no_chat', password='testpass123')
         response = self.client.get(reverse('messaging:audit_list'))
         self.assertEqual(response.status_code, 403)
+
+    def test_compose_includes_group_avatar_field(self):
+        self.client.login(username='chat_admin', password='testpass123')
+        response = self.client.get(reverse('messaging:compose'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="group_avatar"')
+        self.assertContains(response, 'enctype="multipart/form-data"')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_send_message_does_not_show_serialized_dict_as_flash(self, _mock):
+        self.client.login(username='chat_admin', password='testpass123')
+        response = self.client.post(reverse('messaging:thread', args=[self.conversation.pk]), {
+            'body': 'Hello team',
+        })
+        self.assertEqual(response.status_code, 302)
+        response = self.client.get(reverse('messaging:thread', args=[self.conversation.pk]))
+        self.assertContains(response, 'Hello team')
+        self.assertNotContains(response, "'sender_display'")
+        self.assertNotContains(response, "'sender_user_id'")
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_create_group_with_avatar_via_compose(self, _mock):
+        peer2_user = _make_user('peer2')
+        _make_employee(self.company, user=peer2_user, employee_id='E002')
+        avatar = SimpleUploadedFile('logo.png', b'avatar-bytes', content_type='image/png')
+        self.client.login(username='chat_admin', password='testpass123')
+        response = self.client.post(reverse('messaging:compose'), {
+            'compose_type': 'group',
+            'company_id': self.company.pk,
+            'title': 'Ops Team',
+            'participant_ids': [self.emp_user.pk, peer2_user.pk],
+            'group_avatar': avatar,
+        })
+        self.assertEqual(response.status_code, 302)
+        conv = Conversation.objects.get(title='Ops Team')
+        self.assertTrue(conv.group_avatar.name)
+        response = self.client.get(reverse('messaging:thread', args=[conv.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, conv.group_avatar.url)
+        self.assertContains(response, '<img')
+        self.assertNotContains(response, 'msg-group-avatar--initial"')
+
+    def test_thread_shows_group_initial_avatar(self):
+        peer2_user = _make_user('peer2')
+        _make_employee(self.company, user=peer2_user, employee_id='E003')
+        conv = create_group_conversation(
+            self.admin,
+            'Finance',
+            [self.emp_user, peer2_user],
+            self.company,
+        )
+        self.client.login(username='chat_admin', password='testpass123')
+        response = self.client.get(reverse('messaging:thread', args=[conv.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'msg-group-avatar--initial')
+        self.assertContains(response, '>F<')

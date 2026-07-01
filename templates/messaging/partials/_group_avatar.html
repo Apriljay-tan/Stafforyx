@@ -1,0 +1,10 @@
+{% if conversation.conversation_type == 'group' %}
+  {% if conversation.group_avatar.name %}
+    <img src="{{ conversation.group_avatar.url }}"
+         class="msg-group-avatar msg-group-avatar--{{ size|default:'sm' }}"
+         alt="{{ conversation.title }} avatar">
+  {% else %}
+    <span class="msg-group-avatar msg-group-avatar--{{ size|default:'sm' }} msg-group-avatar--initial"
+          aria-hidden="true">{{ conversation.get_group_avatar_initial }}</span>
+  {% endif %}
+{% endif %}

@@ -51,7 +51,7 @@
         </tr>
       </thead>
       <tbody>
-        {% for message in messages %}
+        {% for message in chat_messages %}
           <tr>
             <td class="ps-3 text-muted">{{ message.created_at|slice:":19" }}</td>
             <td>{{ message.sender_display }} <span class="text-muted">(#{{ message.sender_user_id }})</span></td>
