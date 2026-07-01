@@ -111,6 +111,7 @@ TEMPLATES = [
                 "accounts.context_processors.company_context",
                 "portal.context_processors.portal_notifications",
                 "notifications.context_processors.notification_context",
+                "messaging.context_processors.messaging_context",
             ],
         },
     },

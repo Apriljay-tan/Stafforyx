@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Conversation{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+  <div>
+    <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+    </a>
+  </div>
+  <form method="post" action="{% url 'messaging:archive' conversation.pk %}">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-danger btn-sm" onclick="return confirm('Archive this conversation?');">
+      <i class="bi bi-archive me-1"></i>Archive
+    </button>
+  </form>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="fw-semibold">
+      {% if conversation.title %}
+        {{ conversation.title }}
+      {% else %}
+        {{ conversation.get_conversation_type_display }}
+      {% endif %}
+    </div>
+    <div class="small text-muted">{{ conversation.company.name }}</div>
+  </div>
+  <div class="card-body" style="max-height: 55vh; overflow-y: auto;">
+    {% for message in messages %}
+      <div class="mb-3">
+        <div class="small text-muted mb-1">
+          <strong>{{ message.sender_display }}</strong>
+          · {{ message.created_at|slice:":19"|default:message.created_at }}
+        </div>
+        <div class="p-2 rounded {% if message.is_deleted %}bg-light text-muted fst-italic{% else %}bg-light{% endif %}">
+          {{ message.body }}
+        </div>
+      </div>
+    {% empty %}
+      <p class="text-muted mb-0">No messages yet. Send the first message below.</p>
+    {% endfor %}
+  </div>
+  <div class="card-footer">
+    <form method="post">
+      {% csrf_token %}
+      <div class="mb-2">
+        <textarea name="body" class="form-control" rows="3" maxlength="5000" required
+                  placeholder="Type your message…"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">
+        <i class="bi bi-send me-1"></i>Send
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

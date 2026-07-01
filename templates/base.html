@@ -638,6 +638,17 @@
           <i class="bi bi-megaphone"></i> Announcements
         </a>
       </li>
+      {% if can_manage_chat_user %}
+      <li class="nav-item">
+        <a href="{% url 'messaging:inbox' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'messaging' %}active{% endif %}">
+          <i class="bi bi-chat-dots"></i>
+          <span class="sidebar-text">Messages</span>
+          <span id="sidebarMessagingBadge" class="sidebar-badge"
+                {% if not messaging_unread_total %}style="display:none;"{% endif %}>{{ messaging_unread_total }}</span>
+        </a>
+      </li>
+      {% endif %}
       <li class="nav-item">
         <a href="{% url 'reports:reports_dashboard' %}"
            class="nav-link {% if request.resolver_match.app_name == 'reports' %}active{% endif %}">

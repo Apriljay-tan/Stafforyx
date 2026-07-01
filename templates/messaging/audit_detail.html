@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Audit Detail{% endblock %}
+{% block page_title %}Chat Audit{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="{% url 'messaging:audit_list' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Audit List
+  </a>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">
+    <div class="fw-semibold">
+      {% if conversation.title %}
+        {{ conversation.title }}
+      {% else %}
+        {{ conversation.get_conversation_type_display }}
+      {% endif %}
+    </div>
+    <div class="small text-muted">{{ conversation.company.name }}</div>
+  </div>
+  <div class="card-body">
+    <h6 class="fw-semibold">Participants</h6>
+    <ul class="mb-0">
+      {% for participant in participants %}
+        <li>
+          {% if participant.employee %}
+            {{ participant.employee }} ({{ participant.user.username }})
+          {% else %}
+            {{ participant.user.username }}
+          {% endif %}
+          — {{ participant.get_role_display }}
+        </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Message history (real senders)</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th class="ps-3">Time</th>
+          <th>Sender (real)</th>
+          <th>Message</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for message in messages %}
+          <tr>
+            <td class="ps-3 text-muted">{{ message.created_at|slice:":19" }}</td>
+            <td>{{ message.sender_display }} <span class="text-muted">(#{{ message.sender_user_id }})</span></td>
+            <td>{{ message.body }}</td>
+            <td>
+              {% if message.is_deleted %}
+                <span class="badge text-bg-secondary">Deleted</span>
+              {% else %}
+                <span class="badge text-bg-success">Active</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr>
+            <td colspan="4" class="text-center py-4 text-muted">No messages.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
