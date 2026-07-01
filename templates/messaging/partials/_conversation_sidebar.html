@@ -26,7 +26,7 @@
       <a href="{% url thread_url_name row.conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
          class="msg-chat-list-item{% if active_conversation_id == row.conversation.pk %} active{% endif %}{% if row.unread %} has-unread{% endif %}"
          data-conversation-id="{{ row.conversation.pk }}">
-        {% include 'messaging/partials/_conversation_avatar.html' with conversation=row.conversation size='sm' title=row.title avatar_initial=row.avatar_initial %}
+    {% include 'messaging/partials/_conversation_avatar.html' with avatar=row.avatar size='sm' %}
         <div class="msg-chat-list-body">
           <div class="msg-chat-list-top">
             <div class="msg-chat-list-title text-truncate">

@@ -13,4 +13,5 @@ urlpatterns = [
     path('<int:pk>/', views.thread, name='thread'),
     path('<int:pk>/archive/', views.archive_conversation_view, name='archive'),
     path('api/thread/<int:pk>/', views.thread_api, name='thread_api'),
+    path('attachments/<int:pk>/', views.attachment_view, name='attachment_view'),
 ]

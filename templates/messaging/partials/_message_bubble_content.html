@@ -1,0 +1,15 @@
+{% if message.body %}
+  <div class="msg-chat-bubble-text">{{ message.body }}</div>
+{% endif %}
+{% if message.attachments %}
+  <div class="msg-chat-attachments{% if message.body %} msg-chat-attachments--with-text{% endif %}">
+    {% for attachment in message.attachments %}
+      <a href="{{ attachment.url }}" target="_blank" rel="noopener noreferrer" class="msg-chat-attachment-link">
+        <img src="{{ attachment.url }}"
+             alt="{{ attachment.original_filename }}"
+             class="msg-chat-attachment-img{% if attachment.attachment_type == 'gif' %} msg-chat-attachment-img--gif{% endif %}"
+             loading="lazy">
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -9,6 +9,7 @@ app_name = 'portal'
 urlpatterns = [
     # Employee self-service
     path('', views.portal_dashboard, name='dashboard'),
+    path('profile/', views.portal_profile, name='profile'),
     path('payslips/', views.portal_payslip_list, name='payslip_list'),
     path('payslips/<int:pk>/', views.portal_payslip_detail, name='payslip_detail'),
     path('documents/', views.portal_documents, name='documents'),

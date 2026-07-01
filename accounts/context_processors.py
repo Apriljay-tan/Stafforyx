@@ -1,3 +1,4 @@
+from .avatars import avatar_for_nav_user
 from .company_access import get_accessible_companies, get_selected_company_from_request
 
 
@@ -27,4 +28,5 @@ def company_context(request):
         # Per-user sidebar theme (blank = default theme in base.html).
         'sidebar_color': getattr(profile, 'sidebar_color', '') if profile else '',
         'sidebar_accent': getattr(profile, 'sidebar_accent', '') if profile else '',
+        'current_user_avatar': avatar_for_nav_user(request.user, request),
     }

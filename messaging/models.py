@@ -5,6 +5,7 @@ from companies.models import Company
 from employees.models import Employee
 
 from .constants import (
+    ATTACHMENT_TYPE_CHOICES,
     CONVERSATION_TYPE_CHOICES,
     MAX_MESSAGE_BODY_LENGTH,
     PARTICIPANT_ROLE_CHOICES,
@@ -72,7 +73,7 @@ class ConversationParticipant(models.Model):
 class Message(models.Model):
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
     sender_user = models.ForeignKey(User, on_delete=models.PROTECT, related_name='sent_messages')
-    body = models.TextField(max_length=MAX_MESSAGE_BODY_LENGTH)
+    body = models.TextField(max_length=MAX_MESSAGE_BODY_LENGTH, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(
@@ -88,6 +89,26 @@ class Message(models.Model):
 
     def __str__(self):
         return f'Message {self.pk} in conversation {self.conversation_id}'
+
+
+class MessageAttachment(models.Model):
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='attachments')
+    file = models.FileField(upload_to='messaging/attachments/')
+    original_filename = models.CharField(max_length=255)
+    content_type = models.CharField(max_length=100)
+    size_bytes = models.PositiveIntegerField()
+    attachment_type = models.CharField(max_length=10, choices=ATTACHMENT_TYPE_CHOICES)
+    uploaded_by = models.ForeignKey(User, on_delete=models.PROTECT, related_name='message_attachments')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['message', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f'Attachment {self.pk} on message {self.message_id}'
 
 
 class ConversationReadState(models.Model):

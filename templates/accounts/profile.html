@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}My Profile{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'vendor/cropper/cropper.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/profile-photo-crop.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-person-circle me-1" style="color:#1565C0;"></i>Profile Photo
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-4">Upload a profile photo for your Stafforyx account. This appears in the top bar and in messaging.</p>
+
+        {% include 'partials/_profile_photo_form.html' with avatar=avatar field_name='profile_photo' has_photo=profile.profile_photo display_name=request.user.get_full_name|default:request.user.username display_subtitle=request.user.email|default:request.user.username %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'vendor/cropper/cropper.min.js' %}"></script>
+<script src="{% static 'js/profile-photo-crop.js' %}"></script>
+{% endblock %}
+

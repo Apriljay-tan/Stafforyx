@@ -151,6 +151,31 @@ class SerializeMessageTests(TestCase):
         data = serialize_message_for_user(self.msg, self.emp_user)
         self.assertEqual(data['sender_display'], 'Company Desk')
 
+    def test_employee_message_avatar_hides_admin_photo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.admin.stafforyx_profile.profile_photo = SimpleUploadedFile(
+            'admin.png', b'bytes', content_type='image/png',
+        )
+        self.admin.stafforyx_profile.save(update_fields=['profile_photo'])
+        from messaging.views import enrich_chat_messages
+
+        enriched = enrich_chat_messages([self.msg], self.emp_user)
+        self.assertIsNone(enriched[0]['sender_avatar']['image_url'])
+        self.assertEqual(enriched[0]['sender_avatar']['variant'], 'support')
+
+    def test_admin_message_avatar_shows_admin_photo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        self.admin.stafforyx_profile.profile_photo = SimpleUploadedFile(
+            'admin.png', b'bytes', content_type='image/png',
+        )
+        self.admin.stafforyx_profile.save(update_fields=['profile_photo'])
+        from messaging.views import enrich_chat_messages
+
+        enriched = enrich_chat_messages([self.msg], self.admin)
+        self.assertTrue(enriched[0]['sender_avatar']['image_url'])
+
 
 class SoftDeleteMessageTests(TestCase):
     def setUp(self):

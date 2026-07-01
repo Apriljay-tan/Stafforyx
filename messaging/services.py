@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 
+from .attachment_validation import attachment_type_for_file, validate_message_attachment
 from .constants import (
     MAX_MESSAGE_BODY_LENGTH,
     ROLE_ADMIN,
@@ -14,7 +15,7 @@ from .constants import (
     TYPE_DIRECT,
     TYPE_GROUP,
 )
-from .models import Conversation, ConversationParticipant, ConversationReadState, Message
+from .models import Conversation, ConversationParticipant, ConversationReadState, Message, MessageAttachment
 from .permissions import (
     get_allowed_chat_contacts,
     get_portal_employee,
@@ -214,21 +215,33 @@ def _ensure_sender_can_message(conversation, sender):
 
 
 @transaction.atomic
-def send_message(conversation, sender, body):
+def send_message(conversation, sender, body, *, attachment=None):
     body = (body or '').strip()
-    if not body:
-        raise ValidationError('Message body cannot be empty.')
-    if len(body) > MAX_MESSAGE_BODY_LENGTH:
+    if not body and not attachment:
+        raise ValidationError('Message must include text or an image attachment.')
+    if body and len(body) > MAX_MESSAGE_BODY_LENGTH:
         raise ValidationError(f'Message body cannot exceed {MAX_MESSAGE_BODY_LENGTH} characters.')
+    if attachment:
+        validate_message_attachment(attachment)
 
     _ensure_sender_can_message(conversation, sender)
 
-    now = timezone.now()
     message = Message.objects.create(
         conversation=conversation,
         sender_user=sender,
         body=body,
     )
+    if attachment:
+        MessageAttachment.objects.create(
+            message=message,
+            file=attachment,
+            original_filename=getattr(attachment, 'name', '') or 'attachment',
+            content_type=(getattr(attachment, 'content_type', '') or 'application/octet-stream'),
+            size_bytes=getattr(attachment, 'size', 0) or 0,
+            attachment_type=attachment_type_for_file(attachment),
+            uploaded_by=sender,
+        )
+
     conversation.last_message_at = message.created_at
     conversation.save(update_fields=['last_message_at', 'updated_at'])
     return message
@@ -332,7 +345,7 @@ def messages_for_conversation(conversation, user, *, after_id=None):
     if not user_can_access_conversation(user, conversation):
         raise PermissionDenied('You cannot access this conversation.')
 
-    qs = conversation.messages.select_related('sender_user').order_by('created_at')
+    qs = conversation.messages.select_related('sender_user').prefetch_related('attachments').order_by('created_at')
     if after_id is not None:
         qs = qs.filter(pk__gt=after_id)
     return qs
@@ -391,6 +404,38 @@ def audit_conversations(user, filters=None):
     return qs.order_by('-last_message_at', '-created_at')
 
 
+def _serialize_attachments(message, viewer_user):
+    is_manager = user_can_manage_chat(viewer_user)
+    if message.deleted_at and not is_manager:
+        return []
+
+    from django.urls import reverse
+
+    items = []
+    for attachment in message.attachments.all():
+        items.append({
+            'id': attachment.pk,
+            'url': reverse('messaging:attachment_view', args=[attachment.pk]),
+            'attachment_type': attachment.attachment_type,
+            'original_filename': attachment.original_filename,
+            'content_type': attachment.content_type,
+        })
+    return items
+
+
+def message_preview_text(message, viewer_user) -> str:
+    data = serialize_message_for_user(message, viewer_user)
+    body = (data.get('body') or '').strip()
+    attachments = data.get('attachments') or []
+    if attachments and not body:
+        if attachments[0]['attachment_type'] == 'gif':
+            return 'GIF'
+        return 'Photo'
+    if body:
+        return body[:80]
+    return ''
+
+
 def serialize_message_for_user(message, viewer_user, *, include_sender_id=None):
     conversation = message.conversation
     is_manager = user_can_manage_chat(viewer_user)
@@ -408,6 +453,7 @@ def serialize_message_for_user(message, viewer_user, *, include_sender_id=None):
         'sender_display': sender_display,
         'created_at': message.created_at.isoformat(),
         'is_deleted': bool(message.deleted_at),
+        'attachments': _serialize_attachments(message, viewer_user),
     }
 
     if include_sender_id is None:

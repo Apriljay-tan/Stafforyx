@@ -19,6 +19,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static 'css/staff-avatars.css' %}" />
 
   <style>
     :root {
@@ -368,6 +369,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .avatar-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .avatar-name {
       font-size: 0.8rem;
@@ -718,7 +727,9 @@
       <div class="dropdown">
         <button class="avatar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
           <div class="avatar-circle">
-            {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
+            {% if current_user_avatar.image_url %}
+              <img src="{{ current_user_avatar.image_url }}" alt="">
+            {% else %}{{ current_user_avatar.initials }}{% endif %}
           </div>
           <span class="avatar-name">
             {% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}
@@ -736,6 +747,12 @@
             <li>
               <a class="dropdown-item" href="{% url 'portal:dashboard' %}">
                 <i class="bi bi-person-workspace"></i>Employee Portal
+              </a>
+            </li>
+
+            <li>
+              <a class="dropdown-item" href="{% url 'accounts:profile' %}">
+                <i class="bi bi-person-circle"></i>My Profile
               </a>
             </li>
 

@@ -6,6 +6,8 @@ from django.core.exceptions import PermissionDenied
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from accounts.avatars import resolve_conversation_avatar
+
 from .constants import TYPE_DIRECT, TYPE_GROUP
 from .models import Conversation
 from .permissions import (
@@ -19,13 +21,14 @@ from .services import (
     get_or_create_direct_conversation,
     inbox_for_user,
     mark_conversation_read,
+    message_preview_text,
     messages_for_conversation,
     send_message,
     serialize_message_for_user,
     unread_count_for_conversation,
     unread_count_for_user,
 )
-from .views import enrich_chat_messages, messages_for_api
+from .views import enrich_chat_messages, messages_for_api, post_thread_message
 
 
 def portal_chat_required(view_func):
@@ -103,9 +106,7 @@ def portal_thread(request, pk):
         raise PermissionDenied
 
     if request.method == 'POST':
-        body = request.POST.get('body', '').strip()
-        if body:
-            send_message(conversation, request.user, body)
+        post_thread_message(request, conversation)
         return redirect('portal:messages_thread', pk=conversation.pk)
 
     search = request.GET.get('q', '').strip()
@@ -182,6 +183,7 @@ def _portal_thread_display_context(user, conversation, *, mark_read=False):
         'conversation': conversation,
         'conversation_title': title,
         'avatar_initial': _portal_avatar_initial(conversation, user),
+        'avatar': resolve_conversation_avatar(conversation, user, title=title),
         'chat_messages': enrich_chat_messages(message_qs, user),
         'participant_names': participant_names,
         'participant_count': conversation.participants.filter(left_at__isnull=True).count(),
@@ -198,7 +200,7 @@ def _portal_conversation_rows(user, conversations):
         last_message = conversation.messages.filter(deleted_at__isnull=True).order_by('-created_at').first()
         preview = ''
         if last_message:
-            preview = serialize_message_for_user(last_message, user)['body'][:80]
+            preview = message_preview_text(last_message, user)
         rows.append({
             'conversation': conversation,
             'unread': unread_count_for_conversation(conversation, user),
@@ -206,6 +208,7 @@ def _portal_conversation_rows(user, conversations):
             'last_at': conversation.last_message_at or conversation.created_at,
             'title': _portal_conversation_title(conversation, user),
             'avatar_initial': _portal_avatar_initial(conversation, user),
+            'avatar': resolve_conversation_avatar(conversation, user, title=_portal_conversation_title(conversation, user)),
         })
     return rows
 

@@ -3,18 +3,20 @@ import mimetypes
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.http import FileResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
+from accounts.avatars import avatar_for_employee
 from accounts.company_access import (
     filter_queryset_by_user_companies,
     get_accessible_companies,
     user_can_access_company,
 )
+from accounts.profile_images import validate_profile_image
 from announcements.models import Announcement
 from attendance.models import AttendanceRecord
 from attendance.schedule_services import resolve_expected_shift
@@ -788,4 +790,41 @@ def manage_incident_detail(request, pk):
         'incident': incident,
         'status_choices': IncidentReport.STATUS_CHOICES,
     })
-    """HR can view and update an incident's status and notes."""
+
+
+@login_required
+def portal_profile(request):
+    employee, denial = _require_portal_employee(request)
+    if denial:
+        return denial
+
+    if request.method == 'POST':
+        if 'clear_photo' in request.POST:
+            if employee.photo:
+                employee.photo.delete(save=False)
+            employee.photo = None
+            employee.save(update_fields=['photo'])
+            messages.success(request, 'Profile photo removed.')
+            return redirect('portal:profile')
+
+        uploaded = request.FILES.get('photo')
+        if uploaded:
+            try:
+                validate_profile_image(uploaded)
+            except ValidationError as exc:
+                messages.error(request, '; '.join(exc.messages))
+                return redirect('portal:profile')
+            if employee.photo:
+                employee.photo.delete(save=False)
+            employee.photo = uploaded
+            employee.save(update_fields=['photo'])
+            messages.success(request, 'Profile photo updated.')
+            return redirect('portal:profile')
+
+        messages.error(request, 'Please choose a photo to upload.')
+        return redirect('portal:profile')
+
+    return render(request, 'portal/profile.html', {
+        'employee': employee,
+        'avatar': avatar_for_employee(employee),
+    })

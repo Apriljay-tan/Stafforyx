@@ -42,6 +42,29 @@
     if (empty) empty.remove();
   }
 
+  function buildAvatarNode(avatar, showSender) {
+    if (!avatar) return null;
+    var wrap = document.createElement('div');
+    wrap.className = 'msg-chat-row-avatar';
+    if (!showSender) {
+      wrap.style.visibility = 'hidden';
+      wrap.style.width = '28px';
+    }
+    if (avatar.image_url) {
+      var img = document.createElement('img');
+      img.src = avatar.image_url;
+      img.alt = '';
+      img.className = 'staff-avatar staff-avatar--xs staff-avatar--' + (avatar.variant || 'user');
+      wrap.appendChild(img);
+    } else {
+      var span = document.createElement('span');
+      span.className = 'staff-avatar staff-avatar--xs staff-avatar--initial staff-avatar--' + (avatar.variant || 'user');
+      span.textContent = avatar.initials || '?';
+      wrap.appendChild(span);
+    }
+    return wrap;
+  }
+
   function appendMessage(msg) {
     if (messagesBox.querySelector('[data-message-id="' + msg.id + '"]')) return false;
     removeEmptyState();
@@ -50,6 +73,11 @@
     row.className = 'msg-chat-row ' + (msg.is_mine ? 'mine' : 'theirs') + (showSender ? '' : ' msg-chat-row--compact');
     row.setAttribute('data-message-id', String(msg.id));
     row.setAttribute('data-sender-display', msg.sender_display);
+
+    if (!msg.is_mine && msg.sender_avatar) {
+      var avatarNode = buildAvatarNode(msg.sender_avatar, showSender);
+      if (avatarNode) row.appendChild(avatarNode);
+    }
 
     var wrap = document.createElement('div');
     wrap.className = 'msg-chat-bubble-wrap';
@@ -63,7 +91,31 @@
 
     var bubble = document.createElement('div');
     bubble.className = 'msg-chat-bubble' + (msg.is_deleted ? ' deleted' : '');
-    bubble.textContent = msg.body;
+    if (msg.body) {
+      var text = document.createElement('div');
+      text.className = 'msg-chat-bubble-text';
+      text.textContent = msg.body;
+      bubble.appendChild(text);
+    }
+    if (msg.attachments && msg.attachments.length) {
+      var attachments = document.createElement('div');
+      attachments.className = 'msg-chat-attachments' + (msg.body ? ' msg-chat-attachments--with-text' : '');
+      msg.attachments.forEach(function (att) {
+        var link = document.createElement('a');
+        link.href = att.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.className = 'msg-chat-attachment-link';
+        var img = document.createElement('img');
+        img.src = att.url;
+        img.alt = att.original_filename || '';
+        img.className = 'msg-chat-attachment-img' + (att.attachment_type === 'gif' ? ' msg-chat-attachment-img--gif' : '');
+        img.loading = 'lazy';
+        link.appendChild(img);
+        attachments.appendChild(link);
+      });
+      bubble.appendChild(attachments);
+    }
     wrap.appendChild(bubble);
 
     var time = document.createElement('div');

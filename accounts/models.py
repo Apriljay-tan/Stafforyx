@@ -84,6 +84,7 @@ class UserProfile(models.Model):
         default=False,
         help_text='Access admin chat inbox, message employees, create official groups, and audit.',
     )
+    profile_photo = models.ImageField(upload_to='profiles/', blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

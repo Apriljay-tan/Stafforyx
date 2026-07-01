@@ -1,19 +1,21 @@
+from django.contrib import messages as django_messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.http import JsonResponse
+from django.http import FileResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from accounts.avatars import resolve_conversation_avatar, resolve_message_sender_avatar
 from accounts.company_access import filter_queryset_by_user_companies, get_accessible_companies
 from employees.models import Employee
 
 from .constants import TYPE_ADMIN_SUPPORT, TYPE_GROUP
 from .decorators import chat_manager_required
-from .models import Conversation
+from .models import Conversation, MessageAttachment
 from .permissions import user_can_access_conversation, _chat_enabled_employees
 from .services import (
     archive_conversation,
@@ -22,6 +24,7 @@ from .services import (
     get_or_create_admin_support_conversation,
     inbox_for_user,
     mark_conversation_read,
+    message_preview_text,
     messages_for_conversation,
     send_message,
     serialize_message_for_user,
@@ -54,7 +57,7 @@ def _conversation_rows(user, conversations):
         title = _conversation_title(conversation)
         preview = ''
         if last_message:
-            preview = serialize_message_for_user(last_message, user)['body'][:80]
+            preview = message_preview_text(last_message, user)
         rows.append({
             'conversation': conversation,
             'unread': unread_count_for_conversation(conversation, user),
@@ -62,6 +65,7 @@ def _conversation_rows(user, conversations):
             'last_at': conversation.last_message_at or conversation.created_at,
             'title': title,
             'avatar_initial': _conversation_avatar_initial(conversation, title),
+            'avatar': resolve_conversation_avatar(conversation, user, title=title),
         })
     return rows
 
@@ -87,6 +91,7 @@ def _admin_thread_display_context(user, conversation, *, mark_read=False):
         'conversation': conversation,
         'conversation_title': title,
         'avatar_initial': _conversation_avatar_initial(conversation, title),
+        'avatar': resolve_conversation_avatar(conversation, user, title=title),
         'chat_messages': enrich_chat_messages(message_qs, user),
         'participant_names': participant_names,
         'participant_count': _participant_count(conversation),
@@ -124,6 +129,21 @@ def _enrich_messages_for_display(message_dicts, user):
     return enriched
 
 
+def post_thread_message(request, conversation):
+    """Handle composer POST for admin and portal thread views."""
+    body = request.POST.get('body', '').strip()
+    attachment = request.FILES.get('attachment')
+    if not body and not attachment:
+        django_messages.error(request, 'Type a message or attach an image.')
+        return False
+    try:
+        send_message(conversation, request.user, body, attachment=attachment)
+        return True
+    except ValidationError as exc:
+        django_messages.error(request, '; '.join(exc.messages))
+        return False
+
+
 def enrich_chat_messages(messages_qs, user):
     """Build template-ready chat message dicts with correct is_mine for any viewer."""
     enriched = []
@@ -135,6 +155,7 @@ def enrich_chat_messages(messages_qs, user):
         data['is_mine'] = is_mine
         data['time_display'] = _format_message_time(data.get('created_at', ''))
         data['show_sender'] = message.sender_user_id != prev_sender_id
+        data['sender_avatar'] = resolve_message_sender_avatar(message, user)
         prev_sender_id = message.sender_user_id
         enriched.append(data)
     return enriched
@@ -155,6 +176,8 @@ def messages_for_api(user, conversation, *, after_id=None, mark_read=False):
             'is_mine': msg['is_mine'],
             'is_deleted': msg['is_deleted'],
             'show_sender': msg['show_sender'],
+            'sender_avatar': msg['sender_avatar'],
+            'attachments': msg.get('attachments', []),
         }
         for msg in enrich_chat_messages(message_qs, user)
     ]
@@ -260,9 +283,7 @@ def thread(request, pk):
         raise PermissionDenied
 
     if request.method == 'POST':
-        body = request.POST.get('body', '').strip()
-        if body:
-            send_message(conversation, request.user, body)
+        post_thread_message(request, conversation)
         return redirect('messaging:thread', pk=conversation.pk)
 
     search = request.GET.get('q', '').strip()
@@ -371,3 +392,20 @@ def thread_api(request, pk):
         mark_read=True,
     )
     return JsonResponse({'messages': message_list})
+
+
+@login_required
+def attachment_view(request, pk):
+    attachment = get_object_or_404(
+        MessageAttachment.objects.select_related('message__conversation'),
+        pk=pk,
+    )
+    conversation = attachment.message.conversation
+    if not user_can_access_conversation(request.user, conversation):
+        raise PermissionDenied
+
+    mime_type = attachment.content_type or 'application/octet-stream'
+    response = FileResponse(attachment.file.open('rb'), content_type=mime_type)
+    filename = attachment.original_filename or attachment.file.name.split('/')[-1]
+    response['Content-Disposition'] = f'inline; filename="{filename}"'
+    return response
