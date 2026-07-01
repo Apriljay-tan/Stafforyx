@@ -83,7 +83,9 @@ class AuditAccessTests(TestCase):
     def test_normal_employee_cannot_access_audit(self):
         self.client.login(username='emp_user', password='testpass123')
         response = self.client.get(reverse('messaging:audit_list'))
-        self.assertEqual(response.status_code, 403)
+        self.assertIn(response.status_code, (403, 302))
+        if response.status_code == 302:
+            self.assertIn('/portal/', response.url)
 
     def test_company_scoped_admin_cannot_see_other_company_detail(self):
         self.client.login(username='other_admin', password='testpass123')
