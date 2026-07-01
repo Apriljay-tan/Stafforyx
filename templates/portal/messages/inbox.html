@@ -4,10 +4,16 @@
 {% block page_title %}Messages{% endblock %}
 
 {% block content %}
-<div class="msg-chat-app">
-  {% include 'portal/messages/partials/_conversation_sidebar.html' %}
-  <section class="msg-chat-main">
-    {% include 'portal/messages/partials/_empty_state.html' %}
-  </section>
+<div class="msg-chat-page">
+  <div class="msg-chat-app">
+    {% include 'messaging/partials/_conversation_sidebar.html' %}
+    <section class="msg-chat-main">
+      {% if conversation %}
+        {% include 'messaging/partials/_thread_panel.html' %}
+      {% else %}
+        {% include 'messaging/partials/_empty_state.html' %}
+      {% endif %}
+    </section>
+  </div>
 </div>
 {% endblock %}

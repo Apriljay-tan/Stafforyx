@@ -1,38 +1,47 @@
 <header class="msg-chat-thread-header">
   <div class="msg-chat-thread-heading">
-    {% if conversation.conversation_type == 'group' %}
-      {% include 'messaging/partials/_group_avatar.html' with conversation=conversation size='md' %}
-    {% endif %}
+    {% include 'messaging/partials/_conversation_avatar.html' with conversation=conversation size='md' title=conversation_title avatar_initial=avatar_initial %}
     <div class="min-w-0">
       <h3 class="msg-chat-thread-title text-truncate">{{ conversation_title }}</h3>
       <div class="msg-chat-thread-sub text-truncate">
         {{ conversation.company.name }}
+        {% if participant_count %}
+          · {{ participant_count }} member{{ participant_count|pluralize }}
+        {% endif %}
         {% if participant_names %}
           · {{ participant_names|join:", " }}
         {% endif %}
       </div>
     </div>
   </div>
-  <form method="post" action="{% url 'messaging:archive' conversation.pk %}" class="flex-shrink-0">
-    {% csrf_token %}
-    <button type="submit" class="btn btn-outline-secondary btn-sm"
-            onclick="return confirm('Archive this conversation?');" title="Archive">
-      <i class="bi bi-archive"></i>
-    </button>
-  </form>
+  {% if show_archive %}
+    <form method="post" action="{% url archive_url_name conversation.pk %}" class="flex-shrink-0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-secondary btn-sm"
+              onclick="return confirm('Archive this conversation?');" title="Archive">
+        <i class="bi bi-archive"></i>
+      </button>
+    </form>
+  {% endif %}
 </header>
 
-<div class="msg-chat-messages" id="msgChatMessages">
+<div class="msg-chat-messages" id="msgChatMessages"
+     data-conversation-id="{{ conversation.pk }}"
+     data-last-message-id="{% if chat_messages %}{{ chat_messages|last.id }}{% else %}0{% endif %}">
   {% for message in chat_messages %}
-    <div class="msg-chat-row {% if message.is_mine %}mine{% else %}theirs{% endif %}">
+    <div class="msg-chat-row {% if message.is_mine %}mine{% else %}theirs{% endif %}{% if not message.show_sender %} msg-chat-row--compact{% endif %}"
+         data-message-id="{{ message.id }}"
+         data-sender-display="{{ message.sender_display }}">
       <div class="msg-chat-bubble-wrap">
-        <div class="msg-chat-sender">{{ message.sender_display }}</div>
+        {% if message.show_sender %}
+          <div class="msg-chat-sender">{{ message.sender_display }}</div>
+        {% endif %}
         <div class="msg-chat-bubble{% if message.is_deleted %} deleted{% endif %}">{{ message.body }}</div>
         <div class="msg-chat-time">{{ message.time_display }}</div>
       </div>
     </div>
   {% empty %}
-    <div class="msg-chat-empty" style="min-height: 200px;">
+    <div class="msg-chat-empty" id="msgChatEmptyState">
       <i class="bi bi-chat"></i>
       <p class="mb-0 small">No messages yet. Say hello below.</p>
     </div>
@@ -40,18 +49,43 @@
 </div>
 
 <div class="msg-chat-composer">
-  <form method="post">
+  <form method="post" action="{% url thread_url_name conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}" id="msgChatComposerForm">
     {% csrf_token %}
-    <textarea name="body" rows="1" maxlength="5000" required placeholder="Type a message…"></textarea>
-    <button type="submit" class="msg-chat-send-btn">Send</button>
+    <textarea name="body" id="msgChatComposerInput" rows="1" maxlength="5000" required placeholder="Type a message…"></textarea>
+    <button type="submit" class="msg-chat-send-btn" id="msgChatSendBtn">
+      <i class="bi bi-send-fill"></i> Send
+    </button>
   </form>
 </div>
+
+{% include 'messaging/partials/_chat_poll.html' %}
 
 <script>
   (function () {
     var box = document.getElementById('msgChatMessages');
     if (box) {
       box.scrollTop = box.scrollHeight;
+    }
+    var input = document.getElementById('msgChatComposerInput');
+    var form = document.getElementById('msgChatComposerForm');
+    var sendBtn = document.getElementById('msgChatSendBtn');
+    if (input && form) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (input.value.trim()) {
+            form.requestSubmit();
+          }
+        }
+      });
+    }
+    if (form && sendBtn) {
+      form.addEventListener('submit', function () {
+        if (input.value.trim()) {
+          sendBtn.disabled = true;
+          sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        }
+      });
     }
   })();
 </script>

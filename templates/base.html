@@ -1015,6 +1015,9 @@
       window.setInterval(pollNotifications, 20000);
     })();
   </script>
+  {% if can_manage_chat_user %}
+    {% include 'messaging/partials/_nav_unread_poll.html' with unread_api_url_name='messaging:unread_api' %}
+  {% endif %}
   {% block extra_js %}{% endblock %}
 </body>
 </html>

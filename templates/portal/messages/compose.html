@@ -5,77 +5,90 @@
 
 {% block content %}
 {% include 'messaging/partials/_chat_styles.html' %}
-<div class="mb-3">
-  <a href="{% url 'portal:messages_inbox' %}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>Back to Inbox
-  </a>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation
+<div class="msg-compose-page">
+  <div class="msg-compose-back">
+    <a href="{% url 'portal:messages_inbox' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+    </a>
   </div>
-  <div class="card-body">
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Conversation type</label>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="compose_type" id="type_direct"
-                 value="direct" checked>
-          <label class="form-check-label" for="type_direct">Direct message</label>
-        </div>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="compose_type" id="type_group" value="group">
-          <label class="form-check-label" for="type_group">Create group</label>
-        </div>
-      </div>
 
-      <div id="directFields">
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="contact_employee_id">Contact</label>
-          <select name="contact_employee_id" id="contact_employee_id" class="form-select" required>
-            <option value="">Select a contact…</option>
+  <div class="msg-compose-card">
+    <div class="msg-compose-card-header">
+      <h2><i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation</h2>
+      <p>Message a colleague or create a group with your allowed contacts.</p>
+    </div>
+    <div class="msg-compose-card-body">
+      <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+
+        <div class="msg-compose-section-label">Conversation type</div>
+        <div class="msg-compose-type-picker">
+          <label class="msg-compose-type-card" for="type_direct">
+            <input type="radio" name="compose_type" id="type_direct" value="direct" checked>
+            <span class="msg-compose-type-icon"><i class="bi bi-person-fill"></i></span>
+            <span class="msg-compose-type-label">Direct message</span>
+            <span class="msg-compose-type-desc">Chat one-on-one with a contact</span>
+          </label>
+          <label class="msg-compose-type-card" for="type_group">
+            <input type="radio" name="compose_type" id="type_group" value="group">
+            <span class="msg-compose-type-icon"><i class="bi bi-people-fill"></i></span>
+            <span class="msg-compose-type-label">Group chat</span>
+            <span class="msg-compose-type-desc">Start a group with multiple contacts</span>
+          </label>
+        </div>
+
+        <div id="directFields">
+          <div class="msg-compose-section-label">Select contact</div>
+          <div class="msg-compose-contact-grid">
             {% for contact in allowed_contacts %}
-              <option value="{{ contact.pk }}">
-                {{ contact }} — {{ contact.company.name }}
-              </option>
+              <label class="msg-compose-contact-card">
+                <input type="radio" name="contact_employee_id" value="{{ contact.pk }}"{% if forloop.first %} required{% endif %}>
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ contact.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ contact }}</span>
+                  <span class="msg-compose-contact-sub">{{ contact.company.name }}</span>
+                </span>
+              </label>
+            {% empty %}
+              <p class="text-muted small mb-0">No contacts available.</p>
             {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <div id="groupFields" style="display:none;">
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="title">Group title</label>
-          <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
-            <input type="text" name="title" id="title" class="form-control flex-grow-1" maxlength="150"
-                   placeholder="e.g. Team Updates">
           </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="group_avatar">Group logo (optional)</label>
-          <input type="file" name="group_avatar" id="group_avatar" class="form-control" accept="image/*">
-          <div class="form-text">Upload a square image for the group avatar. Leave blank to use a letter initial.</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Participants</label>
-          <select name="participant_ids" class="form-select" multiple size="8">
-            {% for contact in allowed_contacts %}
-              <option value="{{ contact.user_id }}">
-                {{ contact }} — {{ contact.company.name }}
-              </option>
-            {% endfor %}
-          </select>
-          <div class="form-text">Select at least two other participants for a group conversation.</div>
-        </div>
-      </div>
 
-      <button type="submit" class="btn btn-primary">
-        <i class="bi bi-chat-dots me-1"></i>Start Conversation
-      </button>
-    </form>
+        <div id="groupFields" style="display:none;">
+          <div class="msg-compose-section-label">Group details</div>
+          <div class="msg-compose-group-row">
+            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
+            <input type="text" name="title" id="title" class="form-control" maxlength="150"
+                   placeholder="Group title, e.g. Team Updates">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted" for="group_avatar">Group logo (optional)</label>
+            <input type="file" name="group_avatar" id="group_avatar" class="form-control form-control-sm" accept="image/*">
+          </div>
+          <div class="msg-compose-section-label">Participants</div>
+          <div class="msg-compose-contact-grid">
+            {% for contact in allowed_contacts %}
+              <label class="msg-compose-contact-card">
+                <input type="checkbox" name="participant_ids" value="{{ contact.user_id }}">
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ contact.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ contact }}</span>
+                  <span class="msg-compose-contact-sub">{{ contact.company.name }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="form-text small">Select at least two other participants for a group conversation.</p>
+        </div>
+
+        <div class="msg-compose-actions">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-chat-dots me-1"></i>Start Conversation
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -88,7 +101,7 @@
     var titleInput = document.getElementById('title');
     var avatarInput = document.getElementById('group_avatar');
     var avatarPreview = document.getElementById('groupAvatarPreview');
-    var contactSelect = document.getElementById('contact_employee_id');
+    var contactRadios = directFields.querySelectorAll('input[name="contact_employee_id"]');
 
     function updateInitialPreview() {
       if (!avatarPreview || !titleInput) return;
@@ -96,13 +109,18 @@
       avatarPreview.textContent = title ? title.charAt(0).toUpperCase() : 'G';
     }
 
+    function syncContactRequired() {
+      var isGroup = groupRadio.checked;
+      contactRadios.forEach(function (radio) {
+        radio.required = !isGroup;
+      });
+    }
+
     function sync() {
       var isGroup = groupRadio.checked;
       directFields.style.display = isGroup ? 'none' : '';
       groupFields.style.display = isGroup ? '' : 'none';
-      if (contactSelect) {
-        contactSelect.required = !isGroup;
-      }
+      syncContactRequired();
       if (isGroup) {
         updateInitialPreview();
       }

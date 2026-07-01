@@ -5,10 +5,12 @@
     <div class="msg-chat-sidebar-title">
       <h2><i class="bi bi-chat-dots me-1" style="color:#1565C0;"></i>Messages</h2>
       <div class="d-flex gap-1">
-        <a href="{% url 'messaging:audit_list' %}" class="btn btn-outline-secondary btn-sm" title="Audit">
-          <i class="bi bi-shield-check"></i>
-        </a>
-        <a href="{% url 'messaging:compose' %}" class="btn btn-primary btn-sm">
+        {% if show_audit %}
+          <a href="{% url 'messaging:audit_list' %}" class="btn btn-outline-secondary btn-sm" title="Audit">
+            <i class="bi bi-shield-check"></i>
+          </a>
+        {% endif %}
+        <a href="{% url compose_url_name %}" class="btn btn-primary btn-sm">
           <i class="bi bi-pencil-square me-1"></i>New
         </a>
       </div>
@@ -21,28 +23,29 @@
 
   <div class="msg-chat-list">
     {% for row in conversation_rows %}
-      <a href="{% url 'messaging:thread' row.conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
-         class="msg-chat-list-item{% if active_conversation_id == row.conversation.pk %} active{% endif %}">
-        {% if row.conversation.conversation_type == 'group' %}
-          {% include 'messaging/partials/_group_avatar.html' with conversation=row.conversation size='sm' %}
-        {% endif %}
+      <a href="{% url thread_url_name row.conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
+         class="msg-chat-list-item{% if active_conversation_id == row.conversation.pk %} active{% endif %}{% if row.unread %} has-unread{% endif %}"
+         data-conversation-id="{{ row.conversation.pk }}">
+        {% include 'messaging/partials/_conversation_avatar.html' with conversation=row.conversation size='sm' title=row.title avatar_initial=row.avatar_initial %}
         <div class="msg-chat-list-body">
           <div class="msg-chat-list-top">
             <div class="msg-chat-list-title text-truncate">
-              {{ row.title }}
+              <span class="text-truncate">{{ row.title }}</span>
               {% if row.unread %}<span class="msg-chat-unread">{{ row.unread }}</span>{% endif %}
             </div>
-            <div class="msg-chat-list-meta">{{ row.last_at|date:"M d" }}</div>
+            <div class="msg-chat-list-meta">{{ row.last_at|date:"M j" }}</div>
           </div>
           <div class="msg-chat-list-preview">{{ row.preview|default:"No messages yet" }}</div>
-          <div class="msg-chat-list-company">{{ row.conversation.company.name }}</div>
+          {% if row.conversation.company.name %}
+            <div class="msg-chat-list-company">{{ row.conversation.company.name }}</div>
+          {% endif %}
         </div>
       </a>
     {% empty %}
       <div class="text-center text-muted py-5 px-3">
         <i class="bi bi-chat-dots fs-2 d-block mb-2" style="opacity:.35;"></i>
         <div class="small">No conversations yet.</div>
-        <a href="{% url 'messaging:compose' %}" class="btn btn-sm btn-primary mt-2">Start a chat</a>
+        <a href="{% url compose_url_name %}" class="btn btn-sm btn-primary mt-2">Start a chat</a>
       </div>
     {% endfor %}
   </div>

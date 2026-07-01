@@ -51,14 +51,51 @@ def _conversation_rows(user, conversations):
     rows = []
     for conversation in conversations.select_related('company'):
         last_message = conversation.messages.filter(deleted_at__isnull=True).order_by('-created_at').first()
+        title = _conversation_title(conversation)
+        preview = ''
+        if last_message:
+            preview = serialize_message_for_user(last_message, user)['body'][:80]
         rows.append({
             'conversation': conversation,
             'unread': unread_count_for_conversation(conversation, user),
-            'preview': (last_message.body[:80] if last_message else ''),
+            'preview': preview,
             'last_at': conversation.last_message_at or conversation.created_at,
-            'title': _conversation_title(conversation),
+            'title': title,
+            'avatar_initial': _conversation_avatar_initial(conversation, title),
         })
     return rows
+
+
+def _conversation_avatar_initial(conversation, title):
+    if conversation.conversation_type == TYPE_GROUP:
+        return conversation.get_group_avatar_initial()
+    title = (title or '').strip()
+    return title[0].upper() if title else '?'
+
+
+def _participant_count(conversation):
+    return conversation.participants.filter(left_at__isnull=True).count()
+
+
+def _admin_thread_display_context(user, conversation, *, mark_read=False):
+    if mark_read:
+        mark_conversation_read(conversation, user)
+    message_qs = messages_for_conversation(conversation, user)
+    title = _conversation_title(conversation)
+    participant_names = _participant_names(conversation)
+    return {
+        'conversation': conversation,
+        'conversation_title': title,
+        'avatar_initial': _conversation_avatar_initial(conversation, title),
+        'chat_messages': enrich_chat_messages(message_qs, user),
+        'participant_names': participant_names,
+        'participant_count': _participant_count(conversation),
+        'show_archive': True,
+        'thread_url_name': 'messaging:thread',
+        'archive_url_name': 'messaging:archive',
+        'thread_api_url_name': 'messaging:thread_api',
+        'unread_api_url_name': 'messaging:unread_api',
+    }
 
 
 def _conversation_title(conversation):
@@ -90,13 +127,37 @@ def _enrich_messages_for_display(message_dicts, user):
 def enrich_chat_messages(messages_qs, user):
     """Build template-ready chat message dicts with correct is_mine for any viewer."""
     enriched = []
+    prev_sender_id = None
     for message in messages_qs:
         data = serialize_message_for_user(message, user)
         data = dict(data)
-        data['is_mine'] = message.sender_user_id == user.pk
+        is_mine = message.sender_user_id == user.pk
+        data['is_mine'] = is_mine
         data['time_display'] = _format_message_time(data.get('created_at', ''))
+        data['show_sender'] = message.sender_user_id != prev_sender_id
+        prev_sender_id = message.sender_user_id
         enriched.append(data)
     return enriched
+
+
+def messages_for_api(user, conversation, *, after_id=None, mark_read=False):
+    """JSON-serializable message dicts for thread polling APIs."""
+    if mark_read:
+        mark_conversation_read(conversation, user)
+    message_qs = messages_for_conversation(conversation, user, after_id=after_id)
+    return [
+        {
+            'id': msg['id'],
+            'body': msg['body'],
+            'sender_display': msg['sender_display'],
+            'created_at': msg['created_at'],
+            'time_display': msg['time_display'],
+            'is_mine': msg['is_mine'],
+            'is_deleted': msg['is_deleted'],
+            'show_sender': msg['show_sender'],
+        }
+        for msg in enrich_chat_messages(message_qs, user)
+    ]
 
 
 def _participant_names(conversation):
@@ -138,7 +199,18 @@ def _parse_audit_filters(request):
 def inbox(request):
     search = request.GET.get('q', '').strip()
     context = _chat_sidebar_context(request.user, search=search)
-    context['conversation_title'] = None
+    context.update({
+        'compose_url_name': 'messaging:compose',
+        'thread_url_name': 'messaging:thread',
+        'show_audit': True,
+        'thread_api_url_name': 'messaging:thread_api',
+        'unread_api_url_name': 'messaging:unread_api',
+    })
+    rows = context['conversation_rows']
+    if rows:
+        first_conversation = rows[0]['conversation']
+        context['active_conversation_id'] = first_conversation.pk
+        context.update(_admin_thread_display_context(request.user, first_conversation, mark_read=False))
     return render(request, 'messaging/inbox.html', context)
 
 
@@ -193,8 +265,6 @@ def thread(request, pk):
             send_message(conversation, request.user, body)
         return redirect('messaging:thread', pk=conversation.pk)
 
-    mark_conversation_read(conversation, request.user)
-    message_qs = messages_for_conversation(conversation, request.user)
     search = request.GET.get('q', '').strip()
     context = _chat_sidebar_context(
         request.user,
@@ -202,11 +272,13 @@ def thread(request, pk):
         active_conversation_id=conversation.pk,
     )
     context.update({
-        'conversation': conversation,
-        'conversation_title': _conversation_title(conversation),
-        'chat_messages': enrich_chat_messages(message_qs, request.user),
-        'participant_names': _participant_names(conversation),
+        'compose_url_name': 'messaging:compose',
+        'thread_url_name': 'messaging:thread',
+        'show_audit': True,
+        'thread_api_url_name': 'messaging:thread_api',
+        'unread_api_url_name': 'messaging:unread_api',
     })
+    context.update(_admin_thread_display_context(request.user, conversation, mark_read=True))
     return render(request, 'messaging/thread.html', context)
 
 
@@ -267,11 +339,11 @@ def audit_detail(request, pk):
 def unread_api(request):
     conversations = inbox_for_user(request.user)
     preview = []
-    for row in _conversation_rows(request.user, conversations[:10]):
+    for row in _conversation_rows(request.user, conversations):
         conversation = row['conversation']
         preview.append({
             'id': conversation.pk,
-            'title': conversation.title or conversation.get_conversation_type_display(),
+            'title': row['title'],
             'unread': row['unread'],
             'url': f'/messaging/{conversation.pk}/',
             'preview': row['preview'],
@@ -292,8 +364,10 @@ def thread_api(request, pk):
 
     after_id = request.GET.get('after_id')
     after_id = int(after_id) if after_id else None
-    message_list = [
-        serialize_message_for_user(message, request.user)
-        for message in messages_for_conversation(conversation, request.user, after_id=after_id)
-    ]
+    message_list = messages_for_api(
+        request.user,
+        conversation,
+        after_id=after_id,
+        mark_read=True,
+    )
     return JsonResponse({'messages': message_list})

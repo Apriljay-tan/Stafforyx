@@ -25,7 +25,7 @@ from .services import (
     unread_count_for_conversation,
     unread_count_for_user,
 )
-from .views import enrich_chat_messages
+from .views import enrich_chat_messages, messages_for_api
 
 
 def portal_chat_required(view_func):
@@ -42,6 +42,18 @@ def portal_chat_required(view_func):
 def portal_inbox(request):
     search = request.GET.get('q', '').strip()
     context = _portal_chat_sidebar_context(request.user, search=search)
+    context.update({
+        'compose_url_name': 'portal:messages_compose',
+        'thread_url_name': 'portal:messages_thread',
+        'show_audit': False,
+        'thread_api_url_name': 'portal:messages_thread_api',
+        'unread_api_url_name': 'portal:messages_unread_api',
+    })
+    rows = context['conversation_rows']
+    if rows:
+        first_conversation = rows[0]['conversation']
+        context['active_conversation_id'] = first_conversation.pk
+        context.update(_portal_thread_display_context(request.user, first_conversation, mark_read=False))
     return render(request, 'portal/messages/inbox.html', context)
 
 
@@ -96,8 +108,6 @@ def portal_thread(request, pk):
             send_message(conversation, request.user, body)
         return redirect('portal:messages_thread', pk=conversation.pk)
 
-    mark_conversation_read(conversation, request.user)
-    message_qs = messages_for_conversation(conversation, request.user)
     search = request.GET.get('q', '').strip()
     context = _portal_chat_sidebar_context(
         request.user,
@@ -105,11 +115,13 @@ def portal_thread(request, pk):
         active_conversation_id=conversation.pk,
     )
     context.update({
-        'conversation': conversation,
-        'conversation_title': _portal_conversation_title(conversation, request.user),
-        'chat_messages': enrich_chat_messages(message_qs, request.user),
-        'participant_names': _portal_participant_names(conversation, request.user),
+        'compose_url_name': 'portal:messages_compose',
+        'thread_url_name': 'portal:messages_thread',
+        'show_audit': False,
+        'thread_api_url_name': 'portal:messages_thread_api',
+        'unread_api_url_name': 'portal:messages_unread_api',
     })
+    context.update(_portal_thread_display_context(request.user, conversation, mark_read=True))
     return render(request, 'portal/messages/thread.html', context)
 
 
@@ -117,7 +129,7 @@ def portal_thread(request, pk):
 def portal_unread_api(request):
     conversations = inbox_for_user(request.user)
     preview = []
-    for row in _portal_conversation_rows(request.user, conversations[:10]):
+    for row in _portal_conversation_rows(request.user, conversations):
         conversation = row['conversation']
         preview.append({
             'id': conversation.pk,
@@ -141,11 +153,43 @@ def portal_thread_api(request, pk):
 
     after_id = request.GET.get('after_id')
     after_id = int(after_id) if after_id else None
-    message_list = [
-        serialize_message_for_user(message, request.user)
-        for message in messages_for_conversation(conversation, request.user, after_id=after_id)
-    ]
+    message_list = messages_for_api(
+        request.user,
+        conversation,
+        after_id=after_id,
+        mark_read=True,
+    )
     return JsonResponse({'messages': message_list})
+
+
+def _portal_avatar_initial(conversation, user):
+    from .constants import TYPE_GROUP
+
+    if conversation.conversation_type == TYPE_GROUP:
+        return conversation.get_group_avatar_initial()
+    title = _portal_conversation_title(conversation, user)
+    title = (title or '').strip()
+    return title[0].upper() if title else '?'
+
+
+def _portal_thread_display_context(user, conversation, *, mark_read=False):
+    if mark_read:
+        mark_conversation_read(conversation, user)
+    message_qs = messages_for_conversation(conversation, user)
+    participant_names = _portal_participant_names(conversation, user)
+    title = _portal_conversation_title(conversation, user)
+    return {
+        'conversation': conversation,
+        'conversation_title': title,
+        'avatar_initial': _portal_avatar_initial(conversation, user),
+        'chat_messages': enrich_chat_messages(message_qs, user),
+        'participant_names': participant_names,
+        'participant_count': conversation.participants.filter(left_at__isnull=True).count(),
+        'show_archive': False,
+        'thread_url_name': 'portal:messages_thread',
+        'thread_api_url_name': 'portal:messages_thread_api',
+        'unread_api_url_name': 'portal:messages_unread_api',
+    }
 
 
 def _portal_conversation_rows(user, conversations):
@@ -161,6 +205,7 @@ def _portal_conversation_rows(user, conversations):
             'preview': preview,
             'last_at': conversation.last_message_at or conversation.created_at,
             'title': _portal_conversation_title(conversation, user),
+            'avatar_initial': _portal_avatar_initial(conversation, user),
         })
     return rows
 

@@ -1,3 +1,4 @@
+from django.conf import settings
 from .permissions import user_can_manage_chat, user_can_use_employee_chat
 from .services import unread_count_for_user
 
@@ -10,6 +11,7 @@ def messaging_context(request):
     context = {
         'can_manage_chat_user': can_manage,
         'employee_chat_available': employee_chat,
+        'messaging_poll_interval_ms': settings.MESSAGING_POLL_INTERVAL_MS,
     }
     if can_manage or employee_chat:
         context['messaging_unread_total'] = unread_count_for_user(request.user)

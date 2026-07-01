@@ -1,0 +1,16 @@
+{% if conversation.conversation_type == 'group' %}
+  {% if conversation.group_avatar.name %}
+    <img src="{{ conversation.group_avatar.url }}"
+         class="msg-group-avatar msg-group-avatar--{{ size|default:'sm' }}"
+         alt="{{ title|default:conversation.title }} avatar">
+  {% else %}
+    <span class="msg-group-avatar msg-group-avatar--{{ size|default:'sm' }} msg-group-avatar--initial"
+          aria-hidden="true">{{ avatar_initial|default:conversation.get_group_avatar_initial }}</span>
+  {% endif %}
+{% elif conversation.conversation_type == 'admin_support' %}
+  <span class="msg-conv-avatar msg-conv-avatar--{{ size|default:'sm' }} msg-conv-avatar--support msg-conv-avatar--initial"
+        aria-hidden="true">{{ avatar_initial|default:'H' }}</span>
+{% else %}
+  <span class="msg-conv-avatar msg-conv-avatar--{{ size|default:'sm' }} msg-conv-avatar--direct msg-conv-avatar--initial"
+        aria-hidden="true">{{ avatar_initial|default:'?' }}</span>
+{% endif %}

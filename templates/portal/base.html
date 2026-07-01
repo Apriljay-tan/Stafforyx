@@ -175,9 +175,7 @@
         <a href="{% url 'portal:messages_inbox' %}"
            class="nav-link {% if 'messages' in request.resolver_match.url_name %}active{% endif %}">
           <i class="bi bi-chat-dots"></i> Messages
-          {% if messaging_unread_total %}
-            <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ messaging_unread_total }}</span>
-          {% endif %}
+          <span id="portalMessagingBadge" class="badge bg-danger ms-1" style="font-size:.65rem;{% if not messaging_unread_total %}display:none;{% endif %}">{{ messaging_unread_total|default:0 }}</span>
         </a>
       </li>
       {% endif %}
@@ -220,6 +218,10 @@
 {% endblock sidebar %}
 
 {% block extra_js %}
+{{ block.super }}
+{% if employee_chat_available %}
+  {% include 'messaging/partials/_nav_unread_poll.html' with unread_api_url_name='portal:messages_unread_api' %}
+{% endif %}
 <script>
 (function () {
   var dd = document.getElementById('notif-dd');

@@ -5,85 +5,99 @@
 
 {% block content %}
 {% include 'messaging/partials/_chat_styles.html' %}
-<div class="mb-3">
-  <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-arrow-left me-1"></i>Back to Inbox
-  </a>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation
+<div class="msg-compose-page">
+  <div class="msg-compose-back">
+    <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+    </a>
   </div>
-  <div class="card-body">
-    <form method="post" enctype="multipart/form-data">
-      {% csrf_token %}
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Conversation type</label>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="compose_type" id="type_admin_support"
-                 value="admin_support" checked>
-          <label class="form-check-label" for="type_admin_support">Message employee (admin support)</label>
-        </div>
-        <div class="form-check">
-          <input class="form-check-input" type="radio" name="compose_type" id="type_group" value="group">
-          <label class="form-check-label" for="type_group">Create official group</label>
-        </div>
-      </div>
 
-      <div id="adminSupportFields">
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="employee_id">Employee</label>
-          <select name="employee_id" id="employee_id" class="form-select">
-            <option value="">Select employee…</option>
+  <div class="msg-compose-card">
+    <div class="msg-compose-card-header">
+      <h2><i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation</h2>
+      <p>Choose a conversation type and pick who you want to reach.</p>
+    </div>
+    <div class="msg-compose-card-body">
+      <form method="post" enctype="multipart/form-data" id="msgComposeForm">
+        {% csrf_token %}
+
+        <div class="msg-compose-section-label">Conversation type</div>
+        <div class="msg-compose-type-picker">
+          <label class="msg-compose-type-card" for="type_admin_support">
+            <input class="form-check-input" type="radio" name="compose_type" id="type_admin_support"
+                   value="admin_support" checked>
+            <span class="msg-compose-type-icon"><i class="bi bi-headset"></i></span>
+            <span class="msg-compose-type-label">Admin support</span>
+            <span class="msg-compose-type-desc">Message an employee on behalf of HR support</span>
+          </label>
+          <label class="msg-compose-type-card" for="type_group">
+            <input class="form-check-input" type="radio" name="compose_type" id="type_group" value="group">
+            <span class="msg-compose-type-icon"><i class="bi bi-people-fill"></i></span>
+            <span class="msg-compose-type-label">Official group</span>
+            <span class="msg-compose-type-desc">Create a group chat with multiple employees</span>
+          </label>
+        </div>
+
+        <div id="adminSupportFields">
+          <div class="msg-compose-section-label">Select employee</div>
+          <div class="msg-compose-contact-grid">
             {% for employee in employees %}
-              <option value="{{ employee.pk }}">
-                {{ employee }} — {{ employee.company.name }}
-              </option>
+              <label class="msg-compose-contact-card">
+                <input type="radio" name="employee_id" value="{{ employee.pk }}"{% if forloop.first %} required{% endif %}>
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ employee.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ employee }}</span>
+                  <span class="msg-compose-contact-sub">{{ employee.company.name }}</span>
+                </span>
+              </label>
+            {% empty %}
+              <p class="text-muted small mb-0">No employees available.</p>
             {% endfor %}
-          </select>
-        </div>
-      </div>
-
-      <div id="groupFields" style="display:none;">
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="company_id">Company</label>
-          <select name="company_id" id="company_id" class="form-select">
-            {% for company in companies %}
-              <option value="{{ company.pk }}">{{ company.name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="title">Group title</label>
-          <div class="d-flex align-items-center gap-3 flex-wrap">
-            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
-            <input type="text" name="title" id="title" class="form-control flex-grow-1" maxlength="150"
-                   placeholder="e.g. HR Announcements">
           </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="group_avatar">Group logo (optional)</label>
-          <input type="file" name="group_avatar" id="group_avatar" class="form-control" accept="image/*">
-          <div class="form-text">Upload a square image for the group avatar. Leave blank to use a letter initial.</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Participants (chat-enabled employees)</label>
-          <select name="participant_ids" class="form-select" multiple size="8">
-            {% for employee in group_employees %}
-              <option value="{{ employee.user_id }}">
-                {{ employee }} — {{ employee.company.name }}
-              </option>
-            {% endfor %}
-          </select>
-          <div class="form-text">Select at least two participants for a group conversation.</div>
-        </div>
-      </div>
 
-      <button type="submit" class="btn btn-primary">
-        <i class="bi bi-chat-dots me-1"></i>Start Conversation
-      </button>
-    </form>
+        <div id="groupFields" style="display:none;">
+          <div class="mb-3">
+            <div class="msg-compose-section-label">Company</div>
+            <select name="company_id" id="company_id" class="form-select">
+              {% for company in companies %}
+                <option value="{{ company.pk }}">{{ company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="msg-compose-section-label">Group details</div>
+          <div class="msg-compose-group-row">
+            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
+            <input type="text" name="title" id="title" class="form-control" maxlength="150"
+                   placeholder="Group title, e.g. HR Announcements">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted" for="group_avatar">Group logo (optional)</label>
+            <input type="file" name="group_avatar" id="group_avatar" class="form-control form-control-sm" accept="image/*">
+          </div>
+          <div class="msg-compose-section-label">Participants</div>
+          <div class="msg-compose-contact-grid">
+            {% for employee in group_employees %}
+              <label class="msg-compose-contact-card">
+                <input type="checkbox" name="participant_ids" value="{{ employee.user_id }}">
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ employee.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ employee }}</span>
+                  <span class="msg-compose-contact-sub">{{ employee.company.name }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="form-text small">Select at least two participants for a group conversation.</p>
+        </div>
+
+        <div class="msg-compose-actions">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-chat-dots me-1"></i>Start Conversation
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -96,6 +110,7 @@
     var titleInput = document.getElementById('title');
     var avatarInput = document.getElementById('group_avatar');
     var avatarPreview = document.getElementById('groupAvatarPreview');
+    var employeeRadios = adminFields.querySelectorAll('input[name="employee_id"]');
 
     function updateInitialPreview() {
       if (!avatarPreview || !titleInput) return;
@@ -103,10 +118,18 @@
       avatarPreview.textContent = title ? title.charAt(0).toUpperCase() : 'G';
     }
 
+    function syncEmployeeRequired() {
+      var isGroup = groupRadio.checked;
+      employeeRadios.forEach(function (radio) {
+        radio.required = !isGroup;
+      });
+    }
+
     function sync() {
       var isGroup = groupRadio.checked;
       adminFields.style.display = isGroup ? 'none' : '';
       groupFields.style.display = isGroup ? '' : 'none';
+      syncEmployeeRequired();
       if (isGroup) {
         updateInitialPreview();
       }
