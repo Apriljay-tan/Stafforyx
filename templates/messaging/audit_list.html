@@ -3,102 +3,57 @@
 {% block title %}Chat Audit{% endblock %}
 {% block page_title %}Chat Audit{% endblock %}
 
+{% block extra_css %}
+{% include 'messaging/partials/_audit_styles.html' %}
+{% endblock %}
+
 {% block content %}
-<div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-4">
-  <div class="page-header mb-0">
-    <h1>Chat Audit</h1>
-    <p>Read-only view of conversations across your accessible companies.</p>
-  </div>
-  <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
-    <i class="bi bi-chat-dots me-1"></i>Back to Inbox
-  </a>
-</div>
-
-<div class="card mb-3">
-  <div class="card-body p-3">
-    <form method="get" class="row g-2 align-items-end">
-      <div class="col-12 col-md-3">
-        <label class="form-label small fw-semibold mb-1">Company</label>
-        <select name="company" class="form-select form-select-sm">
-          <option value="">All</option>
-          {% for company in companies %}
-            <option value="{{ company.pk }}" {% if filters.company == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
-          {% endfor %}
-        </select>
+<div class="msg-audit-page">
+  <div class="msg-audit-topbar">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+      <div>
+        <h1 class="h4 mb-1">Chat Audit</h1>
+        <p class="text-muted small mb-0">Review conversations, participants, and message history across your companies.</p>
       </div>
-      <div class="col-12 col-md-3">
-        <label class="form-label small fw-semibold mb-1">Employee</label>
-        <select name="employee" class="form-select form-select-sm">
-          <option value="">All</option>
-          {% for employee in employees %}
-            <option value="{{ employee.pk }}" {% if filters.employee == employee.pk|stringformat:"s" %}selected{% endif %}>{{ employee }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-12 col-md-3">
-        <label class="form-label small fw-semibold mb-1">Search</label>
-        <input type="search" name="q" value="{{ filters.q|default:'' }}" class="form-control form-control-sm">
-      </div>
-      <div class="col-6 col-md-1">
-        <label class="form-label small fw-semibold mb-1">From</label>
-        <input type="date" name="date_from" value="{{ filters.date_from|default:'' }}" class="form-control form-control-sm">
-      </div>
-      <div class="col-6 col-md-1">
-        <label class="form-label small fw-semibold mb-1">To</label>
-        <input type="date" name="date_to" value="{{ filters.date_to|default:'' }}" class="form-control form-control-sm">
-      </div>
-      <div class="col-12 col-md-1">
-        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i></button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<div class="card">
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0" style="font-size:.875rem;">
-      <thead class="table-light">
-        <tr>
-          <th class="ps-3">Type</th>
-          <th>Title</th>
-          <th>Company</th>
-          <th>Participants</th>
-          <th>Last activity</th>
-          <th class="text-end pe-3">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for conversation in page_obj %}
-          <tr>
-            <td class="ps-3">{{ conversation.get_conversation_type_display }}</td>
-            <td>{{ conversation.title|default:"—" }}</td>
-            <td>{{ conversation.company.name }}</td>
-            <td>{{ conversation.participants.count }}</td>
-            <td class="text-muted">{{ conversation.last_message_at|date:"M d, Y g:i A"|default:"—" }}</td>
-            <td class="text-end pe-3">
-              <a href="{% url 'messaging:audit_detail' conversation.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-            </td>
-          </tr>
-        {% empty %}
-          <tr>
-            <td colspan="6" class="text-center py-5 text-muted">No conversations found.</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% if page_obj.has_other_pages %}
-    <div class="card-footer d-flex justify-content-between align-items-center small">
-      <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
-      <div class="btn-group btn-group-sm">
-        {% if page_obj.has_previous %}
-          <a class="btn btn-outline-secondary" href="?page={{ page_obj.previous_page_number }}">Previous</a>
-        {% endif %}
-        {% if page_obj.has_next %}
-          <a class="btn btn-outline-secondary" href="?page={{ page_obj.next_page_number }}">Next</a>
-        {% endif %}
+      <div class="d-flex gap-2">
+        <a href="{% url 'messaging:audit_export' %}{% if filter_query %}?{{ filter_query }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+        <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-chat-dots me-1"></i>Inbox
+        </a>
       </div>
     </div>
-  {% endif %}
+    {% include 'messaging/partials/_audit_filters.html' %}
+  </div>
+
+  <div class="msg-audit-shell">
+    <aside class="msg-audit-sidebar">
+      <div class="px-3 py-2 border-bottom small text-muted fw-semibold">Conversations</div>
+      <div class="msg-audit-sidebar-list">
+        {% include 'messaging/partials/_audit_sidebar.html' %}
+      </div>
+      {% if page_obj.has_other_pages %}
+        <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center small">
+          <span>Page {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span>
+          <div class="btn-group btn-group-sm">
+            {% if page_obj.has_previous %}
+              <a class="btn btn-outline-secondary" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a class="btn btn-outline-secondary" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </aside>
+
+    <section class="msg-audit-main">
+      <div class="msg-audit-empty">
+        <i class="bi bi-shield-check fs-2 d-block mb-2"></i>
+        Select a conversation to review message history, attachments, and sender identity.
+      </div>
+    </section>
+  </div>
 </div>
 {% endblock %}

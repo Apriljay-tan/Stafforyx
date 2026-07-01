@@ -1,0 +1,47 @@
+.profile-photo-section {
+  max-width: 100%;
+}
+
+.profile-photo-preview {
+  width: 96px;
+  height: 96px;
+  flex-shrink: 0;
+}
+
+.profile-photo-preview .staff-avatar--xl {
+  width: 96px;
+  height: 96px;
+}
+
+.profile-photo-crop-modal .modal-body {
+  padding: 0;
+  background: #0f172a;
+}
+
+.profile-photo-crop-wrap {
+  max-height: min(70vh, 480px);
+  min-height: 280px;
+  width: 100%;
+  overflow: hidden;
+}
+
+.profile-photo-crop-wrap img {
+  display: block;
+  max-width: 100%;
+}
+
+/* Circular crop preview (Cropper.js) */
+.profile-photo-crop-wrap .cropper-view-box,
+.profile-photo-crop-wrap .cropper-face {
+  border-radius: 50%;
+}
+
+.profile-photo-crop-wrap .cropper-view-box {
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.65);
+  outline: none;
+}
+
+.profile-photo-crop-hint {
+  font-size: 0.85rem;
+  color: #64748b;
+}

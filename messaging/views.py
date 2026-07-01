@@ -1,9 +1,11 @@
+import csv
+
 from django.contrib import messages as django_messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.http import FileResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_datetime
 from django.utils import timezone
@@ -13,14 +15,20 @@ from accounts.avatars import resolve_conversation_avatar, resolve_message_sender
 from accounts.company_access import filter_queryset_by_user_companies, get_accessible_companies
 from employees.models import Employee
 
-from .constants import TYPE_ADMIN_SUPPORT, TYPE_GROUP
+from .constants import CONVERSATION_TYPE_CHOICES, TYPE_ADMIN_SUPPORT, TYPE_GROUP
 from .decorators import chat_manager_required
 from .models import Conversation, MessageAttachment
 from .permissions import user_can_access_conversation, _chat_enabled_employees
 from .services import (
     archive_conversation,
+    audit_conversation_list_rows,
     audit_conversations,
+    audit_conversations_queryset,
+    audit_conversation_title,
+    audit_export_rows,
+    audit_participant_labels,
     create_group_conversation,
+    enrich_audit_messages,
     get_or_create_admin_support_conversation,
     inbox_for_user,
     mark_conversation_read,
@@ -208,6 +216,8 @@ def _parse_audit_filters(request):
         filters['company_id'] = int(request.GET['company'])
     if request.GET.get('employee'):
         filters['employee_id'] = int(request.GET['employee'])
+    if request.GET.get('type'):
+        filters['conversation_type'] = request.GET['type']
     if request.GET.get('q', '').strip():
         filters['q'] = request.GET['q'].strip()
     if request.GET.get('date_from'):
@@ -215,6 +225,19 @@ def _parse_audit_filters(request):
     if request.GET.get('date_to'):
         filters['date_to'] = request.GET['date_to']
     return filters
+
+
+def _audit_filter_context(request, filters):
+    return {
+        'companies': get_accessible_companies(request.user),
+        'employees': filter_queryset_by_user_companies(
+            Employee.objects.filter(status='active').select_related('company'),
+            request.user,
+        ),
+        'conversation_types': CONVERSATION_TYPE_CHOICES,
+        'filters': request.GET,
+        'filter_query': request.GET.urlencode(),
+    }
 
 
 @login_required
@@ -318,24 +341,53 @@ def archive_conversation_view(request, pk):
 @chat_manager_required
 def audit_list(request):
     filters = _parse_audit_filters(request)
-    conversations = audit_conversations(request.user, filters)
+    conversations = audit_conversations_queryset(request.user, filters)
     paginator = Paginator(conversations, 25)
     page_obj = paginator.get_page(request.GET.get('page'))
+    rows = audit_conversation_list_rows(request.user, page_obj.object_list)
 
-    return render(request, 'messaging/audit_list.html', {
+    context = _audit_filter_context(request, filters)
+    context.update({
         'page_obj': page_obj,
-        'companies': get_accessible_companies(request.user),
-        'employees': filter_queryset_by_user_companies(
-            Employee.objects.filter(status='active').select_related('company'),
-            request.user,
-        ),
-        'filters': request.GET,
+        'audit_rows': rows,
+        'selected_conversation_id': None,
     })
+    return render(request, 'messaging/audit_list.html', context)
+
+
+@login_required
+@chat_manager_required
+def audit_export_csv(request):
+    filters = _parse_audit_filters(request)
+    export_rows = audit_export_rows(request.user, filters)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="chat-audit.csv"'
+    writer = csv.writer(response)
+    writer.writerow([
+        'conversation_id', 'company', 'type', 'title', 'participants',
+        'last_message_at', 'message_count', 'attachment_count', 'archived',
+    ])
+    for row in export_rows:
+        last_at = row['last_message_at']
+        writer.writerow([
+            row['conversation_id'],
+            row['company'],
+            row['type'],
+            row['title'],
+            row['participants'],
+            timezone.localtime(last_at).strftime('%Y-%m-%d %H:%M') if last_at else '',
+            row['message_count'],
+            row['attachment_count'],
+            'yes' if row['is_archived'] else 'no',
+        ])
+    return response
 
 
 @login_required
 @chat_manager_required
 def audit_detail(request, pk):
+    filters = _parse_audit_filters(request)
     conversation = get_object_or_404(
         Conversation.objects.select_related('company'),
         pk=pk,
@@ -343,16 +395,25 @@ def audit_detail(request, pk):
     if not user_can_access_conversation(request.user, conversation):
         raise PermissionDenied
 
+    sidebar_conversations = audit_conversations_queryset(request.user, filters)[:50]
+    sidebar_rows = audit_conversation_list_rows(request.user, sidebar_conversations)
+
     participants = conversation.participants.select_related('user', 'employee').order_by('joined_at')
-    message_list = [
-        serialize_message_for_user(message, request.user, include_sender_id=True)
-        for message in messages_for_conversation(conversation, request.user)
-    ]
-    return render(request, 'messaging/audit_detail.html', {
+    message_qs = messages_for_conversation(conversation, request.user).prefetch_related('attachments')
+    chat_messages = enrich_audit_messages(message_qs, request.user)
+
+    context = _audit_filter_context(request, filters)
+    context.update({
         'conversation': conversation,
+        'conversation_title': audit_conversation_title(conversation),
         'participants': participants,
-        'chat_messages': message_list,
+        'participant_labels': audit_participant_labels(conversation),
+        'chat_messages': chat_messages,
+        'audit_rows': sidebar_rows,
+        'selected_conversation_id': conversation.pk,
+        'avatar': resolve_conversation_avatar(conversation, request.user, title=audit_conversation_title(conversation)),
     })
+    return render(request, 'messaging/audit_detail.html', context)
 
 
 @login_required

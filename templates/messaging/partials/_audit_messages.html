@@ -1,0 +1,22 @@
+{% for message in chat_messages %}
+  <article class="msg-audit-message" id="audit-message-{{ message.id }}">
+    <div class="flex-shrink-0">
+      {% include 'partials/_avatar.html' with avatar=message.sender_avatar size='sm' %}
+    </div>
+    <div class="msg-audit-message-body">
+      <div class="msg-audit-sender-real">{{ message.sender_real_display }}</div>
+      {% if message.sender_persona_masked %}
+        <div class="msg-audit-sender-employee">Employee sees: {{ message.sender_employee_display }}</div>
+      {% endif %}
+      <div class="msg-audit-bubble{% if message.is_deleted %} deleted{% endif %}">
+        {% if message.is_deleted %}
+          <div class="small text-danger mb-1"><i class="bi bi-trash"></i> Soft-deleted (audit retains original)</div>
+        {% endif %}
+        {% include 'messaging/partials/_message_bubble_content.html' with message=message %}
+      </div>
+      <div class="msg-audit-time">{{ message.time_display }}</div>
+    </div>
+  </article>
+{% empty %}
+  <div class="msg-audit-empty">No messages in this conversation.</div>
+{% endfor %}

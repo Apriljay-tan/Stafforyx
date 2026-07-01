@@ -1,0 +1,48 @@
+<form method="get" class="row g-2 align-items-end">
+  {% if selected_conversation_id %}
+    <input type="hidden" name="page" value="{{ filters.page|default:'' }}">
+  {% endif %}
+  <div class="col-12 col-lg-2">
+    <label class="form-label small fw-semibold mb-1">Company</label>
+    <select name="company" class="form-select form-select-sm">
+      <option value="">All</option>
+      {% for company in companies %}
+        <option value="{{ company.pk }}" {% if filters.company == company.pk|stringformat:"s" %}selected{% endif %}>{{ company.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-lg-2">
+    <label class="form-label small fw-semibold mb-1">Type</label>
+    <select name="type" class="form-select form-select-sm">
+      <option value="">All</option>
+      {% for value, label in conversation_types %}
+        <option value="{{ value }}" {% if filters.type == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-lg-2">
+    <label class="form-label small fw-semibold mb-1">Participant</label>
+    <select name="employee" class="form-select form-select-sm">
+      <option value="">All</option>
+      {% for employee in employees %}
+        <option value="{{ employee.pk }}" {% if filters.employee == employee.pk|stringformat:"s" %}selected{% endif %}>{{ employee }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12 col-lg-2">
+    <label class="form-label small fw-semibold mb-1">Search</label>
+    <input type="search" name="q" value="{{ filters.q|default:'' }}" class="form-control form-control-sm" placeholder="Message or participant">
+  </div>
+  <div class="col-6 col-lg-1">
+    <label class="form-label small fw-semibold mb-1">From</label>
+    <input type="date" name="date_from" value="{{ filters.date_from|default:'' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-6 col-lg-1">
+    <label class="form-label small fw-semibold mb-1">To</label>
+    <input type="date" name="date_to" value="{{ filters.date_to|default:'' }}" class="form-control form-control-sm">
+  </div>
+  <div class="col-12 col-lg-2 d-flex gap-2">
+    <button type="submit" class="btn btn-primary btn-sm flex-grow-1"><i class="bi bi-funnel me-1"></i>Filter</button>
+    <a href="{% url 'messaging:audit_list' %}" class="btn btn-outline-secondary btn-sm">Reset</a>
+  </div>
+</form>

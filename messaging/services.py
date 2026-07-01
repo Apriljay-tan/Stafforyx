@@ -1,12 +1,13 @@
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
 
 from .attachment_validation import attachment_type_for_file, validate_message_attachment
 from .constants import (
+    CONVERSATION_TYPE_CHOICES,
     MAX_MESSAGE_BODY_LENGTH,
     ROLE_ADMIN,
     ROLE_GROUP_CREATOR,
@@ -391,17 +392,212 @@ def audit_conversations(user, filters=None):
         ).distinct()
 
     if filters.get('q'):
-        qs = qs.filter(
-            Q(title__icontains=filters['q'])
-            | Q(messages__body__icontains=filters['q'])
-        ).distinct()
+        qs = qs.filter(_audit_search_q(filters['q'])).distinct()
 
     if filters.get('date_from'):
-        qs = qs.filter(last_message_at__gte=filters['date_from'])
+        qs = qs.filter(last_message_at__gte=_audit_filter_datetime_start(filters['date_from']))
     if filters.get('date_to'):
-        qs = qs.filter(last_message_at__lte=filters['date_to'])
+        qs = qs.filter(last_message_at__lte=_audit_filter_datetime_end(filters['date_to']))
+
+    if filters.get('conversation_type'):
+        qs = qs.filter(conversation_type=filters['conversation_type'])
 
     return qs.order_by('-last_message_at', '-created_at')
+
+
+def _audit_filter_datetime_start(value):
+    from datetime import datetime, time
+    from django.utils.dateparse import parse_date, parse_datetime
+
+    parsed = parse_datetime(value)
+    if parsed is not None:
+        return parsed
+    date_value = parse_date(value)
+    if date_value is None:
+        return value
+    return timezone.make_aware(datetime.combine(date_value, time.min))
+
+
+def _audit_filter_datetime_end(value):
+    from datetime import datetime, time
+    from django.utils.dateparse import parse_date, parse_datetime
+
+    parsed = parse_datetime(value)
+    if parsed is not None:
+        return parsed
+    date_value = parse_date(value)
+    if date_value is None:
+        return value
+    return timezone.make_aware(datetime.combine(date_value, time.max))
+
+
+def _audit_search_q(term):
+    return (
+        Q(title__icontains=term)
+        | Q(messages__body__icontains=term)
+        | Q(participants__user__username__icontains=term)
+        | Q(participants__user__first_name__icontains=term)
+        | Q(participants__user__last_name__icontains=term)
+        | Q(participants__employee__first_name__icontains=term)
+        | Q(participants__employee__last_name__icontains=term)
+        | Q(participants__employee__employee_id__icontains=term)
+    )
+
+
+def audit_conversations_queryset(user, filters=None):
+    """Alias for audit_conversations with annotations for list/export."""
+    qs = audit_conversations(user, filters)
+    return qs.annotate(
+        message_count=Count('messages', distinct=True),
+        attachment_count=Count('messages__attachments', distinct=True),
+        active_participant_count=Count(
+            'participants',
+            filter=Q(participants__left_at__isnull=True),
+            distinct=True,
+        ),
+    )
+
+
+def audit_conversation_attachment_flags(conversation):
+    types = set(
+        MessageAttachment.objects.filter(message__conversation=conversation)
+        .values_list('attachment_type', flat=True)
+        .distinct()
+    )
+    return {
+        'has_image': 'image' in types,
+        'has_gif': 'gif' in types,
+        'has_voice': 'voice' in types,
+    }
+
+
+def audit_conversation_title(conversation):
+    if conversation.title:
+        return conversation.title
+    return conversation.get_conversation_type_display()
+
+
+def audit_participant_labels(conversation):
+    labels = []
+    for participant in conversation.participants.filter(left_at__isnull=True).select_related('user', 'employee'):
+        if participant.employee_id:
+            labels.append(str(participant.employee))
+        else:
+            labels.append(participant.user.get_full_name().strip() or participant.user.username)
+    return labels
+
+
+def audit_conversation_list_rows(user, conversations_qs):
+    rows = []
+    for conversation in conversations_qs.select_related('company'):
+        last_message = (
+            conversation.messages
+            .select_related('sender_user')
+            .prefetch_related('attachments')
+            .order_by('-created_at')
+            .first()
+        )
+        preview = message_preview_text(last_message, user) if last_message else ''
+        flags = audit_conversation_attachment_flags(conversation)
+        rows.append({
+            'conversation': conversation,
+            'title': audit_conversation_title(conversation),
+            'preview': preview,
+            'last_at': conversation.last_message_at or conversation.created_at,
+            'participant_count': getattr(
+                conversation, 'active_participant_count', None,
+            ) or conversation.participants.filter(left_at__isnull=True).count(),
+            'message_count': getattr(conversation, 'message_count', None) or conversation.messages.count(),
+            'attachment_count': getattr(conversation, 'attachment_count', None) or MessageAttachment.objects.filter(
+                message__conversation=conversation,
+            ).count(),
+            'participants_label': ', '.join(audit_participant_labels(conversation)),
+            'avatar': resolve_conversation_avatar_for_audit(conversation, user),
+            **flags,
+        })
+    return rows
+
+
+def resolve_conversation_avatar_for_audit(conversation, user):
+    from accounts.avatars import resolve_conversation_avatar
+    return resolve_conversation_avatar(conversation, user, title=audit_conversation_title(conversation))
+
+
+def _employee_reference_user(conversation):
+    participant = (
+        conversation.participants
+        .filter(left_at__isnull=True, employee__isnull=False)
+        .select_related('user')
+        .first()
+    )
+    return participant.user if participant else None
+
+
+def employee_visible_sender_display(message):
+    employee_user = _employee_reference_user(message.conversation)
+    if employee_user is None:
+        return _user_display_name(message.sender_user)
+    return _sender_display_for_viewer(message, employee_user)
+
+
+def _real_sender_label(user):
+    name = _user_display_name(user)
+    username = user.username
+    if name and name != username:
+        return f'{name} ({username})'
+    return username
+
+
+def serialize_audit_message(message, auditor_user):
+    from accounts.avatars import avatar_for_user_profile
+
+    real_display = _real_sender_label(message.sender_user)
+    employee_display = employee_visible_sender_display(message)
+    persona_masked = employee_display != _user_display_name(message.sender_user)
+
+    body = message.body
+    if message.deleted_at:
+        body_display = body
+        deleted_note = 'Deleted'
+    else:
+        body_display = body
+        deleted_note = ''
+
+    return {
+        'id': message.pk,
+        'body': body_display,
+        'created_at': message.created_at.isoformat(),
+        'time_display': timezone.localtime(message.created_at).strftime('%b %d, %Y %I:%M %p'),
+        'sender_real_display': real_display,
+        'sender_employee_display': employee_display,
+        'sender_persona_masked': persona_masked,
+        'sender_user_id': message.sender_user_id,
+        'is_deleted': bool(message.deleted_at),
+        'deleted_note': deleted_note,
+        'attachments': _serialize_attachments(message, auditor_user),
+        'sender_avatar': avatar_for_user_profile(message.sender_user),
+    }
+
+
+def enrich_audit_messages(messages_qs, auditor_user):
+    return [serialize_audit_message(message, auditor_user) for message in messages_qs]
+
+
+def audit_export_rows(user, filters=None):
+    rows = []
+    for conversation in audit_conversations_queryset(user, filters).select_related('company'):
+        rows.append({
+            'conversation_id': conversation.pk,
+            'company': conversation.company.name,
+            'type': conversation.get_conversation_type_display(),
+            'title': audit_conversation_title(conversation),
+            'participants': '; '.join(audit_participant_labels(conversation)),
+            'last_message_at': conversation.last_message_at,
+            'message_count': conversation.message_count,
+            'attachment_count': conversation.attachment_count,
+            'is_archived': conversation.is_archived,
+        })
+    return rows
 
 
 def _serialize_attachments(message, viewer_user):
