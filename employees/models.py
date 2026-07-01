@@ -239,6 +239,16 @@ class Employee(models.Model):
         default=False,
         help_text='Allows future flexible/mobile rules to include other registered locations without bypassing validation.',
     )
+    can_use_chat = models.BooleanField(
+        default=False,
+        help_text='Allow this employee to use portal chat when company chat is enabled.',
+    )
+    allowed_chat_companies = models.ManyToManyField(
+        'companies.Company',
+        blank=True,
+        related_name='chat_enabled_employees',
+        help_text='Other companies this employee may chat with (cross-company).',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

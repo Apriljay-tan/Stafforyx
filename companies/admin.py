@@ -23,6 +23,10 @@ class CompanyAdmin(admin.ModelAdmin):
                 'payslip_show_received_by', 'payslip_footer_note',
             ),
         }),
+        ('Chat Settings', {
+            'classes': ('collapse',),
+            'fields': ('employee_chat_enabled', 'chat_support_display_name'),
+        }),
         ('Attendance Settings', {
             'classes': ('collapse',),
             'fields': (
