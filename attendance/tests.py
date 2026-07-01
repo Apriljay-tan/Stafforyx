@@ -50,7 +50,7 @@ def _make_schedule(company, **kwargs):
 _emp_counter = 0
 
 
-def _make_employee(company, schedule=None):
+def _make_employee(company, schedule=None, overtime_policy='automatic'):
     global _emp_counter
     _emp_counter += 1
     emp = Employee.objects.create(
@@ -60,6 +60,7 @@ def _make_employee(company, schedule=None):
         last_name='Employee',
         date_hired=datetime.date(2024, 1, 1),
         status='active',
+        overtime_policy=overtime_policy,
     )
     if schedule:
         emp.work_schedule = schedule
@@ -2048,7 +2049,7 @@ class FlexibleScheduleAttendanceTests(TestCase):
         )
 
     def _flex_employee(self, required_hours='8.00', break_minutes=60, overtime_grace=30):
-        emp = _make_employee(self.company)
+        emp = _make_employee(self.company, overtime_policy='automatic')
         emp.attendance_policy_type = 'flexible'
         emp.required_daily_hours = Decimal(required_hours)
         emp.default_break_minutes = break_minutes
@@ -2107,7 +2108,7 @@ class FlexibleScheduleAttendanceTests(TestCase):
         self.assertEqual(rec.total_work_minutes, 540)
         self.assertEqual(rec.overtime_minutes, 30)
         self.assertEqual(rec.undertime_minutes, 0)
-        self.assertEqual(rec.computed_status, 'present')
+        self.assertEqual(rec.computed_status, 'overtime')
 
 
 class FixedShiftRegressionTests(TestCase):

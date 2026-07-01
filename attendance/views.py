@@ -335,8 +335,13 @@ def attendance_list(request):
 def attendance_add(request):
     form = AttendanceRecordForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
+        overtime_override = (
+            form.cleaned_data['overtime_hours']
+            if 'overtime_hours' in form.changed_data
+            else None
+        )
         record = form.save()
-        compute_attendance(record)
+        compute_attendance(record, overtime_override=overtime_override)
         messages.success(request, 'Attendance record added successfully.')
         return redirect('attendance:attendance_list')
     return render(request, 'attendance/attendance_form.html', {
@@ -354,8 +359,13 @@ def attendance_edit(request, pk):
         raise PermissionDenied
     form = AttendanceRecordForm(request.POST or None, instance=record)
     if request.method == 'POST' and form.is_valid():
+        overtime_override = (
+            form.cleaned_data['overtime_hours']
+            if 'overtime_hours' in form.changed_data
+            else None
+        )
         record = form.save()
-        compute_attendance(record)
+        compute_attendance(record, overtime_override=overtime_override)
         messages.success(request, 'Attendance record updated successfully.')
         return redirect('attendance:attendance_list')
     return render(request, 'attendance/attendance_form.html', {
@@ -404,14 +414,15 @@ def attendance_recent_json(request):
     show_company = (selected_company is None) and request.user.is_superuser
     data = []
     for r in records:
+        display_status = r.effective_computed_status
         entry = {
             'employee_id':   r.employee.employee_id,
             'employee_name': r.employee.full_name,
             'department':    r.employee.department.name if r.employee.department else '',
             'time_in':       r.time_in.strftime('%I:%M %p') if r.time_in else None,
             'time_out':      r.time_out.strftime('%I:%M %p') if r.time_out else None,
-            'status':        r.computed_status or r.get_status_display(),
-            'status_key':    r.computed_status or r.status,
+            'status':        display_status or r.get_status_display(),
+            'status_key':    display_status or r.status,
             'total_hours':   str(r.total_hours),
         }
         if show_company:

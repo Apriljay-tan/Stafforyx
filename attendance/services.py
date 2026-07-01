@@ -81,6 +81,72 @@ def _overlap_minutes(start, end, window_start, window_end):
     return int((overlap_end - overlap_start).total_seconds() // 60)
 
 
+def _overtime_grace_threshold_minutes(employee):
+    """Minimum detected OT minutes before payable OT accrues (request_required)."""
+    return int(getattr(employee, 'flexible_overtime_grace_minutes', 0) or 0)
+
+
+def _approved_overtime_minutes_for_date(employee, date):
+    from overtime.services import build_overtime_approval_index
+
+    approval_index = build_overtime_approval_index(
+        employee.company, [employee], date, date,
+    )
+    return approval_index.get((employee.id, date), 0)
+
+
+def _resolve_payable_raw_overtime_minutes(employee, date, actual_overtime_min):
+    """
+    Map detected overtime minutes to payable raw minutes before the counting rule.
+
+    automatic: pay all detected overtime.
+    no_ot: never pay overtime.
+    request_required: pay only with an approved request, after the grace
+    threshold, capped at approved minutes.
+    """
+    policy = getattr(employee, 'overtime_mode', None) or getattr(
+        employee, 'overtime_policy', 'no_ot',
+    )
+
+    if policy in ('no_ot', 'not_allowed'):
+        return 0
+    if policy == 'automatic':
+        return actual_overtime_min or 0
+
+    approved_min = _approved_overtime_minutes_for_date(employee, date)
+    if approved_min <= 0:
+        return 0
+
+    actual = actual_overtime_min or 0
+    if actual <= _overtime_grace_threshold_minutes(employee):
+        return 0
+
+    return min(actual, approved_min)
+
+
+def _hours_to_overtime_minutes(hours):
+    return int(
+        (Decimal(str(hours or 0)) * _60).to_integral_value(rounding=ROUND_HALF_UP)
+    )
+
+
+def _finalize_computed_status(computed, counted_overtime_min, late_min, undertime_min):
+    """
+    Persist a computed status that reflects payable overtime, not raw detection.
+
+    Overtime status is only stored when counted/payable overtime is positive.
+    """
+    if (counted_overtime_min or 0) > 0:
+        return 'overtime'
+    if computed == 'overtime':
+        if undertime_min > 0:
+            return 'undertime'
+        if late_min > 0:
+            return 'late'
+        return 'present'
+    return computed
+
+
 def calculate_night_differential_minutes(record, employee=None):
     employee = employee or record.employee
     if not getattr(employee, 'night_differential_enabled', False):
@@ -117,13 +183,17 @@ def calculate_night_differential_minutes(record, employee=None):
     return minutes
 
 
-def compute_attendance(record):
+def compute_attendance(record, overtime_override=None):
     """
     Compute late, undertime, overtime, total work minutes, and computed status.
 
     Fixed employees keep the existing resolved-shift behavior. Flexible
     employees use employee-level required hours and day-off settings instead of
     a fixed start/end time.
+
+    When ``overtime_override`` is set (admin manually edited overtime_hours on
+    the attendance form), payable overtime fields are taken from that value
+    instead of being auto-derived from clock times and policy.
     """
     shift = resolve_expected_shift(record.employee, record.date)
 
@@ -240,10 +310,24 @@ def compute_attendance(record):
     night_diff_min = calculate_night_differential_minutes(record, record.employee)
 
     # overtime_min is the raw detected overtime. Preserve it as the audit value
-    # and apply the effective counting rule to derive the counted/payable value.
+    # and apply policy + counting rule to derive payable overtime fields.
     actual_overtime_min = overtime_min
-    overtime_rule = resolve_overtime_rule(record.employee)
-    counted_overtime_min = apply_overtime_rule(actual_overtime_min, overtime_rule)
+    if overtime_override is not None:
+        counted_overtime_min = _hours_to_overtime_minutes(overtime_override)
+        overtime_hours = Decimal(str(overtime_override)).quantize(
+            Decimal('0.01'), rounding=ROUND_HALF_UP,
+        )
+    else:
+        payable_raw_min = _resolve_payable_raw_overtime_minutes(
+            record.employee, record.date, actual_overtime_min,
+        )
+        overtime_rule = resolve_overtime_rule(record.employee)
+        counted_overtime_min = apply_overtime_rule(payable_raw_min, overtime_rule)
+        overtime_hours = _minutes_to_hours(counted_overtime_min)
+
+    computed = _finalize_computed_status(
+        computed, counted_overtime_min, late_min, undertime_min,
+    )
 
     record.late_minutes = late_min
     record.undertime_minutes = undertime_min
@@ -252,7 +336,7 @@ def compute_attendance(record):
     record.total_work_minutes = total_work_min
     record.night_differential_minutes = night_diff_min
     record.total_hours = _minutes_to_hours(total_work_min)
-    record.overtime_hours = _minutes_to_hours(counted_overtime_min)
+    record.overtime_hours = overtime_hours
     record.computed_status = computed
     record.save(update_fields=[
         'late_minutes', 'undertime_minutes', 'actual_overtime_minutes',

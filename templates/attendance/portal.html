@@ -109,7 +109,7 @@
               <span class="badge text-bg-warning">Late {% if today_record.late_minutes %}({{ today_record.late_minutes }} min){% endif %}</span>
             {% elif today_record.computed_status == 'undertime' %}
               <span class="badge" style="background:#f97316;color:#fff;">Undertime ({{ today_record.undertime_minutes }} min)</span>
-            {% elif today_record.computed_status == 'overtime' %}
+            {% elif today_record.overtime_minutes > 0 %}
               <span class="badge text-bg-primary">Overtime ({{ today_record.overtime_counted_display }} counted)</span>
               {% if today_record.overtime_counting_reduced %}
                 <span class="text-muted small ms-1">Actual: {{ today_record.actual_overtime_display }}</span>

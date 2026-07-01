@@ -541,6 +541,22 @@ class AttendanceRecord(models.Model):
         """True when the counting rule reduced the payable overtime below actual."""
         return (self.actual_overtime_minutes or 0) > (self.overtime_minutes or 0)
 
+    @property
+    def effective_computed_status(self):
+        """
+        Status for UI badges. Overtime is shown only when payable/counted
+        overtime is positive; raw detected overtime alone does not qualify.
+        """
+        if (self.overtime_minutes or 0) > 0:
+            return 'overtime'
+        if self.computed_status == 'overtime':
+            if self.undertime_minutes:
+                return 'undertime'
+            if self.late_minutes:
+                return 'late'
+            return 'present'
+        return self.computed_status or self.status or ''
+
 
 class AttendancePortalLog(models.Model):
     """

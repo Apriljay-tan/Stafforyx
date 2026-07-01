@@ -277,21 +277,21 @@
               {% endif %}
             </td>
             <td>
-              {% if record.computed_status == 'present' %}
+              {% if record.effective_computed_status == 'present' %}
                 <span class="badge text-bg-success">Present</span>
-              {% elif record.computed_status == 'late' %}
+              {% elif record.effective_computed_status == 'late' %}
                 <span class="badge text-bg-warning">Late</span>
-              {% elif record.computed_status == 'undertime' %}
+              {% elif record.effective_computed_status == 'undertime' %}
                 <span class="badge" style="background:#f97316;color:#fff;">Undertime</span>
-              {% elif record.computed_status == 'overtime' %}
+              {% elif record.effective_computed_status == 'overtime' %}
                 <span class="badge text-bg-primary">Overtime</span>
-              {% elif record.computed_status == 'absent' %}
+              {% elif record.effective_computed_status == 'absent' %}
                 <span class="badge text-bg-danger">Absent</span>
-              {% elif record.computed_status == 'incomplete' %}
+              {% elif record.effective_computed_status == 'incomplete' %}
                 <span class="badge text-bg-secondary">Incomplete</span>
-              {% elif record.computed_status == 'rest_day' %}
+              {% elif record.effective_computed_status == 'rest_day' %}
                 <span class="badge text-bg-secondary">Rest Day</span>
-              {% elif record.computed_status == 'no_schedule' %}
+              {% elif record.effective_computed_status == 'no_schedule' %}
                 <span class="badge text-bg-light border">No Schedule</span>
               {% elif record.status == 'present' %}
                 <span class="badge text-bg-success">Present</span>

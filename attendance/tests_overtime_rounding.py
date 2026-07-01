@@ -10,11 +10,15 @@ payroll sums) holds the counted/payable value.
 
 import datetime
 from decimal import Decimal
+from unittest.mock import patch
 
+from django.contrib.auth.models import User
 from django.test import TestCase
+from django.urls import reverse
 
 from companies.models import Company
 from employees.models import Employee
+from overtime.models import OvertimeRequest
 from .models import AttendanceRecord, WorkSchedule
 from .services import apply_overtime_rule, compute_attendance, resolve_overtime_rule
 
@@ -127,6 +131,7 @@ class OvertimeRoundingComputeTests(TestCase):
             attendance_policy_type='flexible', required_daily_hours=Decimal('8.00'),
             default_break_minutes=60, flexible_overtime_grace_minutes=0,
             overtime_counting_rule=employee_rule,
+            overtime_policy='automatic',
         )
         emp.work_schedule = schedule
         emp.save(update_fields=['work_schedule'])
@@ -242,3 +247,280 @@ class OvertimeRoundingPayrollTests(TestCase):
         generate_payroll_for_period(period)
         pr = PayrollRecord.objects.get(payroll_period=period, employee=emp)
         self.assertEqual(pr.overtime_minutes, 90)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Request-required overtime policy + manual admin override
+# ──────────────────────────────────────────────────────────────────────────────
+
+class RequestRequiredOvertimePolicyTests(TestCase):
+    """Payable overtime on attendance records follows OT policy and approvals."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name='RR Co')
+        self.schedule = WorkSchedule.objects.create(
+            company=self.company,
+            name='Day Shift',
+            start_time=datetime.time(9, 0),
+            end_time=datetime.time(18, 0),
+            grace_minutes=15,
+            break_minutes=60,
+            required_hours=Decimal('8.00'),
+        )
+        self.day = datetime.date(2026, 5, 25)  # Monday
+        self.emp = Employee.objects.create(
+            company=self.company,
+            employee_id='RR1',
+            first_name='Req',
+            last_name='OT',
+            date_hired=datetime.date(2024, 1, 1),
+            status='active',
+            overtime_policy='request_required',
+            flexible_overtime_grace_minutes=30,
+        )
+        self.emp.work_schedule = self.schedule
+        self.emp.save(update_fields=['work_schedule'])
+
+    def _record(self, time_in, time_out):
+        return AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=self.day,
+            time_in=time_in,
+            time_out=time_out,
+            break_minutes=60,
+            status='present',
+        )
+
+    def test_no_request_checkout_after_schedule_has_zero_payable_overtime(self):
+        rec = self._record(datetime.time(8, 55, 53), datetime.time(18, 1, 45))
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertGreater(rec.actual_overtime_minutes, 0)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_hours, Decimal('0.00'))
+        self.assertNotEqual(rec.computed_status, 'overtime')
+        self.assertEqual(rec.effective_computed_status, 'present')
+
+        rec.time_out = datetime.time(20, 0)
+        rec.save(update_fields=['time_out'])
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertGreater(rec.actual_overtime_minutes, 0)
+        self.assertEqual(rec.overtime_hours, Decimal('0.00'))
+
+    def test_approved_request_below_grace_has_zero_payable_overtime(self):
+        rec = self._record(datetime.time(8, 55), datetime.time(18, 20))
+        OvertimeRequest.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=self.day,
+            requested_hours=Decimal('2.00'),
+            approved_hours=Decimal('2.00'),
+            status='approved',
+            source='employee',
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.actual_overtime_minutes, 20)
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_hours, Decimal('0.00'))
+        self.assertNotEqual(rec.computed_status, 'overtime')
+        self.assertEqual(rec.effective_computed_status, 'present')
+
+    def test_approved_request_above_grace_uses_counting_rule(self):
+        self.company.default_overtime_counting_rule = '30'
+        self.company.save(update_fields=['default_overtime_counting_rule'])
+        rec = self._record(datetime.time(8, 55), datetime.time(19, 0))
+        OvertimeRequest.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=self.day,
+            requested_hours=Decimal('2.00'),
+            approved_hours=Decimal('2.00'),
+            status='approved',
+            source='employee',
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertEqual(rec.actual_overtime_minutes, 60)
+        self.assertEqual(rec.overtime_minutes, 60)
+        self.assertEqual(rec.overtime_hours, Decimal('1.00'))
+        self.assertEqual(rec.computed_status, 'overtime')
+        self.assertEqual(rec.effective_computed_status, 'overtime')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_manual_overtime_zero_is_preserved_on_edit(self, _license_active):
+        auto_emp = Employee.objects.create(
+            company=self.company,
+            employee_id='RR-AUTO',
+            first_name='Auto',
+            last_name='OT',
+            date_hired=datetime.date(2024, 1, 1),
+            status='active',
+            overtime_policy='automatic',
+        )
+        auto_emp.work_schedule = self.schedule
+        auto_emp.save(update_fields=['work_schedule'])
+        rec = AttendanceRecord.objects.create(
+            company=self.company,
+            employee=auto_emp,
+            date=self.day,
+            time_in=datetime.time(8, 55),
+            time_out=datetime.time(19, 0),
+            break_minutes=60,
+            status='present',
+        )
+        compute_attendance(rec)
+        rec.refresh_from_db()
+        self.assertGreater(rec.overtime_hours, Decimal('0.00'))
+
+        user = User.objects.create_superuser('otadmin', password='pass')
+        self.client.force_login(user)
+        response = self.client.post(
+            reverse('attendance:attendance_edit', args=[rec.pk]),
+            data={
+                'company': self.company.pk,
+                'employee': auto_emp.pk,
+                'date': self.day.isoformat(),
+                'time_in': '08:55',
+                'time_out': '19:00',
+                'break_minutes': 60,
+                'total_hours': rec.total_hours,
+                'late_minutes': rec.late_minutes,
+                'overtime_hours': '0.00',
+                'status': 'present',
+                'remarks': '',
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('attendance:attendance_list'))
+        rec.refresh_from_db()
+        self.assertEqual(rec.overtime_hours, Decimal('0.00'))
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertGreater(rec.actual_overtime_minutes, 0)
+
+
+class OvertimeStatusDisplayTests(TestCase):
+    """Status badges and list rendering respect payable overtime only."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name='Display Co')
+        self.schedule = WorkSchedule.objects.create(
+            company=self.company,
+            name='Day Shift',
+            start_time=datetime.time(9, 0),
+            end_time=datetime.time(18, 0),
+            grace_minutes=15,
+            break_minutes=60,
+            required_hours=Decimal('8.00'),
+        )
+        self.day = datetime.date(2026, 5, 25)
+        self.emp = Employee.objects.create(
+            company=self.company,
+            employee_id='DISP1',
+            first_name='Disp',
+            last_name='Lay',
+            date_hired=datetime.date(2024, 1, 1),
+            status='active',
+            overtime_policy='request_required',
+            flexible_overtime_grace_minutes=30,
+        )
+        self.emp.work_schedule = self.schedule
+        self.emp.save(update_fields=['work_schedule'])
+
+    def _stale_overtime_record(self):
+        return AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=self.day,
+            time_in=datetime.time(8, 55),
+            time_out=datetime.time(18, 5),
+            break_minutes=60,
+            status='present',
+            computed_status='overtime',
+            actual_overtime_minutes=5,
+            overtime_minutes=0,
+            overtime_hours=Decimal('0.00'),
+        )
+
+    def test_effective_status_hides_overtime_when_payable_zero(self):
+        rec = self._stale_overtime_record()
+        self.assertEqual(rec.effective_computed_status, 'present')
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_attendance_list_does_not_show_overtime_status_badge_when_payable_zero(
+        self, _license_active,
+    ):
+        rec = self._stale_overtime_record()
+        user = User.objects.create_superuser('dispadmin', password='pass')
+        self.client.force_login(user)
+        response = self.client.get(reverse('attendance:attendance_list'))
+        self.assertEqual(response.status_code, 200)
+        html = response.content.decode()
+        self.assertIn('0m counted', html)
+        self.assertIn('Actual: 5m', html)
+        row_marker = rec.employee.full_name
+        row_start = html.index(row_marker)
+        row_end = html.find('</tr>', row_start)
+        row_html = html[row_start:row_end]
+        self.assertNotIn('>Overtime</span>', row_html)
+
+    def test_fix_command_dry_run_finds_mismarked_records(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        self._stale_overtime_record()
+        out = StringIO()
+        call_command('fix_attendance_overtime_status', '--dry-run', stdout=out)
+        output = out.getvalue()
+        self.assertIn('Matched records: 1', output)
+        self.assertIn('computed_status', output)
+
+    def test_fix_command_dry_run_finds_stale_payable_minutes_without_approval(self):
+        from io import StringIO
+
+        from django.core.management import call_command
+
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=datetime.date(2026, 5, 26),
+            time_in=datetime.time(8, 55),
+            time_out=datetime.time(18, 3),
+            break_minutes=60,
+            status='present',
+            computed_status='overtime',
+            actual_overtime_minutes=3,
+            overtime_minutes=3,
+            overtime_hours=Decimal('0.05'),
+        )
+        out = StringIO()
+        call_command('fix_attendance_overtime_status', '--dry-run', stdout=out)
+        output = out.getvalue()
+        self.assertIn('Matched records: 1', output)
+        self.assertIn('overtime_minutes', output)
+
+    def test_fix_command_clears_payable_ot_for_request_required_without_approval(self):
+        from django.core.management import call_command
+
+        rec = AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=datetime.date(2026, 5, 26),
+            time_in=datetime.time(8, 55),
+            time_out=datetime.time(18, 3),
+            break_minutes=60,
+            status='present',
+            computed_status='overtime',
+            actual_overtime_minutes=3,
+            overtime_minutes=3,
+            overtime_hours=Decimal('0.05'),
+        )
+        call_command('fix_attendance_overtime_status')
+        rec.refresh_from_db()
+        self.assertEqual(rec.overtime_minutes, 0)
+        self.assertEqual(rec.overtime_hours, Decimal('0.00'))
+        self.assertGreater(rec.actual_overtime_minutes, 0)
+        self.assertNotEqual(rec.computed_status, 'overtime')
