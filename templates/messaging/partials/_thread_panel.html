@@ -27,7 +27,7 @@
 
 <div class="msg-chat-messages" id="msgChatMessages"
      data-conversation-id="{{ conversation.pk }}"
-     data-last-message-id="{% if chat_messages %}{{ chat_messages|last.id }}{% else %}0{% endif %}">
+     data-last-message-id="{% if chat_messages %}{% with m=chat_messages|last %}{{ m.id }}{% endwith %}{% else %}0{% endif %}">
   {% for message in chat_messages %}
     <div class="msg-chat-row {% if message.is_mine %}mine{% else %}theirs{% endif %}{% if not message.show_sender %} msg-chat-row--compact{% endif %}"
          data-message-id="{{ message.id }}"
