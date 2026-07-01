@@ -558,14 +558,6 @@
           <i class="bi bi-people"></i> Employees
         </a>
       </li>
-      {% if request.user.is_staff %}
-      <li class="nav-item">
-        <a href="/admin/companies/company/"
-           class="nav-link {% if '/admin/companies/company/' in request.path %}active{% endif %}">
-          <i class="bi bi-building"></i> Companies
-        </a>
-      </li>
-      {% endif %}
     </ul>
 
     <div class="sidebar-section-label">Workforce</div>
@@ -754,6 +746,11 @@
               <li>
                 <a class="dropdown-item" href="/admin/">
                   <i class="bi bi-shield-lock"></i>Admin Panel
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="/admin/companies/company/">
+                  <i class="bi bi-building"></i>Companies
                 </a>
               </li>
             {% endif %}
