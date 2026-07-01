@@ -1,0 +1,142 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}New Message{% endblock %}
+{% block page_title %}New Message{% endblock %}
+
+{% block content %}
+{% include 'messaging/partials/_chat_styles.html' %}
+<div class="mb-3">
+  <a href="{% url 'portal:messages_inbox' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+  </a>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation
+  </div>
+  <div class="card-body">
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Conversation type</label>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="compose_type" id="type_direct"
+                 value="direct" checked>
+          <label class="form-check-label" for="type_direct">Direct message</label>
+        </div>
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="compose_type" id="type_group" value="group">
+          <label class="form-check-label" for="type_group">Create group</label>
+        </div>
+      </div>
+
+      <div id="directFields">
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="contact_employee_id">Contact</label>
+          <select name="contact_employee_id" id="contact_employee_id" class="form-select" required>
+            <option value="">Select a contact…</option>
+            {% for contact in allowed_contacts %}
+              <option value="{{ contact.pk }}">
+                {{ contact }} — {{ contact.company.name }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div id="groupFields" style="display:none;">
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="title">Group title</label>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
+            <input type="text" name="title" id="title" class="form-control flex-grow-1" maxlength="150"
+                   placeholder="e.g. Team Updates">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="group_avatar">Group logo (optional)</label>
+          <input type="file" name="group_avatar" id="group_avatar" class="form-control" accept="image/*">
+          <div class="form-text">Upload a square image for the group avatar. Leave blank to use a letter initial.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Participants</label>
+          <select name="participant_ids" class="form-select" multiple size="8">
+            {% for contact in allowed_contacts %}
+              <option value="{{ contact.user_id }}">
+                {{ contact }} — {{ contact.company.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <div class="form-text">Select at least two other participants for a group conversation.</div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-chat-dots me-1"></i>Start Conversation
+      </button>
+    </form>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var directRadio = document.getElementById('type_direct');
+    var groupRadio = document.getElementById('type_group');
+    var directFields = document.getElementById('directFields');
+    var groupFields = document.getElementById('groupFields');
+    var titleInput = document.getElementById('title');
+    var avatarInput = document.getElementById('group_avatar');
+    var avatarPreview = document.getElementById('groupAvatarPreview');
+    var contactSelect = document.getElementById('contact_employee_id');
+
+    function updateInitialPreview() {
+      if (!avatarPreview || !titleInput) return;
+      var title = (titleInput.value || '').trim();
+      avatarPreview.textContent = title ? title.charAt(0).toUpperCase() : 'G';
+    }
+
+    function sync() {
+      var isGroup = groupRadio.checked;
+      directFields.style.display = isGroup ? 'none' : '';
+      groupFields.style.display = isGroup ? '' : 'none';
+      if (contactSelect) {
+        contactSelect.required = !isGroup;
+      }
+      if (isGroup) {
+        updateInitialPreview();
+      }
+    }
+
+    if (avatarInput && avatarPreview) {
+      avatarInput.addEventListener('change', function () {
+        var file = avatarInput.files && avatarInput.files[0];
+        if (!file) {
+          avatarPreview.innerHTML = '';
+          avatarPreview.classList.add('msg-group-avatar--initial');
+          updateInitialPreview();
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          avatarPreview.classList.remove('msg-group-avatar--initial');
+          avatarPreview.innerHTML = '<img src="' + e.target.result + '" alt="" class="msg-group-avatar msg-group-avatar--lg" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (titleInput) {
+      titleInput.addEventListener('input', function () {
+        if (!avatarInput || !avatarInput.files || !avatarInput.files.length) {
+          updateInitialPreview();
+        }
+      });
+    }
+
+    directRadio.addEventListener('change', sync);
+    groupRadio.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

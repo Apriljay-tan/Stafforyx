@@ -170,6 +170,17 @@
           <i class="bi bi-megaphone"></i> Announcements
         </a>
       </li>
+      {% if employee_chat_available %}
+      <li class="nav-item">
+        <a href="{% url 'portal:messages_inbox' %}"
+           class="nav-link {% if 'messages' in request.resolver_match.url_name %}active{% endif %}">
+          <i class="bi bi-chat-dots"></i> Messages
+          {% if messaging_unread_total %}
+            <span class="badge bg-danger ms-1" style="font-size:.65rem;">{{ messaging_unread_total }}</span>
+          {% endif %}
+        </a>
+      </li>
+      {% endif %}
     </ul>
 
     <div class="sidebar-section-label">Requests</div>

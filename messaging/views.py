@@ -87,6 +87,18 @@ def _enrich_messages_for_display(message_dicts, user):
     return enriched
 
 
+def enrich_chat_messages(messages_qs, user):
+    """Build template-ready chat message dicts with correct is_mine for any viewer."""
+    enriched = []
+    for message in messages_qs:
+        data = serialize_message_for_user(message, user)
+        data = dict(data)
+        data['is_mine'] = message.sender_user_id == user.pk
+        data['time_display'] = _format_message_time(data.get('created_at', ''))
+        enriched.append(data)
+    return enriched
+
+
 def _participant_names(conversation):
     names = []
     for participant in conversation.participants.filter(left_at__isnull=True).select_related('user', 'employee'):
@@ -182,10 +194,7 @@ def thread(request, pk):
         return redirect('messaging:thread', pk=conversation.pk)
 
     mark_conversation_read(conversation, request.user)
-    message_list = [
-        serialize_message_for_user(message, request.user)
-        for message in messages_for_conversation(conversation, request.user)
-    ]
+    message_qs = messages_for_conversation(conversation, request.user)
     search = request.GET.get('q', '').strip()
     context = _chat_sidebar_context(
         request.user,
@@ -195,7 +204,7 @@ def thread(request, pk):
     context.update({
         'conversation': conversation,
         'conversation_title': _conversation_title(conversation),
-        'chat_messages': _enrich_messages_for_display(message_list, request.user),
+        'chat_messages': enrich_chat_messages(message_qs, request.user),
         'participant_names': _participant_names(conversation),
     })
     return render(request, 'messaging/thread.html', context)

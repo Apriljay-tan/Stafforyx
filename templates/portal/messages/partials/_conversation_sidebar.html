@@ -1,0 +1,43 @@
+{% include 'messaging/partials/_chat_styles.html' %}
+
+<aside class="msg-chat-sidebar">
+  <div class="msg-chat-sidebar-header">
+    <div class="msg-chat-sidebar-title">
+      <h2><i class="bi bi-chat-dots me-1" style="color:#1565C0;"></i>Messages</h2>
+      <a href="{% url 'portal:messages_compose' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-pencil-square me-1"></i>New
+      </a>
+    </div>
+    <form method="get" class="msg-chat-search">
+      <i class="bi bi-search"></i>
+      <input type="search" name="q" value="{{ search_query }}" placeholder="Search conversations…">
+    </form>
+  </div>
+
+  <div class="msg-chat-list">
+    {% for row in conversation_rows %}
+      <a href="{% url 'portal:messages_thread' row.conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
+         class="msg-chat-list-item{% if active_conversation_id == row.conversation.pk %} active{% endif %}">
+        {% if row.conversation.conversation_type == 'group' %}
+          {% include 'messaging/partials/_group_avatar.html' with conversation=row.conversation size='sm' %}
+        {% endif %}
+        <div class="msg-chat-list-body">
+          <div class="msg-chat-list-top">
+            <div class="msg-chat-list-title text-truncate">
+              {{ row.title }}
+              {% if row.unread %}<span class="msg-chat-unread">{{ row.unread }}</span>{% endif %}
+            </div>
+            <div class="msg-chat-list-meta">{{ row.last_at|date:"M d" }}</div>
+          </div>
+          <div class="msg-chat-list-preview">{{ row.preview|default:"No messages yet" }}</div>
+        </div>
+      </a>
+    {% empty %}
+      <div class="text-center text-muted py-5 px-3">
+        <i class="bi bi-chat-dots fs-2 d-block mb-2" style="opacity:.35;"></i>
+        <div class="small">No conversations yet.</div>
+        <a href="{% url 'portal:messages_compose' %}" class="btn btn-sm btn-primary mt-2">Start a chat</a>
+      </div>
+    {% endfor %}
+  </div>
+</aside>
