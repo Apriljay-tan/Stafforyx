@@ -7,8 +7,8 @@ from django.urls import reverse
 from companies.models import Company
 from employees.models import Employee
 
-from .models import UserCompanyAccess, UserProfile
-from .company_access import (
+from accounts.models import UserCompanyAccess, UserProfile
+from accounts.company_access import (
     get_accessible_companies,
     user_can_access_company,
     filter_queryset_by_user_companies,
