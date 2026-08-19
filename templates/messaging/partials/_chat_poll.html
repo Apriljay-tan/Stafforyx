@@ -1,0 +1,236 @@
+<script>
+(function () {
+  if (!window.fetch) return;
+
+  var pollIntervalMs = {{ messaging_poll_interval_ms|default:15000 }};
+  window.__msgChatPollActive = true;
+  var threadApiUrl = "{% url thread_api_url_name conversation.pk %}";
+  var unreadApiUrl = "{% url unread_api_url_name %}";
+  var messagesBox = document.getElementById('msgChatMessages');
+  if (!messagesBox) return;
+
+  var threadPollTimer = null;
+  var unreadPollTimer = null;
+  var threadPolling = false;
+  var unreadPolling = false;
+
+  function getLastMessageId() {
+    var rows = messagesBox.querySelectorAll('[data-message-id]');
+    var maxId = 0;
+    rows.forEach(function (row) {
+      var id = parseInt(row.getAttribute('data-message-id'), 10);
+      if (id > maxId) maxId = id;
+    });
+    return maxId;
+  }
+
+  function isNearBottom(box) {
+    return box.scrollHeight - box.scrollTop - box.clientHeight < 100;
+  }
+
+  function shouldShowSender(msg) {
+    var rows = messagesBox.querySelectorAll('.msg-chat-row');
+    if (!rows.length) return true;
+    var last = rows[rows.length - 1];
+    var lastMine = last.classList.contains('mine');
+    if (lastMine !== !!msg.is_mine) return true;
+    return last.getAttribute('data-sender-display') !== msg.sender_display;
+  }
+
+  function removeEmptyState() {
+    var empty = document.getElementById('msgChatEmptyState');
+    if (empty) empty.remove();
+  }
+
+  function buildAvatarNode(avatar, showSender) {
+    if (!avatar) return null;
+    var wrap = document.createElement('div');
+    wrap.className = 'msg-chat-row-avatar';
+    if (!showSender) {
+      wrap.style.visibility = 'hidden';
+      wrap.style.width = '28px';
+    }
+    if (avatar.image_url) {
+      var img = document.createElement('img');
+      img.src = avatar.image_url;
+      img.alt = '';
+      img.className = 'staff-avatar staff-avatar--xs staff-avatar--' + (avatar.variant || 'user');
+      wrap.appendChild(img);
+    } else {
+      var span = document.createElement('span');
+      span.className = 'staff-avatar staff-avatar--xs staff-avatar--initial staff-avatar--' + (avatar.variant || 'user');
+      span.textContent = avatar.initials || '?';
+      wrap.appendChild(span);
+    }
+    return wrap;
+  }
+
+  function appendMessage(msg) {
+    if (messagesBox.querySelector('[data-message-id="' + msg.id + '"]')) return false;
+    removeEmptyState();
+    var showSender = shouldShowSender(msg);
+    var row = document.createElement('div');
+    row.className = 'msg-chat-row ' + (msg.is_mine ? 'mine' : 'theirs') + (showSender ? '' : ' msg-chat-row--compact');
+    row.setAttribute('data-message-id', String(msg.id));
+    row.setAttribute('data-sender-display', msg.sender_display);
+
+    if (!msg.is_mine && msg.sender_avatar) {
+      var avatarNode = buildAvatarNode(msg.sender_avatar, showSender);
+      if (avatarNode) row.appendChild(avatarNode);
+    }
+
+    var wrap = document.createElement('div');
+    wrap.className = 'msg-chat-bubble-wrap';
+
+    if (showSender) {
+      var sender = document.createElement('div');
+      sender.className = 'msg-chat-sender';
+      sender.textContent = msg.sender_display;
+      wrap.appendChild(sender);
+    }
+
+    var bubble = document.createElement('div');
+    bubble.className = 'msg-chat-bubble' + (msg.is_deleted ? ' deleted' : '');
+    if (msg.body) {
+      var text = document.createElement('div');
+      text.className = 'msg-chat-bubble-text';
+      text.textContent = msg.body;
+      bubble.appendChild(text);
+    }
+    if (msg.attachments && msg.attachments.length) {
+      var attachments = document.createElement('div');
+      attachments.className = 'msg-chat-attachments' + (msg.body ? ' msg-chat-attachments--with-text' : '');
+      msg.attachments.forEach(function (att) {
+        if (att.attachment_type === 'voice') {
+          var audio = document.createElement('audio');
+          audio.controls = true;
+          audio.preload = 'metadata';
+          audio.className = 'msg-chat-voice-player';
+          audio.src = att.url;
+          attachments.appendChild(audio);
+        } else {
+          var link = document.createElement('a');
+          link.href = att.url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'msg-chat-attachment-link';
+          var img = document.createElement('img');
+          img.src = att.url;
+          img.alt = att.original_filename || '';
+          img.className = 'msg-chat-attachment-img' + (att.attachment_type === 'gif' ? ' msg-chat-attachment-img--gif' : '');
+          img.loading = 'lazy';
+          link.appendChild(img);
+          attachments.appendChild(link);
+        }
+      });
+      bubble.appendChild(attachments);
+    }
+    wrap.appendChild(bubble);
+
+    var time = document.createElement('div');
+    time.className = 'msg-chat-time';
+    time.textContent = msg.time_display || '';
+    wrap.appendChild(time);
+
+    row.appendChild(wrap);
+    messagesBox.appendChild(row);
+    return true;
+  }
+
+  function updateNavBadge(total) {
+    var navBadge = document.getElementById('sidebarMessagingBadge')
+      || document.getElementById('portalMessagingBadge');
+    if (!navBadge) return;
+    if (total > 0) {
+      navBadge.textContent = total;
+      navBadge.style.display = '';
+    } else {
+      navBadge.textContent = '0';
+      navBadge.style.display = 'none';
+    }
+  }
+
+  function updateSidebarUnread(conversations) {
+    if (!conversations) return;
+    conversations.forEach(function (item) {
+      var link = document.querySelector('.msg-chat-list-item[data-conversation-id="' + item.id + '"]');
+      if (!link) return;
+      link.classList.toggle('has-unread', item.unread > 0);
+      var badge = link.querySelector('.msg-chat-unread');
+      if (item.unread > 0) {
+        if (!badge) {
+          badge = document.createElement('span');
+          badge.className = 'msg-chat-unread';
+          var titleEl = link.querySelector('.msg-chat-list-title');
+          if (titleEl) titleEl.appendChild(badge);
+        }
+        badge.textContent = item.unread;
+        badge.style.display = '';
+      } else if (badge) {
+        badge.remove();
+      }
+      var preview = link.querySelector('.msg-chat-list-preview');
+      if (preview && item.preview) {
+        preview.textContent = item.preview;
+      }
+    });
+  }
+
+  function refreshUnread() {
+    if (unreadPolling) return;
+    unreadPolling = true;
+    fetch(unreadApiUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        updateNavBadge(data.total_unread || 0);
+        updateSidebarUnread(data.conversations);
+      })
+      .catch(function () {})
+      .finally(function () { unreadPolling = false; });
+  }
+
+  function pollThread() {
+    if (threadPolling) return;
+    threadPolling = true;
+    var afterId = getLastMessageId();
+    var url = threadApiUrl + (afterId ? '?after_id=' + encodeURIComponent(afterId) : '');
+    var wasNearBottom = isNearBottom(messagesBox);
+
+    fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.messages) return;
+        var added = false;
+        data.messages.forEach(function (msg) {
+          if (appendMessage(msg)) added = true;
+        });
+        if (added && wasNearBottom) {
+          messagesBox.scrollTop = messagesBox.scrollHeight;
+        }
+        if (data.messages.length) {
+          refreshUnread();
+        }
+      })
+      .catch(function () {})
+      .finally(function () { threadPolling = false; });
+  }
+
+  refreshUnread();
+  pollThread();
+  threadPollTimer = setInterval(pollThread, pollIntervalMs);
+  unreadPollTimer = setInterval(refreshUnread, pollIntervalMs);
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      clearInterval(threadPollTimer);
+      clearInterval(unreadPollTimer);
+    } else {
+      pollThread();
+      refreshUnread();
+      threadPollTimer = setInterval(pollThread, pollIntervalMs);
+      unreadPollTimer = setInterval(refreshUnread, pollIntervalMs);
+    }
+  });
+})();
+</script>

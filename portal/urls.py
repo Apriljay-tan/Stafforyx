@@ -1,5 +1,7 @@
 from django.urls import path
 
+from messaging import portal_views
+
 from . import views
 
 app_name = 'portal'
@@ -7,6 +9,7 @@ app_name = 'portal'
 urlpatterns = [
     # Employee self-service
     path('', views.portal_dashboard, name='dashboard'),
+    path('profile/', views.portal_profile, name='profile'),
     path('payslips/', views.portal_payslip_list, name='payslip_list'),
     path('payslips/<int:pk>/', views.portal_payslip_detail, name='payslip_detail'),
     path('documents/', views.portal_documents, name='documents'),
@@ -26,6 +29,11 @@ urlpatterns = [
     path('cash-advance/new/', views.portal_ca_new, name='ca_new'),
     path('cash-advance/<int:pk>/edit/', views.portal_ca_edit, name='ca_edit'),
     path('cash-advance/<int:pk>/cancel/', views.portal_ca_cancel, name='ca_cancel'),
+    path('messages/', portal_views.portal_inbox, name='messages_inbox'),
+    path('messages/new/', portal_views.portal_compose, name='messages_compose'),
+    path('messages/<int:pk>/', portal_views.portal_thread, name='messages_thread'),
+    path('messages/api/unread/', portal_views.portal_unread_api, name='messages_unread_api'),
+    path('messages/api/thread/<int:pk>/', portal_views.portal_thread_api, name='messages_thread_api'),
     # HR management
     path('manage/incidents/', views.manage_incidents, name='manage_incidents'),
     path('manage/incidents/<int:pk>/', views.manage_incident_detail, name='manage_incident_detail'),

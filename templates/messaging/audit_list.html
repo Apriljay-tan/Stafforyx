@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Chat Audit{% endblock %}
+{% block page_title %}Chat Audit{% endblock %}
+
+{% block extra_css %}
+{% include 'messaging/partials/_audit_styles.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="msg-audit-page">
+  <div class="msg-audit-topbar">
+    <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
+      <div>
+        <h1 class="h4 mb-1">Chat Audit</h1>
+        <p class="text-muted small mb-0">Review conversations, participants, and message history across your companies.</p>
+      </div>
+      <div class="d-flex gap-2">
+        <a href="{% url 'messaging:audit_export' %}{% if filter_query %}?{{ filter_query }}{% endif %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-download me-1"></i>Export CSV
+        </a>
+        <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-chat-dots me-1"></i>Inbox
+        </a>
+      </div>
+    </div>
+    {% include 'messaging/partials/_audit_filters.html' %}
+  </div>
+
+  <div class="msg-audit-shell">
+    <aside class="msg-audit-sidebar">
+      <div class="px-3 py-2 border-bottom small text-muted fw-semibold">Conversations</div>
+      <div class="msg-audit-sidebar-list">
+        {% include 'messaging/partials/_audit_sidebar.html' %}
+      </div>
+      {% if page_obj.has_other_pages %}
+        <div class="border-top px-3 py-2 d-flex justify-content-between align-items-center small">
+          <span>Page {{ page_obj.number }}/{{ page_obj.paginator.num_pages }}</span>
+          <div class="btn-group btn-group-sm">
+            {% if page_obj.has_previous %}
+              <a class="btn btn-outline-secondary" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.previous_page_number }}">Prev</a>
+            {% endif %}
+            {% if page_obj.has_next %}
+              <a class="btn btn-outline-secondary" href="?{% if filter_query %}{{ filter_query }}&{% endif %}page={{ page_obj.next_page_number }}">Next</a>
+            {% endif %}
+          </div>
+        </div>
+      {% endif %}
+    </aside>
+
+    <section class="msg-audit-main">
+      <div class="msg-audit-empty">
+        <i class="bi bi-shield-check fs-2 d-block mb-2"></i>
+        Select a conversation to review message history, attachments, and sender identity.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}

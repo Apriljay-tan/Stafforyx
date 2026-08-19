@@ -8,10 +8,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .access import super_admin_required
+from .avatars import avatar_for_user_profile
 from .company_access import get_accessible_companies, user_can_access_company
 from .company_access_sync import sync_user_company_access
 from .forms import StafforyxUserCreationForm, UserProfileForm
 from .models import UserProfile
+from .profile_images import validate_profile_image
 
 
 def permission_denied_view(request, exception=None):
@@ -47,7 +49,7 @@ def select_company(request):
         return redirect(next_url)
 
     if not user_can_access_company(request.user, company):
-        from django.core.exceptions import PermissionDenied
+        from django.core.exceptions import PermissionDenied, ValidationError
         raise PermissionDenied
 
     request.session['selected_company_id'] = company_id
@@ -108,6 +110,42 @@ def theme(request):
         'is_custom': bool(profile.sidebar_color),
         'default_color': DEFAULT_SIDEBAR_COLOR,
         'default_accent': DEFAULT_SIDEBAR_ACCENT,
+    })
+
+
+@login_required
+def profile_settings(request):
+    profile, _created = UserProfile.objects.get_or_create(user=request.user)
+
+    if request.method == 'POST':
+        if 'clear_photo' in request.POST:
+            if profile.profile_photo:
+                profile.profile_photo.delete(save=False)
+            profile.profile_photo = None
+            profile.save(update_fields=['profile_photo'])
+            messages.success(request, 'Profile photo removed.')
+            return redirect('accounts:profile')
+
+        uploaded = request.FILES.get('profile_photo')
+        if uploaded:
+            try:
+                validate_profile_image(uploaded)
+            except ValidationError as exc:
+                messages.error(request, '; '.join(exc.messages))
+                return redirect('accounts:profile')
+            if profile.profile_photo:
+                profile.profile_photo.delete(save=False)
+            profile.profile_photo = uploaded
+            profile.save(update_fields=['profile_photo'])
+            messages.success(request, 'Profile photo updated.')
+            return redirect('accounts:profile')
+
+        messages.error(request, 'Please choose a photo to upload.')
+        return redirect('accounts:profile')
+
+    return render(request, 'accounts/profile.html', {
+        'profile': profile,
+        'avatar': avatar_for_user_profile(request.user),
     })
 
 

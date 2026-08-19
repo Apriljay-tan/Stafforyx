@@ -1,0 +1,25 @@
+{% for row in audit_rows %}
+  <a href="{% url 'messaging:audit_detail' row.conversation.pk %}{% if filter_query %}?{{ filter_query }}{% endif %}"
+     class="msg-audit-row{% if selected_conversation_id == row.conversation.pk %} active{% endif %}">
+    <div class="msg-audit-row-top">
+      {% include 'partials/_avatar.html' with avatar=row.avatar size='sm' %}
+      <div class="msg-audit-row-title">{{ row.title }}</div>
+      <span class="text-muted small flex-shrink-0">{{ row.last_at|date:"M d, g:i A" }}</span>
+    </div>
+    <div class="msg-audit-row-meta">
+      {{ row.conversation.get_conversation_type_display }} · {{ row.conversation.company.name }}
+      · {{ row.participant_count }} participant{{ row.participant_count|pluralize }}
+    </div>
+    {% if row.preview %}
+      <div class="msg-audit-row-preview">{{ row.preview }}</div>
+    {% endif %}
+    <div class="msg-audit-badges">
+      {% if row.has_image %}<span class="msg-audit-badge"><i class="bi bi-image"></i> Image</span>{% endif %}
+      {% if row.has_gif %}<span class="msg-audit-badge"><i class="bi bi-filetype-gif"></i> GIF</span>{% endif %}
+      {% if row.has_voice %}<span class="msg-audit-badge"><i class="bi bi-mic"></i> Voice</span>{% endif %}
+      {% if row.conversation.is_archived %}<span class="msg-audit-badge text-bg-secondary">Archived</span>{% endif %}
+    </div>
+  </a>
+{% empty %}
+  <div class="msg-audit-empty">No conversations match these filters.</div>
+{% endfor %}

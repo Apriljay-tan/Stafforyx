@@ -1,0 +1,15 @@
+{% extends 'portal/base.html' %}
+
+{% block title %}{{ conversation_title }}{% endblock %}
+{% block page_title %}Messages{% endblock %}
+
+{% block content %}
+<div class="msg-chat-page">
+  <div class="msg-chat-app">
+    {% include 'messaging/partials/_conversation_sidebar.html' %}
+    <section class="msg-chat-main">
+      {% include 'messaging/partials/_thread_panel.html' %}
+    </section>
+  </div>
+</div>
+{% endblock %}

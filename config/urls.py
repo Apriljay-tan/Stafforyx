@@ -31,6 +31,7 @@ urlpatterns = [
     path('cash-advance/', include('cash_advance.urls')),
     path('incident-reports/', include('portal.incident_urls')),
     path('notifications/', include('notifications.urls')),
+    path('messaging/', include('messaging.urls')),
 ]
 
 if settings.DEBUG:

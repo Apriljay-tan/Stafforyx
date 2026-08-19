@@ -80,6 +80,11 @@ class UserProfile(models.Model):
     can_manage_users = models.BooleanField(default=False)
     can_manage_settings = models.BooleanField(default=False)
     can_manage_license = models.BooleanField(default=False)
+    can_manage_chat = models.BooleanField(
+        default=False,
+        help_text='Access admin chat inbox, message employees, create official groups, and audit.',
+    )
+    profile_photo = models.ImageField(upload_to='profiles/', blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

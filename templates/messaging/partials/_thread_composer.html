@@ -1,0 +1,40 @@
+{% load static %}
+<div class="msg-chat-composer">
+  <form method="post"
+        action="{% url thread_url_name conversation.pk %}{% if search_query %}?q={{ search_query|urlencode }}{% endif %}"
+        id="msgChatComposerForm"
+        enctype="multipart/form-data">
+    {% csrf_token %}
+    <div id="msgChatAttachmentPreview" class="msg-chat-attachment-preview d-none" aria-live="polite"></div>
+    <div class="msg-chat-composer-row">
+      <input type="file"
+             name="attachment"
+             id="msgChatAttachmentInput"
+             class="d-none"
+             accept="image/jpeg,image/png,image/webp,image/gif,audio/webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg,video/webm,.mp3,.m4a,.wav,.ogg">
+      <input type="file"
+             id="msgChatVoiceUploadInput"
+             class="d-none"
+             accept="audio/webm,audio/mpeg,audio/mp4,audio/wav,audio/ogg,video/webm,.webm,.mp3,.m4a,.wav,.ogg">
+      <button type="button" class="msg-chat-attach-btn" id="msgChatAttachBtn" title="Attach image or GIF">
+        <i class="bi bi-image"></i>
+      </button>
+      <button type="button" class="msg-chat-voice-btn" id="msgChatVoiceBtn" title="Record voice message (or upload audio file)">
+        <i class="bi bi-mic"></i>
+      </button>
+      <span id="msgChatVoiceTimer" class="msg-chat-voice-timer d-none" aria-live="polite"></span>
+      <textarea name="body" id="msgChatComposerInput" rows="1" maxlength="5000" placeholder="Type a message…"></textarea>
+      <button type="submit" class="msg-chat-send-btn" id="msgChatSendBtn">
+        <i class="bi bi-send-fill"></i> Send
+      </button>
+    </div>
+    <div class="msg-chat-composer-hint">
+      <button type="button" class="btn btn-link btn-sm p-0 msg-chat-voice-upload-link" onclick="document.getElementById('msgChatVoiceUploadInput').click()">
+        Upload audio file
+      </button>
+    </div>
+  </form>
+</div>
+
+{% include 'messaging/partials/_chat_poll.html' %}
+<script src="{% static 'js/chat-composer.js' %}"></script>

@@ -1,0 +1,48 @@
+<script>
+(function () {
+  if (!window.fetch) return;
+  if (window.__msgChatPollActive) return;
+  var pollIntervalMs = {{ messaging_poll_interval_ms|default:15000 }};
+  var unreadApiUrl = "{% url unread_api_url_name %}";
+  var unreadPollTimer = null;
+  var unreadPolling = false;
+
+  function updateNavBadge(total) {
+    var navBadge = document.getElementById('sidebarMessagingBadge')
+      || document.getElementById('portalMessagingBadge');
+    if (!navBadge) return;
+    if (total > 0) {
+      navBadge.textContent = total;
+      navBadge.style.display = '';
+    } else {
+      navBadge.textContent = '0';
+      navBadge.style.display = 'none';
+    }
+  }
+
+  function refreshUnread() {
+    if (unreadPolling) return;
+    unreadPolling = true;
+    fetch(unreadApiUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data) return;
+        updateNavBadge(data.total_unread || 0);
+      })
+      .catch(function () {})
+      .finally(function () { unreadPolling = false; });
+  }
+
+  refreshUnread();
+  unreadPollTimer = setInterval(refreshUnread, pollIntervalMs);
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      clearInterval(unreadPollTimer);
+    } else {
+      refreshUnread();
+      unreadPollTimer = setInterval(refreshUnread, pollIntervalMs);
+    }
+  });
+})();
+</script>

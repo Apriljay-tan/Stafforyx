@@ -79,6 +79,7 @@ INSTALLED_APPS = [
     "overtime",
     "cash_advance",
     "notifications",
+    "messaging",
 ]
 
 MIDDLEWARE = [
@@ -110,6 +111,7 @@ TEMPLATES = [
                 "accounts.context_processors.company_context",
                 "portal.context_processors.portal_notifications",
                 "notifications.context_processors.notification_context",
+                "messaging.context_processors.messaging_context",
             ],
         },
     },
@@ -202,6 +204,9 @@ MEDIA_ROOT = BASE_DIR / 'media'
 TRUSTED_PROXY = os.environ.get('TRUSTED_PROXY', 'False') == 'True'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+MESSAGING_DEFAULT_SUPPORT_NAME = 'HR Support'
+MESSAGING_POLL_INTERVAL_MS = 15000
 
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'

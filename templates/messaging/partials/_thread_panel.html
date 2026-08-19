@@ -1,0 +1,58 @@
+<header class="msg-chat-thread-header">
+  <div class="msg-chat-thread-heading">
+    {% include 'messaging/partials/_conversation_avatar.html' with avatar=avatar size='md' %}
+    <div class="min-w-0">
+      <h3 class="msg-chat-thread-title text-truncate">{{ conversation_title }}</h3>
+      <div class="msg-chat-thread-sub text-truncate">
+        {{ conversation.company.name }}
+        {% if participant_count %}
+          · {{ participant_count }} member{{ participant_count|pluralize }}
+        {% endif %}
+        {% if participant_names %}
+          · {{ participant_names|join:", " }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if show_archive %}
+    <form method="post" action="{% url archive_url_name conversation.pk %}" class="flex-shrink-0">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-outline-secondary btn-sm"
+              onclick="return confirm('Archive this conversation?');" title="Archive">
+        <i class="bi bi-archive"></i>
+      </button>
+    </form>
+  {% endif %}
+</header>
+
+<div class="msg-chat-messages" id="msgChatMessages"
+     data-last-message-id="{% if chat_messages %}{% with m=chat_messages|last %}{{ m.id }}{% endwith %}{% else %}0{% endif %}">
+  {% for message in chat_messages %}
+    <div class="msg-chat-row {% if message.is_mine %}mine{% else %}theirs{% endif %}{% if not message.show_sender %} msg-chat-row--compact{% endif %}"
+         data-message-id="{{ message.id }}"
+         data-sender-display="{{ message.sender_display }}">
+      {% if not message.is_mine %}
+        <div class="msg-chat-row-avatar">
+          {% include 'partials/_avatar.html' with avatar=message.sender_avatar size='xs' %}
+        </div>
+      {% endif %}
+      <div class="msg-chat-bubble-wrap">
+        {% if message.show_sender %}
+          <div class="msg-chat-sender">{{ message.sender_display }}</div>
+        {% endif %}
+        <div class="msg-chat-bubble{% if message.is_deleted %} deleted{% endif %}">
+          {% include 'messaging/partials/_message_bubble_content.html' with message=message %}
+        </div>
+        <div class="msg-chat-time">{{ message.time_display }}</div>
+      </div>
+    </div>
+  {% empty %}
+    <div class="msg-chat-empty" id="msgChatEmptyState">
+      <i class="bi bi-chat"></i>
+      <p class="mb-0 small">No messages yet. Say hello below.</p>
+    </div>
+  {% endfor %}
+</div>
+
+{% include 'messaging/partials/_thread_composer.html' %}
+

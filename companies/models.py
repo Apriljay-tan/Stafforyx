@@ -87,6 +87,16 @@ class Company(models.Model):
     payslip_footer_note = models.TextField(
         blank=True, help_text='Optional note printed at the bottom of every payslip.',
     )
+    employee_chat_enabled = models.BooleanField(
+        default=False,
+        help_text='Master switch: allow employee portal chat for this company.',
+    )
+    chat_support_display_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Persona name shown to employees in admin support chats. Blank uses global default.',
+    )
     attendance_selfie_retention_days = models.PositiveIntegerField(
         default=30,
         validators=[MinValueValidator(1)],

@@ -9,6 +9,7 @@ from .access import is_employee_only_user
 _EMPLOYEE_ALLOWED_PREFIXES = (
     '/portal/',               # Employee self-service portal (and all its pages)
     '/attendance/portal/',    # IP/WiFi-validated time clock used by the portal
+    '/messaging/attachments/',  # Protected chat image/GIF downloads for portal users
     '/accounts/logout/',      # Logout
     '/static/',               # Static assets (CSS/JS/images)
     '/media/',                # Uploaded media (e.g. payslip/document files)

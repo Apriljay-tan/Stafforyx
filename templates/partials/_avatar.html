@@ -1,0 +1,8 @@
+{% if avatar.image_url %}
+  <img src="{{ avatar.image_url }}"
+       class="staff-avatar staff-avatar--{{ size|default:'sm' }}{% if extra_class %} {{ extra_class }}{% endif %}"
+       alt="{{ alt|default:'' }}">
+{% else %}
+  <span class="staff-avatar staff-avatar--{{ size|default:'sm' }} staff-avatar--initial staff-avatar--{{ avatar.variant|default:'user' }}{% if extra_class %} {{ extra_class }}{% endif %}"
+        aria-hidden="true">{{ avatar.initials }}</span>
+{% endif %}

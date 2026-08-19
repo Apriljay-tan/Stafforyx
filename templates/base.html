@@ -19,6 +19,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" />
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{% static 'css/staff-avatars.css' %}" />
 
   <style>
     :root {
@@ -368,6 +369,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .avatar-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     .avatar-name {
       font-size: 0.8rem;
@@ -558,14 +567,6 @@
           <i class="bi bi-people"></i> Employees
         </a>
       </li>
-      {% if request.user.is_staff %}
-      <li class="nav-item">
-        <a href="/admin/companies/company/"
-           class="nav-link {% if '/admin/companies/company/' in request.path %}active{% endif %}">
-          <i class="bi bi-building"></i> Companies
-        </a>
-      </li>
-      {% endif %}
     </ul>
 
     <div class="sidebar-section-label">Workforce</div>
@@ -646,6 +647,17 @@
           <i class="bi bi-megaphone"></i> Announcements
         </a>
       </li>
+      {% if can_manage_chat_user %}
+      <li class="nav-item">
+        <a href="{% url 'messaging:inbox' %}"
+           class="nav-link {% if request.resolver_match.app_name == 'messaging' %}active{% endif %}">
+          <i class="bi bi-chat-dots"></i>
+          <span class="sidebar-text">Messages</span>
+          <span id="sidebarMessagingBadge" class="sidebar-badge"
+                {% if not messaging_unread_total %}style="display:none;"{% endif %}>{{ messaging_unread_total }}</span>
+        </a>
+      </li>
+      {% endif %}
       <li class="nav-item">
         <a href="{% url 'reports:reports_dashboard' %}"
            class="nav-link {% if request.resolver_match.app_name == 'reports' %}active{% endif %}">
@@ -715,7 +727,9 @@
       <div class="dropdown">
         <button class="avatar-btn dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
           <div class="avatar-circle">
-            {% if request.user.get_full_name %}{{ request.user.get_full_name|first|upper }}{% else %}{{ request.user.username|first|upper }}{% endif %}
+            {% if current_user_avatar.image_url %}
+              <img src="{{ current_user_avatar.image_url }}" alt="">
+            {% else %}{{ current_user_avatar.initials }}{% endif %}
           </div>
           <span class="avatar-name">
             {% if request.user.get_full_name %}{{ request.user.get_full_name }}{% else %}{{ request.user.username }}{% endif %}
@@ -737,6 +751,12 @@
             </li>
 
             <li>
+              <a class="dropdown-item" href="{% url 'accounts:profile' %}">
+                <i class="bi bi-person-circle"></i>My Profile
+              </a>
+            </li>
+
+            <li>
               <a class="dropdown-item" href="{% url 'accounts:theme' %}">
                 <i class="bi bi-palette2"></i>Theme
               </a>
@@ -754,6 +774,11 @@
               <li>
                 <a class="dropdown-item" href="/admin/">
                   <i class="bi bi-shield-lock"></i>Admin Panel
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="/admin/companies/company/">
+                  <i class="bi bi-building"></i>Companies
                 </a>
               </li>
             {% endif %}
@@ -1007,6 +1032,9 @@
       window.setInterval(pollNotifications, 20000);
     })();
   </script>
+  {% if can_manage_chat_user %}
+    {% include 'messaging/partials/_nav_unread_poll.html' with unread_api_url_name='messaging:unread_api' %}
+  {% endif %}
   {% block extra_js %}{% endblock %}
 </body>
 </html>

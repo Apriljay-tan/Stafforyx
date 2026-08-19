@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block title %}New Message{% endblock %}
+{% block page_title %}New Message{% endblock %}
+
+{% block content %}
+{% include 'messaging/partials/_chat_styles.html' %}
+<div class="msg-compose-page">
+  <div class="msg-compose-back">
+    <a href="{% url 'messaging:inbox' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back to Inbox
+    </a>
+  </div>
+
+  <div class="msg-compose-card">
+    <div class="msg-compose-card-header">
+      <h2><i class="bi bi-pencil-square me-1" style="color:#1565C0;"></i>Start a Conversation</h2>
+      <p>Choose a conversation type and pick who you want to reach.</p>
+    </div>
+    <div class="msg-compose-card-body">
+      <form method="post" enctype="multipart/form-data" id="msgComposeForm">
+        {% csrf_token %}
+
+        <div class="msg-compose-section-label">Conversation type</div>
+        <div class="msg-compose-type-picker">
+          <label class="msg-compose-type-card" for="type_admin_support">
+            <input class="form-check-input" type="radio" name="compose_type" id="type_admin_support"
+                   value="admin_support" checked>
+            <span class="msg-compose-type-icon"><i class="bi bi-headset"></i></span>
+            <span class="msg-compose-type-label">Admin support</span>
+            <span class="msg-compose-type-desc">Message an employee on behalf of HR support</span>
+          </label>
+          <label class="msg-compose-type-card" for="type_group">
+            <input class="form-check-input" type="radio" name="compose_type" id="type_group" value="group">
+            <span class="msg-compose-type-icon"><i class="bi bi-people-fill"></i></span>
+            <span class="msg-compose-type-label">Official group</span>
+            <span class="msg-compose-type-desc">Create a group chat with multiple employees</span>
+          </label>
+        </div>
+
+        <div id="adminSupportFields">
+          <div class="msg-compose-section-label">Select employee</div>
+          <div class="msg-compose-contact-grid">
+            {% for employee in employees %}
+              <label class="msg-compose-contact-card">
+                <input type="radio" name="employee_id" value="{{ employee.pk }}"{% if forloop.first %} required{% endif %}>
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ employee.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ employee }}</span>
+                  <span class="msg-compose-contact-sub">{{ employee.company.name }}</span>
+                </span>
+              </label>
+            {% empty %}
+              <p class="text-muted small mb-0">No employees available.</p>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div id="groupFields" style="display:none;">
+          <div class="mb-3">
+            <div class="msg-compose-section-label">Company</div>
+            <select name="company_id" id="company_id" class="form-select">
+              {% for company in companies %}
+                <option value="{{ company.pk }}">{{ company.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="msg-compose-section-label">Group details</div>
+          <div class="msg-compose-group-row">
+            <span id="groupAvatarPreview" class="msg-group-avatar msg-group-avatar--lg msg-group-avatar--initial" aria-hidden="true">G</span>
+            <input type="text" name="title" id="title" class="form-control" maxlength="150"
+                   placeholder="Group title, e.g. HR Announcements">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted" for="group_avatar">Group logo (optional)</label>
+            <input type="file" name="group_avatar" id="group_avatar" class="form-control form-control-sm" accept="image/*">
+          </div>
+          <div class="msg-compose-section-label">Participants</div>
+          <div class="msg-compose-contact-grid">
+            {% for employee in group_employees %}
+              <label class="msg-compose-contact-card">
+                <input type="checkbox" name="participant_ids" value="{{ employee.user_id }}">
+                <span class="msg-conv-avatar msg-conv-avatar--sm msg-conv-avatar--direct msg-conv-avatar--initial">{{ employee.first_name|slice:":1"|upper }}</span>
+                <span class="msg-compose-contact-meta">
+                  <span class="msg-compose-contact-name">{{ employee }}</span>
+                  <span class="msg-compose-contact-sub">{{ employee.company.name }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          <p class="form-text small">Select at least two participants for a group conversation.</p>
+        </div>
+
+        <div class="msg-compose-actions">
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-chat-dots me-1"></i>Start Conversation
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var adminRadio = document.getElementById('type_admin_support');
+    var groupRadio = document.getElementById('type_group');
+    var adminFields = document.getElementById('adminSupportFields');
+    var groupFields = document.getElementById('groupFields');
+    var titleInput = document.getElementById('title');
+    var avatarInput = document.getElementById('group_avatar');
+    var avatarPreview = document.getElementById('groupAvatarPreview');
+    var employeeRadios = adminFields.querySelectorAll('input[name="employee_id"]');
+
+    function updateInitialPreview() {
+      if (!avatarPreview || !titleInput) return;
+      var title = (titleInput.value || '').trim();
+      avatarPreview.textContent = title ? title.charAt(0).toUpperCase() : 'G';
+    }
+
+    function syncEmployeeRequired() {
+      var isGroup = groupRadio.checked;
+      employeeRadios.forEach(function (radio) {
+        radio.required = !isGroup;
+      });
+    }
+
+    function sync() {
+      var isGroup = groupRadio.checked;
+      adminFields.style.display = isGroup ? 'none' : '';
+      groupFields.style.display = isGroup ? '' : 'none';
+      syncEmployeeRequired();
+      if (isGroup) {
+        updateInitialPreview();
+      }
+    }
+
+    if (avatarInput && avatarPreview) {
+      avatarInput.addEventListener('change', function () {
+        var file = avatarInput.files && avatarInput.files[0];
+        if (!file) {
+          avatarPreview.innerHTML = '';
+          avatarPreview.classList.add('msg-group-avatar--initial');
+          updateInitialPreview();
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          avatarPreview.classList.remove('msg-group-avatar--initial');
+          avatarPreview.innerHTML = '<img src="' + e.target.result + '" alt="" class="msg-group-avatar msg-group-avatar--lg" style="width:56px;height:56px;border-radius:50%;object-fit:cover;">';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (titleInput) {
+      titleInput.addEventListener('input', function () {
+        if (!avatarInput || !avatarInput.files || !avatarInput.files.length) {
+          updateInitialPreview();
+        }
+      });
+    }
+
+    adminRadio.addEventListener('change', sync);
+    groupRadio.addEventListener('change', sync);
+    sync();
+  })();
+</script>
+{% endblock %}

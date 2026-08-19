@@ -1,0 +1,35 @@
+{% extends 'portal/base.html' %}
+{% load static %}
+
+{% block title %}My Profile{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+
+{% block extra_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/cropper/cropper.min.css' %}">
+<link rel="stylesheet" href="{% static 'css/profile-photo-crop.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-person-circle me-1" style="color:#1565C0;"></i>Profile Photo
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-4">Update how you appear in the employee portal and in messages with colleagues.</p>
+
+        {% include 'partials/_profile_photo_form.html' with avatar=avatar field_name='photo' has_photo=employee.photo display_name=employee display_subtitle=employee.company.name %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{{ block.super }}
+<script src="{% static 'vendor/cropper/cropper.min.js' %}"></script>
+<script src="{% static 'js/profile-photo-crop.js' %}"></script>
+{% endblock %}
+
