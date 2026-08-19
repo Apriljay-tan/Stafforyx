@@ -1,9 +1,11 @@
 import datetime
 import os
 import uuid
+from decimal import Decimal
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models.signals import pre_delete
 from django.dispatch import receiver
@@ -119,9 +121,43 @@ class WorkSchedule(models.Model):
     name = models.CharField(max_length=100)
     start_time = models.TimeField()
     end_time = models.TimeField()
-    grace_minutes = models.PositiveIntegerField(default=15)
+    grace_minutes = models.PositiveIntegerField(
+        default=15,
+        help_text='Late minutes start only after this grace period.',
+    )
     break_minutes = models.PositiveIntegerField(default=60)
     required_hours = models.DecimalField(max_digits=4, decimal_places=2, default=8.00)
+    half_day_cutoff_time = models.TimeField(
+        null=True,
+        blank=True,
+        help_text='Optional. Clock-outs at or before this time are marked half-day and undertime is capped to this cutoff.',
+    )
+    use_employee_hourly_rate_for_late = models.BooleanField(
+        default=True,
+        verbose_name='Use employee hourly rate for late deduction',
+        help_text='When enabled, late deduction uses each employee\'s computed hourly rate.',
+    )
+    late_deduction_rate_per_hour = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Fixed amount deducted per total late hour when employee hourly rate is off.',
+    )
+    use_employee_hourly_rate_for_undertime = models.BooleanField(
+        default=True,
+        verbose_name='Use employee hourly rate for undertime deduction',
+        help_text='When enabled, undertime deduction uses each employee\'s computed hourly rate.',
+    )
+    undertime_deduction_rate_per_hour = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.00'))],
+        help_text='Fixed amount deducted per total undertime hour when employee hourly rate is off.',
+    )
     overtime_after = models.TimeField(
         null=True, blank=True,
         help_text='Overtime counted after this time. Leave blank to use End Time.',
@@ -466,6 +502,7 @@ class AttendanceRecord(models.Model):
         ('present',     'Present'),
         ('late',        'Late'),
         ('undertime',   'Undertime'),
+        ('half_day',    'Half Day'),
         ('overtime',    'Overtime'),
         ('absent',      'Absent'),
         ('incomplete',  'Incomplete'),

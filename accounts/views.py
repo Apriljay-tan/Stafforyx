@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from .access import super_admin_required
 from .company_access import get_accessible_companies, user_can_access_company
+from .company_access_sync import sync_user_company_access
 from .forms import StafforyxUserCreationForm, UserProfileForm
 from .models import UserProfile
 
@@ -112,7 +113,12 @@ def theme(request):
 
 @super_admin_required
 def user_list(request):
-    users = User.objects.select_related('stafforyx_profile').order_by('username')
+    users = (
+        User.objects
+        .select_related('stafforyx_profile')
+        .prefetch_related('company_accesses__company')
+        .order_by('username')
+    )
     return render(request, 'accounts/user_list.html', {'users': users})
 
 
@@ -126,6 +132,12 @@ def user_add(request):
         profile = profile_form.save(commit=False)
         profile.user = user
         profile.save()
+        managed_companies = profile_form.cleaned_data.get('managed_companies')
+        sync_user_company_access(
+            user,
+            [c.pk for c in managed_companies] if managed_companies else [],
+            profile=profile,
+        )
         messages.success(request, f'User "{user.username}" created successfully.')
         return redirect('accounts:user_list')
 
@@ -140,10 +152,20 @@ def user_add(request):
 def user_edit(request, pk):
     user = get_object_or_404(User, pk=pk)
     profile, _created = UserProfile.objects.get_or_create(user=user)
-    profile_form = UserProfileForm(request.POST or None, instance=profile)
+    profile_form = UserProfileForm(
+        request.POST or None,
+        instance=profile,
+        managed_user=user,
+    )
 
     if request.method == 'POST' and profile_form.is_valid():
-        profile_form.save()
+        profile = profile_form.save()
+        managed_companies = profile_form.cleaned_data.get('managed_companies')
+        sync_user_company_access(
+            user,
+            [c.pk for c in managed_companies] if managed_companies else [],
+            profile=profile,
+        )
         messages.success(request, f'Access updated for "{user.username}".')
         return redirect('accounts:user_list')
 

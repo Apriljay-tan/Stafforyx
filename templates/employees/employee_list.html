@@ -28,6 +28,8 @@
   </div>
 </div>
 
+{% include 'includes/company_selector.html' %}
+
 <!-- Search & Filters -->
 <div class="card mb-3">
   <div class="card-body p-3">
@@ -98,6 +100,7 @@
           <th style="width:44px;" class="ps-3"></th>
           <th>ID</th>
           <th>Name</th>
+          {% if show_company_column %}<th>Company</th>{% endif %}
           <th>Department</th>
           <th>Position</th>
           <th>Pay Basis</th>
@@ -133,6 +136,9 @@
             </a>
             <div class="text-muted" style="font-size:.73rem;">{{ emp.email }}</div>
           </td>
+          {% if show_company_column %}
+            <td class="text-muted" style="font-size:.8rem;white-space:nowrap;">{{ emp.company.name }}</td>
+          {% endif %}
           <td class="text-muted">{{ emp.department.name|default:"—" }}</td>
           <td class="text-muted">{{ emp.position.title|default:"—" }}</td>
           <td>
@@ -206,7 +212,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="12" class="text-center py-5">
+          <td colspan="{% if show_company_column %}13{% else %}12{% endif %}" class="text-center py-5">
             <i class="bi bi-people fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
             <span class="text-muted">No employees found.</span>
             {% if not q and not status_filter and not dept_filter and not license_read_only %}

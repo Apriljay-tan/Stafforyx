@@ -49,7 +49,11 @@
               {% endif %}
             </td>
             <td class="text-muted">
-              {% if user.stafforyx_profile and user.stafforyx_profile.company %}
+              {% if user.company_accesses.exists %}
+                {% for access in user.company_accesses.all %}
+                  {% if access.is_active %}{{ access.company.name }}{% if not forloop.last %}, {% endif %}{% endif %}
+                {% endfor %}
+              {% elif user.stafforyx_profile and user.stafforyx_profile.company %}
                 {{ user.stafforyx_profile.company.name }}
               {% else %}
                 -

@@ -71,6 +71,12 @@ class Employee(models.Model):
         ('daily', 'Daily / Payable-days'),
         ('monthly', 'Monthly (fixed salary includes holidays)'),
     ]
+    ALLOWANCE_DAILY = 'daily'
+    ALLOWANCE_MONTHLY = 'monthly'
+    ALLOWANCE_FREQUENCY_CHOICES = [
+        (ALLOWANCE_DAILY, 'Daily'),
+        (ALLOWANCE_MONTHLY, 'Monthly'),
+    ]
     OVERTIME_NO_OT = 'no_ot'
     OVERTIME_REQUEST_REQUIRED = 'request_required'
     OVERTIME_AUTOMATIC = 'automatic'
@@ -108,6 +114,22 @@ class Employee(models.Model):
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES, default='regular')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    daily_allowance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        verbose_name='Allowance amount',
+        help_text='Allowance amount per selected allowance type.',
+    )
+    allowance_frequency = models.CharField(
+        max_length=10,
+        choices=ALLOWANCE_FREQUENCY_CHOICES,
+        default=ALLOWANCE_DAILY,
+        verbose_name='Allowance type',
+        help_text='Daily is attendance-based. Monthly is prorated by payroll period calendar dates.',
+    )
+    deduct_undertime = models.BooleanField(
+        default=True,
+        help_text='Deduct undertime from payroll. Undertime minutes remain recorded when disabled.',
+    )
     daily_rate = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True,
         help_text='Daily pay rate for daily-paid employees. Monthly employees '

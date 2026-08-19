@@ -42,7 +42,9 @@ class EmployeeAdmin(admin.ModelAdmin):
         ('Employment Details', {
             'fields': (
                 'date_hired', 'department', 'position',
-                'employment_type', 'status', 'basic_salary',
+                'employment_type', 'status', 'pay_basis', 'basic_salary',
+                'daily_rate', 'daily_allowance', 'allowance_frequency',
+                'deduct_undertime',
                 'biometric_user_id',
             )
         }),

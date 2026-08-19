@@ -156,7 +156,9 @@ class WorkScheduleForm(forms.ModelForm):
         fields = [
             'company', 'name',
             'start_time', 'end_time', 'overtime_after',
-            'grace_minutes', 'break_minutes', 'required_hours',
+            'grace_minutes', 'break_minutes', 'required_hours', 'half_day_cutoff_time',
+            'use_employee_hourly_rate_for_late', 'late_deduction_rate_per_hour',
+            'use_employee_hourly_rate_for_undertime', 'undertime_deduction_rate_per_hour',
             'work_monday', 'work_tuesday', 'work_wednesday', 'work_thursday',
             'work_friday', 'work_saturday', 'work_sunday',
             'is_active',
@@ -165,8 +167,30 @@ class WorkScheduleForm(forms.ModelForm):
             'start_time':     forms.TimeInput(attrs={'type': 'time'}),
             'end_time':       forms.TimeInput(attrs={'type': 'time'}),
             'overtime_after': forms.TimeInput(attrs={'type': 'time'}),
+            'half_day_cutoff_time': forms.TimeInput(attrs={'type': 'time'}),
+            'late_deduction_rate_per_hour': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
+            'undertime_deduction_rate_per_hour': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         _bootstrap(self)
+
+    def clean(self):
+        cleaned = super().clean()
+        use_employee_late = cleaned.get('use_employee_hourly_rate_for_late')
+        late_rate = cleaned.get('late_deduction_rate_per_hour')
+        use_employee_undertime = cleaned.get('use_employee_hourly_rate_for_undertime')
+        undertime_rate = cleaned.get('undertime_deduction_rate_per_hour')
+
+        if not use_employee_late and late_rate is None:
+            self.add_error(
+                'late_deduction_rate_per_hour',
+                'Enter a fixed late deduction amount, or use the employee hourly rate.',
+            )
+        if not use_employee_undertime and undertime_rate is None:
+            self.add_error(
+                'undertime_deduction_rate_per_hour',
+                'Enter a fixed undertime deduction amount, or use the employee hourly rate.',
+            )
+        return cleaned

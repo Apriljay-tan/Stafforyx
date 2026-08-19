@@ -1,0 +1,41 @@
+{% if accessible_companies.count > 0 %}
+<div class="card mb-3" style="border-color:#1565C0;border-width:1px;">
+  <div class="card-body py-2 px-3 d-flex align-items-center gap-3 flex-wrap">
+    <span class="fw-semibold small" style="color:#1565C0;white-space:nowrap;">
+      <i class="bi bi-building me-1"></i>
+      {% if accessible_companies.count > 1 %}Monitoring Company:{% else %}Company:{% endif %}
+    </span>
+  {% if accessible_companies.count > 1 %}
+    <form method="post" action="{% url 'accounts:select_company' %}" class="d-flex align-items-center gap-2 mb-0">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="company_id" class="form-select form-select-sm" style="max-width:240px;min-width:180px;" onchange="this.form.submit()">
+        <option value="" {% if not selected_company %}selected{% endif %}>All Companies</option>
+        {% for co in accessible_companies %}
+          <option value="{{ co.pk }}" {% if selected_company.pk == co.pk %}selected{% endif %}>
+            {{ co.name }}
+          </option>
+        {% endfor %}
+      </select>
+      <noscript>
+        <button type="submit" class="btn btn-primary btn-sm">Apply</button>
+      </noscript>
+    </form>
+    {% if selected_company %}
+      <form method="post" action="{% url 'accounts:select_company' %}" class="mb-0">
+        {% csrf_token %}
+        <input type="hidden" name="company_id" value="">
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <button type="submit" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-x-lg me-1"></i>Clear
+        </button>
+      </form>
+    {% endif %}
+  {% elif selected_company %}
+    <span class="text-muted" style="font-size:.85rem;">
+      <strong style="color:#0D1B2A;">{{ selected_company.name }}</strong>
+    </span>
+  {% endif %}
+  </div>
+</div>
+{% endif %}

@@ -35,6 +35,9 @@
           <th>End</th>
           <th>Grace (min)</th>
           <th>Break (min)</th>
+          <th>Half-day</th>
+          <th>Late / hr</th>
+          <th>Undertime / hr</th>
           <th>Req. Hours</th>
           <th>Workdays</th>
           <th>Employees</th>
@@ -50,6 +53,25 @@
           <td class="text-muted">{{ sched.end_time|time:"g:i A" }}</td>
           <td class="text-muted">{{ sched.grace_minutes }}</td>
           <td class="text-muted">{{ sched.break_minutes }}</td>
+          <td class="text-muted">{{ sched.half_day_cutoff_time|time:"g:i A"|default:"—" }}</td>
+          <td class="text-muted">
+            {% if sched.use_employee_hourly_rate_for_late %}
+              <span class="text-muted">Employee rate</span>
+            {% elif sched.late_deduction_rate_per_hour is not None %}
+              &#8369;{{ sched.late_deduction_rate_per_hour|floatformat:2 }}
+            {% else %}
+              <span class="text-muted">Not set</span>
+            {% endif %}
+          </td>
+          <td class="text-muted">
+            {% if sched.use_employee_hourly_rate_for_undertime %}
+              <span class="text-muted">Employee rate</span>
+            {% elif sched.undertime_deduction_rate_per_hour is not None %}
+              &#8369;{{ sched.undertime_deduction_rate_per_hour|floatformat:2 }}
+            {% else %}
+              <span class="text-muted">Not set</span>
+            {% endif %}
+          </td>
           <td class="text-muted">{{ sched.required_hours }}</td>
           <td>
             <div class="d-flex gap-1 flex-wrap">
@@ -85,7 +107,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="10" class="text-center py-5">
+          <td colspan="13" class="text-center py-5">
             <i class="bi bi-calendar-week fs-1 d-block text-muted mb-2" style="opacity:.3;"></i>
             <span class="text-muted">No work schedules yet.</span>
             {% if not license_read_only %}

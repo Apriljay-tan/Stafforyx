@@ -10,6 +10,31 @@ Superusers bypass all company restrictions and see everything.
 from companies.models import Company
 
 
+def _accessible_company_id_set(user):
+    """Return the set of company PKs a user may access."""
+    if not user.is_authenticated:
+        return set()
+
+    if user.is_superuser:
+        return set(Company.objects.values_list('pk', flat=True))
+
+    profile = getattr(user, 'stafforyx_profile', None)
+    if profile and profile.role == 'super_admin':
+        return set(Company.objects.values_list('pk', flat=True))
+
+    from .models import UserCompanyAccess
+
+    company_ids = set(
+        UserCompanyAccess.objects
+        .filter(user=user, is_active=True)
+        .values_list('company_id', flat=True)
+    )
+    # Legacy single-company assignment on the profile still grants access.
+    if profile and profile.company_id:
+        company_ids.add(profile.company_id)
+    return company_ids
+
+
 def get_accessible_companies(user):
     """Return a queryset of Company objects the user is permitted to access."""
     if not user.is_authenticated:
@@ -22,13 +47,10 @@ def get_accessible_companies(user):
     if profile and profile.role == 'super_admin':
         return Company.objects.all()
 
-    from .models import UserCompanyAccess
-    company_ids = (
-        UserCompanyAccess.objects
-        .filter(user=user, is_active=True)
-        .values_list('company_id', flat=True)
-    )
-    return Company.objects.filter(id__in=company_ids)
+    company_ids = _accessible_company_id_set(user)
+    if not company_ids:
+        return Company.objects.none()
+    return Company.objects.filter(pk__in=company_ids).order_by('name')
 
 
 def user_can_access_company(user, company):
@@ -43,10 +65,7 @@ def user_can_access_company(user, company):
     if profile and profile.role == 'super_admin':
         return True
 
-    from .models import UserCompanyAccess
-    return UserCompanyAccess.objects.filter(
-        user=user, company=company, is_active=True
-    ).exists()
+    return company.pk in _accessible_company_id_set(user)
 
 
 def get_primary_company_for_user(user):
@@ -63,14 +82,18 @@ def get_primary_company_for_user(user):
     if profile and profile.role == 'super_admin':
         return None
 
-    # Legacy single-company assignment via UserProfile
+    from .models import UserCompanyAccess
+    accesses = UserCompanyAccess.objects.filter(
+        user=user, is_active=True,
+    ).select_related('company')
+    access_count = accesses.count()
+    if access_count > 1:
+        return None
+    if access_count == 1:
+        return accesses.first().company
+
     if profile and profile.company_id:
         return profile.company
-
-    from .models import UserCompanyAccess
-    accesses = UserCompanyAccess.objects.filter(user=user, is_active=True).select_related('company')
-    if accesses.count() == 1:
-        return accesses.first().company
 
     return None
 
@@ -134,3 +157,20 @@ def get_selected_company_from_request(request):
             del request.session['selected_company_id']
 
     return None
+
+
+def user_can_view_all_accessible_companies(user):
+    """True when the company switcher may include an 'All Companies' option."""
+    if not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    profile = getattr(user, 'stafforyx_profile', None)
+    if profile and profile.role == 'super_admin':
+        return True
+    return get_accessible_companies(user).count() > 1
+
+
+def should_show_company_column(user, selected_company):
+    """Show a Company column when viewing rows from multiple branches at once."""
+    return selected_company is None and get_accessible_companies(user).count() > 1

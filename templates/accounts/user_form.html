@@ -58,6 +58,14 @@
         <div class="col-12 col-md-6">
           <label class="form-label fw-semibold small">{{ profile_form.company.label }}</label>
           {{ profile_form.company }}
+          <div class="form-text">Optional primary/default company when only one branch is managed.</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label fw-semibold small">{{ profile_form.managed_companies.label }}</label>
+          {{ profile_form.managed_companies }}
+          {% if profile_form.managed_companies.help_text %}
+            <div class="form-text">{{ profile_form.managed_companies.help_text }}</div>
+          {% endif %}
         </div>
         <div class="col-12 col-md-6">
           <label class="form-label fw-semibold small">{{ profile_form.employee.label }}</label>

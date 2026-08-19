@@ -54,6 +54,7 @@ class EmployeeForm(forms.ModelForm):
             'email', 'phone', 'address',
             'date_hired', 'department', 'position',
             'employment_type', 'status', 'pay_basis', 'basic_salary', 'daily_rate',
+            'daily_allowance', 'allowance_frequency', 'deduct_undertime',
             'work_schedule',
             'attendance_policy_type', 'required_daily_hours', 'default_break_minutes',
             'flexible_overtime_grace_minutes', 'overtime_policy', 'overtime_multiplier',
@@ -74,6 +75,15 @@ class EmployeeForm(forms.ModelForm):
             'night_differential_start_time': forms.TimeInput(attrs={'type': 'time'}),
             'night_differential_end_time': forms.TimeInput(attrs={'type': 'time'}),
             'overtime_multiplier': forms.NumberInput(attrs={'min': '1.0', 'max': '5.0', 'step': '0.05'}),
+            'daily_allowance': forms.NumberInput(attrs={'min': '0', 'step': '0.01'}),
+        }
+        labels = {
+            'daily_allowance': 'Allowance amount',
+            'allowance_frequency': 'Allowance type',
+        }
+        help_texts = {
+            'daily_allowance': 'Daily amount or monthly amount, depending on allowance type.',
+            'allowance_frequency': 'Daily allowance is based on attendance; monthly allowance is prorated by payroll period.',
         }
 
     def __init__(self, *args, **kwargs):
@@ -100,6 +110,12 @@ class EmployeeForm(forms.ModelForm):
         value = self.cleaned_data['flexible_overtime_grace_minutes']
         if value < 0:
             raise forms.ValidationError('Overtime grace minutes must not be negative.')
+        return value
+
+    def clean_daily_allowance(self):
+        value = self.cleaned_data['daily_allowance']
+        if value < 0:
+            raise forms.ValidationError('Allowance amount must not be negative.')
         return value
 
     def clean_night_differential_percentage(self):

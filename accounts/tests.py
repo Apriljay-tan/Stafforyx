@@ -76,6 +76,27 @@ class GetAccessibleCompaniesTests(TestCase):
         qs = get_accessible_companies(user_inactive)
         self.assertEqual(qs.count(), 0)
 
+    def test_profile_company_grants_access_without_user_company_access_row(self):
+        user_legacy = _make_user('user_legacy')
+        UserProfile.objects.create(
+            user=user_legacy,
+            role='hr_admin',
+            company=self.company_a,
+            is_active_stafforyx=True,
+            can_manage_employees=True,
+        )
+        qs = get_accessible_companies(user_legacy)
+        self.assertIn(self.company_a, qs)
+        self.assertNotIn(self.company_b, qs)
+        self.assertTrue(user_can_access_company(user_legacy, self.company_a))
+
+    def test_multi_company_access_returns_all_assigned_branches(self):
+        user_multi = _make_user('user_multi')
+        _grant_access(user_multi, self.company_a, role='hr_admin')
+        _grant_access(user_multi, self.company_b, role='hr_admin')
+        qs = get_accessible_companies(user_multi)
+        self.assertEqual(qs.count(), 2)
+
 
 class FilterCompanyQuerysetTests(TestCase):
     """

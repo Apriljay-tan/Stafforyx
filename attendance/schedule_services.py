@@ -24,6 +24,7 @@ _UNSCHEDULED = {
     'end_time': None,
     'is_overnight': False,
     'break_minutes': 0,
+    'half_day_cutoff_time': None,
     'grace_minutes': 0,
     'overtime_after_minutes': 0,
     'allow_early_clock_in_minutes': 30,
@@ -47,6 +48,7 @@ def _flexible_shift(employee, date):
         'end_time': None,
         'is_overnight': False,
         'break_minutes': employee.default_break_minutes or 0,
+        'half_day_cutoff_time': None,
         'grace_minutes': 0,
         'overtime_after_minutes': employee.flexible_overtime_grace_minutes or 0,
         'allow_early_clock_in_minutes': 0,
@@ -79,6 +81,7 @@ def resolve_expected_shift(employee, date):
         end_time                datetime.time or None
         is_overnight            bool — True if shift crosses midnight
         break_minutes           int
+        half_day_cutoff_time    datetime.time or None
         grace_minutes           int
         overtime_after_minutes  int — minutes after end_time before OT counts
         allow_early_clock_in_minutes  int
@@ -102,6 +105,7 @@ def resolve_expected_shift(employee, date):
                 'end_time': None,
                 'is_overnight': False,
                 'break_minutes': 0,
+                'half_day_cutoff_time': None,
                 'grace_minutes': 0,
                 'overtime_after_minutes': 0,
                 'allow_early_clock_in_minutes': 30,
@@ -146,6 +150,7 @@ def resolve_expected_shift(employee, date):
             'end_time': end,
             'is_overnight': is_overnight,
             'break_minutes': break_min,
+            'half_day_cutoff_time': None,
             'grace_minutes': grace_min,
             'overtime_after_minutes': ot_after_min,
             'allow_early_clock_in_minutes': early_min,
@@ -169,6 +174,7 @@ def resolve_expected_shift(employee, date):
                 'end_time': None,
                 'is_overnight': False,
                 'break_minutes': work_schedule.break_minutes or 0,
+                'half_day_cutoff_time': work_schedule.half_day_cutoff_time,
                 'grace_minutes': work_schedule.grace_minutes or 0,
                 'overtime_after_minutes': 0,
                 'allow_early_clock_in_minutes': 30,
@@ -192,6 +198,7 @@ def resolve_expected_shift(employee, date):
             'end_time': end_time,
             'is_overnight': False,
             'break_minutes': work_schedule.break_minutes or 0,
+            'half_day_cutoff_time': work_schedule.half_day_cutoff_time,
             'grace_minutes': work_schedule.grace_minutes or 0,
             'overtime_after_minutes': ot_after_minutes,
             'allow_early_clock_in_minutes': 30,

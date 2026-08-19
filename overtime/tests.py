@@ -283,3 +283,113 @@ class ManageOvertimeAccessTests(TestCase):
         self.req.refresh_from_db()
         self.assertEqual(self.req.status, 'approved')
         self.assertEqual(self.req.approved_hours, Decimal('2.00'))
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_approval_refreshes_matching_draft_payroll(self, _mock_license):
+        from attendance.models import AttendanceRecord
+        from payroll.models import PayrollPeriod, PayrollRecord
+        from payroll.services import generate_payroll_for_period
+
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=_DATE,
+            time_in=datetime.time(8, 0),
+            time_out=datetime.time(19, 0),
+            overtime_minutes=120,
+            status='present',
+        )
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            name='OT Approval Period',
+            start_date=_DATE,
+            end_date=_DATE,
+        )
+        generate_payroll_for_period(period)
+        record = PayrollRecord.objects.get(payroll_period=period, employee=self.emp)
+        self.assertEqual(record.overtime_minutes, 0)
+
+        su = User.objects.create_superuser('root3', 'root3@x.com', 'pw')
+        self.client.force_login(su)
+        response = self.client.post(
+            reverse('overtime:manage_overtime_detail', args=[self.req.pk]),
+            {'action': 'approve', 'approved_hours': '2.00', 'manager_note': ''},
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.req.refresh_from_db()
+        record.refresh_from_db()
+        self.assertEqual(self.req.status, 'approved')
+        self.assertEqual(self.req.approved_hours, Decimal('2.00'))
+        self.assertEqual(record.overtime_minutes, 120)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_bulk_approve_defaults_hours_and_refreshes_draft_payroll(self, _mock_license):
+        from attendance.models import AttendanceRecord
+        from payroll.models import PayrollPeriod, PayrollRecord
+        from payroll.services import generate_payroll_for_period
+
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=_DATE,
+            time_in=datetime.time(8, 0),
+            time_out=datetime.time(19, 0),
+            overtime_minutes=120,
+            status='present',
+        )
+        period = PayrollPeriod.objects.create(
+            company=self.company,
+            name='Bulk OT Approval Period',
+            start_date=_DATE,
+            end_date=_DATE,
+        )
+        generate_payroll_for_period(period)
+        record = PayrollRecord.objects.get(payroll_period=period, employee=self.emp)
+        self.assertEqual(record.overtime_minutes, 0)
+
+        su = User.objects.create_superuser('bulk-root', 'bulk-root@x.com', 'pw')
+        self.client.force_login(su)
+        response = self.client.post(reverse('overtime:manage_overtime'), {
+            'bulk_action': 'approve',
+            'bulk_manager_note': 'bulk ok',
+            'selected_requests': [str(self.req.pk)],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.req.refresh_from_db()
+        record.refresh_from_db()
+        self.assertEqual(self.req.status, 'approved')
+        self.assertEqual(self.req.approved_hours, Decimal('2.00'))
+        self.assertEqual(self.req.manager_note, 'bulk ok')
+        self.assertEqual(self.req.reviewed_by, su)
+        self.assertIsNotNone(self.req.reviewed_at)
+        self.assertEqual(record.overtime_minutes, 120)
+
+    @patch('licenses.middleware.is_license_active', return_value=True)
+    def test_bulk_reject_selected_pending_requests_only(self, _mock_license):
+        approved_req = OvertimeRequest.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=_DATE + datetime.timedelta(days=1),
+            requested_hours=Decimal('1.00'),
+            approved_hours=Decimal('1.00'),
+            status='approved',
+            source='employee',
+        )
+        su = User.objects.create_superuser('bulk-reject-root', 'bulk-reject@x.com', 'pw')
+        self.client.force_login(su)
+
+        response = self.client.post(reverse('overtime:manage_overtime'), {
+            'bulk_action': 'reject',
+            'bulk_manager_note': 'bulk no',
+            'selected_requests': [str(self.req.pk), str(approved_req.pk)],
+        })
+
+        self.assertEqual(response.status_code, 302)
+        self.req.refresh_from_db()
+        approved_req.refresh_from_db()
+        self.assertEqual(self.req.status, 'rejected')
+        self.assertEqual(self.req.manager_note, 'bulk no')
+        self.assertEqual(self.req.reviewed_by, su)
+        self.assertEqual(approved_req.status, 'approved')

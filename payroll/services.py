@@ -19,8 +19,8 @@ Formula (payable-days approach — no double-deduction on absences):
                     display/reporting only and is NOT subtracted again in net_pay)
 
     overtime_pay        = (overtime_minutes / 60) × hourly_rate × 1.25
-    late_deduction      = (late_minutes / 60) × hourly_rate
-    undertime_deduction = (undertime_minutes / 60) × hourly_rate
+    late_deduction      = (late_minutes / 60) × schedule late rate, or hourly_rate
+    undertime_deduction = (undertime_minutes / 60) × schedule undertime rate, or hourly_rate
 
     gross_pay       = basic_pay + overtime_pay + allowances [+ earning adjustments]
     total_deductions= sss + philhealth + pagibig + tax
@@ -35,6 +35,7 @@ Regenerate behaviour:
     Returns (created, updated_draft, skipped_locked).
 """
 
+from calendar import monthrange
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
@@ -189,6 +190,8 @@ def _attendance_state(att):
         return 'neutral', None
     if status in _HALF_DAY_STATUSES:
         return 'present', Decimal('0.5')
+    if getattr(att, 'computed_status', '') in _HALF_DAY_STATUSES:
+        return 'present', Decimal('0.5')
     # 'present', 'late', or any other working status — also accept a bare clock-in.
     if status in ('present', 'late') or att.time_in is not None:
         return 'present', Decimal('1')
@@ -210,6 +213,31 @@ def _resolve_daily_rate(emp):
         return Decimal(str(emp.daily_rate)).quantize(_Q4, rounding=ROUND_HALF_UP)
     salary = Decimal(str(emp.basic_salary or 0))
     return (salary / _DAILY_DIVISOR).quantize(_Q4, rounding=ROUND_HALF_UP)
+
+
+def _prorated_monthly_allowance(amount, start_date, end_date):
+    """
+    Return the monthly allowance portion covered by this payroll period.
+
+    A period covering a full calendar month receives the full amount. Cutoffs
+    such as 1-15 or 16-end receive only their calendar-date share, and periods
+    spanning multiple months receive the proper slice from each month.
+    """
+    monthly_amount = Decimal(str(amount or 0))
+    if monthly_amount <= 0:
+        return Decimal('0.00')
+
+    total = Decimal('0')
+    cur = start_date
+    while cur <= end_date:
+        days_in_month = monthrange(cur.year, cur.month)[1]
+        month_end = cur.replace(day=days_in_month)
+        span_end = min(month_end, end_date)
+        covered_days = (span_end - cur).days + 1
+        total += monthly_amount * Decimal(covered_days) / Decimal(days_in_month)
+        cur = span_end + timedelta(days=1)
+
+    return total.quantize(_Q2, rounding=ROUND_HALF_UP)
 
 
 def _night_differential_percentage(emp):
@@ -240,10 +268,23 @@ def _overtime_multiplier(emp):
     return value.quantize(_Q2, rounding=ROUND_HALF_UP)
 
 
+def _schedule_deduction_rate(emp, use_employee_rate_field, fixed_rate_field, fallback_rate):
+    schedule = getattr(emp, 'work_schedule', None)
+    if not schedule:
+        return fallback_rate
+    if getattr(schedule, use_employee_rate_field, True):
+        return fallback_rate
+    configured = getattr(schedule, fixed_rate_field, None)
+    if configured is None:
+        return fallback_rate
+    return Decimal(str(configured)).quantize(_Q4, rounding=ROUND_HALF_UP)
+
+
 # ── Per-employee calculation ───────────────────────────────────────────────────
 
 def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_dates,
-                           att_by_date, holiday_resolver, approval_index):
+                           att_by_date, start_date, end_date, holiday_resolver,
+                           approval_index):
     """
     Compute all payroll components for one employee.
 
@@ -305,6 +346,22 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
                 absent_dates.add(date)
         # 'neutral' (e.g. on_leave without a leave request) → neither paid nor docked
 
+    # Approved emergency overtime may be worked on a rest day without a normal
+    # attendance row. Pay the approved request as overtime-only in that case;
+    # regular pay remains zero because the date is not present.
+    policy = getattr(emp, 'overtime_mode', None) or getattr(
+        emp, 'overtime_policy', 'no_ot',
+    )
+    if policy in ('request_required', 'management_review'):
+        for (employee_id, date), approved_min in approval_index.items():
+            if employee_id != emp.pk or date in att_by_date:
+                continue
+            if date in paid_leave_dates or date in unpaid_leave_dates:
+                continue
+            overtime_min += payable_overtime_minutes(
+                emp, date, approved_min, approval_index
+            )
+
     # ── Holiday pass ──────────────────────────────────────────────────────────
     for date in holiday_candidate_dates:
         # Leave-covered holidays are paid via leave, not here.
@@ -352,12 +409,32 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     basic_pay = (daily_rate * payable_days).quantize(_Q2, rounding=ROUND_HALF_UP)
     absence_ded = (daily_rate * absent_days).quantize(_Q2, rounding=ROUND_HALF_UP)
 
+    late_rate = _schedule_deduction_rate(
+        emp,
+        'use_employee_hourly_rate_for_late',
+        'late_deduction_rate_per_hour',
+        hourly_rate,
+    )
+    undertime_rate = _schedule_deduction_rate(
+        emp,
+        'use_employee_hourly_rate_for_undertime',
+        'undertime_deduction_rate_per_hour',
+        hourly_rate,
+    )
     late_ded = (
-        Decimal(late_min) / Decimal(60) * hourly_rate
+        Decimal(late_min) / Decimal(60) * late_rate
     ).quantize(_Q2, rounding=ROUND_HALF_UP)
-    undertime_ded = (
-        Decimal(undertime_min) / Decimal(60) * hourly_rate
-    ).quantize(_Q2, rounding=ROUND_HALF_UP)
+    undertime_ded = Decimal('0.00')
+    if getattr(emp, 'deduct_undertime', True):
+        undertime_ded = (
+            Decimal(undertime_min) / Decimal(60) * undertime_rate
+        ).quantize(_Q2, rounding=ROUND_HALF_UP)
+    allowance_amount = Decimal(str(getattr(emp, 'daily_allowance', 0) or 0))
+    allowance_frequency = getattr(emp, 'allowance_frequency', Employee.ALLOWANCE_DAILY)
+    if allowance_frequency == Employee.ALLOWANCE_MONTHLY:
+        allowances = _prorated_monthly_allowance(allowance_amount, start_date, end_date)
+    else:
+        allowances = (allowance_amount * present_weight).quantize(_Q2, rounding=ROUND_HALF_UP)
     ot_multiplier = _overtime_multiplier(emp)
     ot_pay = (
         Decimal(overtime_min) / Decimal(60) * hourly_rate * ot_multiplier
@@ -376,7 +453,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
     pagibig_ded = Decimal(str(emp.pagibig_contribution_amount or 0)).quantize(_Q2)
     tax_ded = Decimal(str(emp.tax_deduction_amount or 0)).quantize(_Q2)
 
-    gross_pay = (basic_pay + ot_pay + night_diff_pay + holiday_pay).quantize(_Q2)
+    gross_pay = (basic_pay + ot_pay + night_diff_pay + holiday_pay + allowances).quantize(_Q2)
     total_ded = sss_ded + philhealth_ded + pagibig_ded + tax_ded + late_ded + undertime_ded
     net_pay = (gross_pay - total_ded).quantize(_Q2)
 
@@ -396,6 +473,7 @@ def _calc_employee_payroll(emp, scheduled_dates, paid_leave_dates, unpaid_leave_
         daily_rate=daily_rate,
         hourly_rate=hourly_rate,
         basic_pay=basic_pay,
+        allowances=allowances,
         overtime_pay=ot_pay,
         night_differential_pay=night_diff_pay,
         holiday_pay=holiday_pay,
@@ -527,6 +605,8 @@ def generate_payroll_for_period(period, department_id=None, allow_update_draft=T
             paid_map.get(emp.pk, set()),
             unpaid_map.get(emp.pk, set()),
             att_map.get(emp.pk, {}),
+            start_date,
+            end_date,
             _holiday_resolver,
             approval_index,
         )

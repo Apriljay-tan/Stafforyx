@@ -14,6 +14,7 @@ from PIL import Image
 from companies.models import Company
 from employees.models import Employee
 from .models import AttendanceLocation, AttendancePortalLog, AttendanceRecord, BiometricDevice, BiometricLog, WorkSchedule
+from .forms import WorkScheduleForm
 from .services import compute_attendance
 from .biometric_services import (
     create_biometric_log,
@@ -78,6 +79,83 @@ def _make_record(employee, date=None, time_in=None, time_out=None, break_minutes
         break_minutes=break_minutes,
         status='present',
     )
+
+
+class WorkScheduleDeductionRateFormTests(TestCase):
+    def setUp(self):
+        self.company = _make_company()
+
+    def _form_data(self, **overrides):
+        data = {
+            'company': str(self.company.pk),
+            'name': 'Regular',
+            'start_time': '09:00',
+            'end_time': '18:00',
+            'overtime_after': '',
+            'grace_minutes': '5',
+            'break_minutes': '60',
+            'required_hours': '8.00',
+            'half_day_cutoff_time': '',
+            'use_employee_hourly_rate_for_late': '',
+            'late_deduction_rate_per_hour': '200.00',
+            'use_employee_hourly_rate_for_undertime': '',
+            'undertime_deduction_rate_per_hour': '250.00',
+            'work_monday': 'on',
+            'work_tuesday': 'on',
+            'work_wednesday': 'on',
+            'work_thursday': 'on',
+            'work_friday': 'on',
+            'work_saturday': '',
+            'work_sunday': '',
+            'is_active': 'on',
+        }
+        data.update(overrides)
+        return data
+
+    def test_schedule_accepts_deduction_rates(self):
+        form = WorkScheduleForm(data=self._form_data())
+
+        self.assertTrue(form.is_valid(), form.errors)
+        schedule = form.save()
+        self.assertFalse(schedule.use_employee_hourly_rate_for_late)
+        self.assertEqual(schedule.late_deduction_rate_per_hour, Decimal('200.00'))
+        self.assertFalse(schedule.use_employee_hourly_rate_for_undertime)
+        self.assertEqual(schedule.undertime_deduction_rate_per_hour, Decimal('250.00'))
+
+    def test_schedule_can_use_employee_hourly_rate_without_fixed_rates(self):
+        form = WorkScheduleForm(data=self._form_data(
+            use_employee_hourly_rate_for_late='on',
+            late_deduction_rate_per_hour='',
+            use_employee_hourly_rate_for_undertime='on',
+            undertime_deduction_rate_per_hour='',
+        ))
+
+        self.assertTrue(form.is_valid(), form.errors)
+        schedule = form.save()
+        self.assertTrue(schedule.use_employee_hourly_rate_for_late)
+        self.assertIsNone(schedule.late_deduction_rate_per_hour)
+        self.assertTrue(schedule.use_employee_hourly_rate_for_undertime)
+        self.assertIsNone(schedule.undertime_deduction_rate_per_hour)
+
+    def test_schedule_requires_fixed_rates_when_employee_rate_is_off(self):
+        form = WorkScheduleForm(data=self._form_data(
+            late_deduction_rate_per_hour='',
+            undertime_deduction_rate_per_hour='',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('late_deduction_rate_per_hour', form.errors)
+        self.assertIn('undertime_deduction_rate_per_hour', form.errors)
+
+    def test_schedule_rejects_negative_deduction_rates(self):
+        form = WorkScheduleForm(data=self._form_data(
+            late_deduction_rate_per_hour='-1.00',
+            undertime_deduction_rate_per_hour='-1.00',
+        ))
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('late_deduction_rate_per_hour', form.errors)
+        self.assertIn('undertime_deduction_rate_per_hour', form.errors)
 
 
 class ComputeAttendanceTotalHoursTests(TestCase):
@@ -195,6 +273,79 @@ class ComputeAttendanceTotalHoursTests(TestCase):
         compute_attendance(record)
         record.refresh_from_db()
         self.assertEqual(record.computed_status, 'absent')
+
+
+class FixedWorkScheduleWindowTests(TestCase):
+    def setUp(self):
+        self.company = _make_company()
+        self.schedule = _make_schedule(
+            self.company,
+            start_time=datetime.time(9, 0),
+            end_time=datetime.time(18, 0),
+            grace_minutes=5,
+            break_minutes=60,
+            required_hours=Decimal('8.00'),
+        )
+        self.employee = _make_employee(self.company, self.schedule)
+
+    def test_early_time_in_does_not_cover_early_time_out(self):
+        record = _make_record(
+            self.employee,
+            time_in=datetime.time(8, 30),
+            time_out=datetime.time(17, 30),
+            break_minutes=60,
+        )
+
+        compute_attendance(record)
+        record.refresh_from_db()
+
+        self.assertEqual(record.total_work_minutes, 450)
+        self.assertEqual(record.total_hours, Decimal('7.50'))
+        self.assertEqual(record.late_minutes, 0)
+        self.assertEqual(record.undertime_minutes, 30)
+        self.assertEqual(record.computed_status, 'undertime')
+
+    def test_late_starts_after_grace_minute(self):
+        within_grace = _make_record(
+            self.employee,
+            date=datetime.date(2026, 5, 26),
+            time_in=datetime.time(9, 5),
+            time_out=datetime.time(18, 0),
+            break_minutes=60,
+        )
+        after_grace = _make_record(
+            self.employee,
+            date=datetime.date(2026, 5, 27),
+            time_in=datetime.time(9, 6),
+            time_out=datetime.time(18, 0),
+            break_minutes=60,
+        )
+
+        compute_attendance(within_grace)
+        compute_attendance(after_grace)
+        within_grace.refresh_from_db()
+        after_grace.refresh_from_db()
+
+        self.assertEqual(within_grace.late_minutes, 0)
+        self.assertEqual(after_grace.late_minutes, 1)
+
+    def test_half_day_cutoff_caps_undertime(self):
+        self.schedule.half_day_cutoff_time = datetime.time(12, 0)
+        self.schedule.save(update_fields=['half_day_cutoff_time'])
+        record = _make_record(
+            self.employee,
+            time_in=datetime.time(9, 0),
+            time_out=datetime.time(11, 0),
+            break_minutes=60,
+        )
+
+        compute_attendance(record)
+        record.refresh_from_db()
+
+        self.assertEqual(record.total_work_minutes, 120)
+        self.assertEqual(record.total_hours, Decimal('2.00'))
+        self.assertEqual(record.undertime_minutes, 60)
+        self.assertEqual(record.computed_status, 'half_day')
 
 
 class AttendanceAccessTests(TestCase):

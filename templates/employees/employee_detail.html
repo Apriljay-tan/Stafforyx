@@ -178,6 +178,31 @@
               <td class="fw-semibold py-2">&#8369;{{ employee.basic_salary|floatformat:2 }}</td>
             </tr>
             <tr>
+              <td class="text-muted ps-3 py-2">Pay Basis</td>
+              <td class="py-2">{{ employee.get_pay_basis_display }}</td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Daily Rate</td>
+              <td class="py-2">
+                {% if employee.effective_daily_rate %}
+                  &#8369;{{ employee.effective_daily_rate|floatformat:2 }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Allowance</td>
+              <td class="py-2">
+                &#8369;{{ employee.daily_allowance|floatformat:2 }}
+                <span class="text-muted">/ {{ employee.get_allowance_frequency_display|lower }}</span>
+              </td>
+            </tr>
+            <tr>
+              <td class="text-muted ps-3 py-2">Undertime Deduction</td>
+              <td class="py-2">{% if employee.deduct_undertime %}Enabled{% else %}Disabled{% endif %}</td>
+            </tr>
+            <tr>
               <td class="text-muted ps-3 py-2">Work Schedule</td>
               <td class="py-2">
                 {% if employee.work_schedule %}

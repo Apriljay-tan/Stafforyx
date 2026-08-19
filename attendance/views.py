@@ -23,6 +23,7 @@ from accounts.company_access import (
     filter_queryset_by_user_companies,
     get_accessible_companies,
     get_selected_company_from_request,
+    should_show_company_column,
     user_can_access_company,
 )
 from companies.models import Company
@@ -315,7 +316,7 @@ def attendance_list(request):
         potential_absences = _potential_absences_today(accessible_companies_qs=accessible)
 
     # Show company column in live table when superuser views all companies
-    show_company_column = (selected_company is None) and request.user.is_superuser
+    show_company_column = should_show_company_column(request.user, selected_company)
 
     context = {
         'records': records,

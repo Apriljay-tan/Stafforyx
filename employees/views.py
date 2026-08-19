@@ -3,7 +3,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q, Count
 from django.shortcuts import render, get_object_or_404, redirect
 
-from accounts.company_access import filter_queryset_by_user_companies, user_can_access_company
+from accounts.company_access import filter_queryset_by_user_companies, get_accessible_companies, get_selected_company_from_request, should_show_company_column, user_can_access_company
 from licenses.context_processors import get_license_state
 from .models import Employee, Department, Position
 from .forms import EmployeeForm, DepartmentForm, PositionForm
@@ -23,8 +23,14 @@ _LIMIT_MSG = (
 # ── Employees ─────────────────────────────────────────────────────────────────
 
 def employee_list(request):
+    accessible = get_accessible_companies(request.user)
+    selected_company = get_selected_company_from_request(request)
+
     qs = Employee.objects.select_related('company', 'department', 'position')
     qs = filter_queryset_by_user_companies(qs, request.user)
+
+    if selected_company:
+        qs = qs.filter(company=selected_company)
 
     q = request.GET.get('q', '').strip()
     if q:
@@ -47,9 +53,14 @@ def employee_list(request):
     at_limit        = state['valid'] and max_employees > 0 and total_employees >= max_employees
 
     dept_qs = filter_queryset_by_user_companies(Department.objects.all(), request.user)
+    if selected_company:
+        dept_qs = dept_qs.filter(company=selected_company)
     context = {
         'employees':       qs,
         'departments':     dept_qs,
+        'accessible_companies': accessible,
+        'selected_company': selected_company,
+        'show_company_column': should_show_company_column(request.user, selected_company),
         'q':               q,
         'status_filter':   status,
         'dept_filter':     dept_id,

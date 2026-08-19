@@ -65,10 +65,67 @@
         <div class="col-6 col-md-3">
           <label class="form-label fw-semibold small">Grace Period (min)</label>
           {{ form.grace_minutes }}
+          {% if form.grace_minutes.help_text %}
+            <div class="form-text">{{ form.grace_minutes.help_text }}</div>
+          {% endif %}
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label fw-semibold small">Break (min)</label>
           {{ form.break_minutes }}
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label fw-semibold small">
+            Half-day cutoff <span class="fw-normal text-muted">(optional)</span>
+          </label>
+          {{ form.half_day_cutoff_time }}
+          {% if form.half_day_cutoff_time.help_text %}
+            <div class="form-text">{{ form.half_day_cutoff_time.help_text }}</div>
+          {% endif %}
+          {% if form.half_day_cutoff_time.errors %}
+            <div class="text-danger small mt-1">{{ form.half_day_cutoff_time.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="form-check form-switch mb-2">
+            {{ form.use_employee_hourly_rate_for_late }}
+            <label class="form-check-label fw-semibold small" for="{{ form.use_employee_hourly_rate_for_late.id_for_label }}">
+              Use employee hourly rate for late deduction
+            </label>
+          </div>
+          <label class="form-label fw-semibold small">
+            Fixed late deduction <span class="fw-normal text-muted">(&#8369; / hour)</span>
+          </label>
+          {{ form.late_deduction_rate_per_hour }}
+          {% if form.late_deduction_rate_per_hour.help_text %}
+            <div class="form-text">{{ form.late_deduction_rate_per_hour.help_text }}</div>
+          {% endif %}
+          {% if form.use_employee_hourly_rate_for_late.errors %}
+            <div class="text-danger small mt-1">{{ form.use_employee_hourly_rate_for_late.errors.as_text }}</div>
+          {% endif %}
+          {% if form.late_deduction_rate_per_hour.errors %}
+            <div class="text-danger small mt-1">{{ form.late_deduction_rate_per_hour.errors.as_text }}</div>
+          {% endif %}
+        </div>
+        <div class="col-12 col-md-6">
+          <div class="form-check form-switch mb-2">
+            {{ form.use_employee_hourly_rate_for_undertime }}
+            <label class="form-check-label fw-semibold small" for="{{ form.use_employee_hourly_rate_for_undertime.id_for_label }}">
+              Use employee hourly rate for undertime deduction
+            </label>
+          </div>
+          <label class="form-label fw-semibold small">
+            Fixed undertime deduction <span class="fw-normal text-muted">(&#8369; / hour)</span>
+          </label>
+          {{ form.undertime_deduction_rate_per_hour }}
+          {% if form.undertime_deduction_rate_per_hour.help_text %}
+            <div class="form-text">{{ form.undertime_deduction_rate_per_hour.help_text }}</div>
+          {% endif %}
+          {% if form.use_employee_hourly_rate_for_undertime.errors %}
+            <div class="text-danger small mt-1">{{ form.use_employee_hourly_rate_for_undertime.errors.as_text }}</div>
+          {% endif %}
+          {% if form.undertime_deduction_rate_per_hour.errors %}
+            <div class="text-danger small mt-1">{{ form.undertime_deduction_rate_per_hour.errors.as_text }}</div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -132,5 +189,22 @@
     <a href="{% url 'attendance:schedule_list' %}" class="btn btn-outline-secondary">Cancel</a>
   </div>
 </form>
+
+<script>
+  (function () {
+    function bindRateToggle(toggleId, inputId) {
+      var toggle = document.getElementById(toggleId);
+      var input = document.getElementById(inputId);
+      if (!toggle || !input) return;
+      function sync() {
+        input.readOnly = toggle.checked;
+      }
+      toggle.addEventListener('change', sync);
+      sync();
+    }
+    bindRateToggle('{{ form.use_employee_hourly_rate_for_late.id_for_label }}', '{{ form.late_deduction_rate_per_hour.id_for_label }}');
+    bindRateToggle('{{ form.use_employee_hourly_rate_for_undertime.id_for_label }}', '{{ form.undertime_deduction_rate_per_hour.id_for_label }}');
+  })();
+</script>
 
 {% endblock %}

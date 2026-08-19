@@ -38,10 +38,41 @@
     <span><i class="bi bi-clock-history me-1"></i>Overtime Queue</span>
     <span class="badge bg-primary rounded-pill">{{ requests|length }}</span>
   </div>
+  <form method="post" id="bulk-overtime-form">
+    {% csrf_token %}
+    <div class="card-body border-bottom">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label small fw-semibold mb-1">Bulk Action</label>
+          <select name="bulk_action" class="form-select form-select-sm" required>
+            <option value="">Choose action</option>
+            <option value="approve">Approve selected</option>
+            <option value="reject">Reject selected</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label small fw-semibold mb-1">Manager Note</label>
+          <input type="text" name="bulk_manager_note" class="form-control form-control-sm" placeholder="Optional note for selected requests">
+        </div>
+        <div class="col-12 col-md-3 d-flex justify-content-md-end">
+          <button type="submit" class="btn btn-primary btn-sm w-100 w-md-auto">
+            <i class="bi bi-check2-square me-1"></i>Apply
+          </button>
+        </div>
+        <div class="col-12">
+          <div class="text-muted small">
+            Bulk actions apply to selected pending requests only. Approved hours default to the requested hours.
+          </div>
+        </div>
+      </div>
+    </div>
   <div class="table-responsive">
     <table class="table table-hover mb-0 align-middle" style="font-size:.875rem;">
       <thead class="table-light">
         <tr>
+          <th class="ps-3" style="width:42px;">
+            <input type="checkbox" class="form-check-input" id="select-all-overtime" aria-label="Select all pending overtime requests">
+          </th>
           <th class="ps-3">Date</th>
           <th>Employee</th>
           <th>Company</th>
@@ -54,6 +85,11 @@
       <tbody>
         {% for r in requests %}
         <tr>
+          <td class="ps-3">
+            {% if r.status == 'pending' %}
+              <input type="checkbox" class="form-check-input overtime-row-check" name="selected_requests" value="{{ r.pk }}" aria-label="Select overtime request for {{ r.employee.full_name }}">
+            {% endif %}
+          </td>
           <td class="ps-3">{{ r.date|date:"M d, Y" }}</td>
           <td class="fw-semibold">{{ r.employee.full_name }}</td>
           <td>{{ r.company.name }}</td>
@@ -67,10 +103,23 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="text-center py-5 text-muted">No overtime requests found for your scope.</td></tr>
+        <tr><td colspan="8" class="text-center py-5 text-muted">No overtime requests found for your scope.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
+  </form>
 </div>
+
+<script>
+  (function () {
+    var selectAll = document.getElementById('select-all-overtime');
+    if (!selectAll) return;
+    selectAll.addEventListener('change', function () {
+      document.querySelectorAll('.overtime-row-check').forEach(function (checkbox) {
+        checkbox.checked = selectAll.checked;
+      });
+    });
+  })();
+</script>
 {% endblock %}

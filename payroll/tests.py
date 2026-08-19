@@ -208,6 +208,22 @@ class AttendanceStatusTest(PayrollV2TestCase):
         self.assertEqual(rec.payable_days, Decimal('0.5'))
         self.assertEqual(rec.basic_pay, Decimal('500.00'))
 
+    def test_computed_half_day_pays_half(self):
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=_MAY_19,
+            status='present',
+            computed_status='half_day',
+            time_in=datetime.time(8, 0),
+        )
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.payable_days, Decimal('0.5'))
+        self.assertEqual(rec.basic_pay, Decimal('500.00'))
+
     def test_explicit_absent_is_docked(self):
         self._record_with(_MAY_19, 'absent', time_in=datetime.time(8, 0))
         self._generate()
@@ -416,6 +432,46 @@ class LateDeductionTest(PayrollV2TestCase):
         expected_net = Decimal('5000.00') - Decimal('125.00')
         self.assertEqual(rec.net_pay, expected_net)
 
+    def test_schedule_late_rate_uses_total_late_minutes(self):
+        self.schedule.work_saturday = True
+        self.schedule.use_employee_hourly_rate_for_late = False
+        self.schedule.late_deduction_rate_per_hour = Decimal('200.00')
+        self.schedule.save(update_fields=[
+            'work_saturday',
+            'use_employee_hourly_rate_for_late',
+            'late_deduction_rate_per_hour',
+        ])
+        self.period.end_date = datetime.date(2025, 5, 24)
+        self.period.save(update_fields=['end_date'])
+
+        for day in range(19, 25):
+            self._clock_in(datetime.date(2025, 5, day), late_min=10)
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.late_minutes, 60)
+        self.assertEqual(rec.late_deduction, Decimal('200.00'))
+        self.assertEqual(rec.basic_pay, Decimal('6000.00'))
+        self.assertEqual(rec.net_pay, Decimal('5800.00'))
+
+    def test_employee_hourly_late_toggle_ignores_fixed_schedule_rate(self):
+        self.schedule.use_employee_hourly_rate_for_late = True
+        self.schedule.late_deduction_rate_per_hour = Decimal('200.00')
+        self.schedule.save(update_fields=[
+            'use_employee_hourly_rate_for_late',
+            'late_deduction_rate_per_hour',
+        ])
+        self._clock_in(_MAY_19, late_min=60)
+        for d in (_MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.late_minutes, 60)
+        self.assertEqual(rec.late_deduction, Decimal('125.00'))
+
 
 # ── Test 7: Overtime pay ───────────────────────────────────────────────────────
 
@@ -459,6 +515,95 @@ class UndertimeDeductionTest(PayrollV2TestCase):
         self.assertEqual(rec.undertime_deduction, Decimal('62.50'))
         expected_net = Decimal('5000.00') - Decimal('62.50')
         self.assertEqual(rec.net_pay, expected_net)
+
+    def test_schedule_undertime_rate_overrides_hourly_rate(self):
+        self.schedule.use_employee_hourly_rate_for_undertime = False
+        self.schedule.undertime_deduction_rate_per_hour = Decimal('300.00')
+        self.schedule.save(update_fields=[
+            'use_employee_hourly_rate_for_undertime',
+            'undertime_deduction_rate_per_hour',
+        ])
+        self._clock_in(_MAY_19, undertime_min=30)
+        for d in (_MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.undertime_minutes, 30)
+        self.assertEqual(rec.undertime_deduction, Decimal('150.00'))
+        self.assertEqual(rec.net_pay, Decimal('4850.00'))
+
+    def test_employee_hourly_undertime_toggle_ignores_fixed_schedule_rate(self):
+        self.schedule.use_employee_hourly_rate_for_undertime = True
+        self.schedule.undertime_deduction_rate_per_hour = Decimal('300.00')
+        self.schedule.save(update_fields=[
+            'use_employee_hourly_rate_for_undertime',
+            'undertime_deduction_rate_per_hour',
+        ])
+        self._clock_in(_MAY_19, undertime_min=30)
+        for d in (_MAY_20, _MAY_21, _MAY_22, _MAY_23):
+            self._clock_in(d)
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.undertime_minutes, 30)
+        self.assertEqual(rec.undertime_deduction, Decimal('62.50'))
+
+
+class EmployeeAllowanceAndUndertimeSettingsTest(PayrollV2TestCase):
+    def test_daily_allowance_uses_actual_attendance_weight(self):
+        self.emp.daily_allowance = Decimal('100.00')
+        self.emp.save(update_fields=['daily_allowance'])
+        self._clock_in(_MAY_19)
+        AttendanceRecord.objects.create(
+            company=self.company,
+            employee=self.emp,
+            date=_MAY_20,
+            time_in=datetime.time(8, 0),
+            status='half_day',
+        )
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.allowances, Decimal('150.00'))
+        self.assertEqual(rec.gross_pay, Decimal('1650.00'))
+        self.assertEqual(rec.net_pay, Decimal('1650.00'))
+
+    def test_absent_days_receive_no_daily_allowance(self):
+        self.emp.daily_allowance = Decimal('100.00')
+        self.emp.save(update_fields=['daily_allowance'])
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.allowances, Decimal('0.00'))
+
+    def test_monthly_allowance_is_prorated_and_not_attendance_weighted(self):
+        self.emp.daily_allowance = Decimal('3100.00')
+        self.emp.allowance_frequency = Employee.ALLOWANCE_MONTHLY
+        self.emp.save(update_fields=['daily_allowance', 'allowance_frequency'])
+
+        self._generate()
+        rec = self._record()
+
+        # Existing period covers 5 May dates; 3100 / 31 * 5 = 500.00.
+        self.assertEqual(rec.allowances, Decimal('500.00'))
+        self.assertEqual(rec.gross_pay, Decimal('500.00'))
+        self.assertEqual(rec.net_pay, Decimal('500.00'))
+
+    def test_undertime_can_be_recorded_without_deduction(self):
+        self.emp.deduct_undertime = False
+        self.emp.save(update_fields=['deduct_undertime'])
+        self._clock_in(_MAY_19, undertime_min=30)
+
+        self._generate()
+        rec = self._record()
+
+        self.assertEqual(rec.undertime_minutes, 30)
+        self.assertEqual(rec.undertime_deduction, Decimal('0.00'))
 
 
 # ── Test 9: PayrollAdjustment — earning ───────────────────────────────────────
@@ -674,6 +819,21 @@ class PayrollOvertimeGatingTests(TestCase):
         rec = self._record(emp)
         self.assertEqual(rec.overtime_minutes, 0)
         self.assertEqual(rec.overtime_pay, Decimal('0.00'))
+
+    def test_approved_emergency_overtime_without_attendance_is_paid(self):
+        emp = self._emp('request_required')
+        OvertimeRequest.objects.create(
+            company=self.company, employee=emp, date=self.day,
+            requested_hours=Decimal('2.00'), approved_hours=Decimal('2.00'),
+            status='approved', source='employee',
+        )
+
+        rec = self._record(emp)
+
+        self.assertEqual(rec.present_days, 0)
+        self.assertEqual(rec.payable_days, Decimal('0'))
+        self.assertEqual(rec.overtime_minutes, 120)
+        self.assertEqual(rec.overtime_pay, Decimal('312.50'))
 
     def test_multiple_approved_requests_do_not_pay_beyond_actual_overtime(self):
         emp = self._emp('request_required')

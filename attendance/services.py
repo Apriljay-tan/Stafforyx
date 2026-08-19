@@ -284,21 +284,39 @@ def compute_attendance(record, overtime_override=None):
                     if record.break_minutes is not None
                     else shift['break_minutes']
                 )
-                total_work_min = max(0, time_out_min - time_in_min - break_min)
-
                 expected_min = max(
                     0,
                     sched_end_min - sched_start_min - shift['break_minutes'],
                 )
-                undertime_min = max(0, expected_min - total_work_min)
 
                 ot_start_min = sched_end_min + (shift['overtime_after_minutes'] or 0)
                 overtime_min = max(0, time_out_min - ot_start_min)
 
+                regular_start_min = max(time_in_min, sched_start_min)
+                regular_end_min = min(time_out_min, sched_end_min)
+                regular_span_min = max(0, regular_end_min - regular_start_min)
+                regular_work_min = max(0, regular_span_min - break_min)
+                total_work_min = regular_work_min + overtime_min
+                undertime_min = max(0, expected_min - regular_work_min)
+
                 if overtime_min > 0:
                     undertime_min = 0
 
-                if overtime_min > 0:
+                half_day_cutoff = shift.get('half_day_cutoff_time')
+                is_half_day = False
+                if half_day_cutoff is not None:
+                    cutoff_min = _to_min(half_day_cutoff)
+                    if is_overnight and cutoff_min <= sched_start_min:
+                        cutoff_min += 24 * 60
+                    if sched_start_min < cutoff_min <= sched_end_min and time_out_min <= cutoff_min:
+                        is_half_day = True
+                        total_work_min = max(0, time_out_min - regular_start_min)
+                        undertime_min = max(0, cutoff_min - max(time_out_min, regular_start_min))
+                        overtime_min = 0
+
+                if is_half_day:
+                    computed = 'half_day'
+                elif overtime_min > 0:
                     computed = 'overtime'
                 elif undertime_min > 0:
                     computed = 'undertime'

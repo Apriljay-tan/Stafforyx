@@ -12,7 +12,13 @@ from .models import (
 
 @admin.register(WorkSchedule)
 class WorkScheduleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'company', 'start_time', 'end_time', 'grace_minutes', 'required_hours', 'is_active')
+    list_display = (
+        'name', 'company', 'start_time', 'end_time', 'grace_minutes',
+        'half_day_cutoff_time',
+        'use_employee_hourly_rate_for_late', 'late_deduction_rate_per_hour',
+        'use_employee_hourly_rate_for_undertime', 'undertime_deduction_rate_per_hour',
+        'required_hours', 'is_active',
+    )
     list_filter = ('is_active', 'company')
     search_fields = ('name',)
     readonly_fields = ('created_at', 'updated_at')

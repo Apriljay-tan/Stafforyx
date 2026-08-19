@@ -1,3 +1,5 @@
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
@@ -21,6 +23,45 @@ def _require_hr(request):
         raise PermissionDenied
 
 
+def _refresh_draft_payroll_for_overtime_requests(overtime_requests):
+    from payroll.models import PayrollPeriod
+    from payroll.services import generate_payroll_for_period
+
+    seen_period_ids = set()
+    for ot in overtime_requests:
+        periods = PayrollPeriod.objects.filter(
+            company=ot.company,
+            start_date__lte=ot.date,
+            end_date__gte=ot.date,
+        )
+        for period in periods:
+            if period.pk in seen_period_ids:
+                continue
+            generate_payroll_for_period(period, allow_update_draft=True)
+            seen_period_ids.add(period.pk)
+
+
+def _approve_overtime_request(ot, user, approved_hours=None, manager_note=None):
+    if approved_hours is None:
+        approved_hours = ot.requested_hours
+    ot.approved_hours = approved_hours
+    if manager_note is not None:
+        ot.manager_note = manager_note
+    ot.status = 'approved'
+    ot.reviewed_by = user
+    ot.reviewed_at = timezone.now()
+    ot.save()
+
+
+def _reject_overtime_request(ot, user, manager_note=None):
+    if manager_note is not None:
+        ot.manager_note = manager_note
+    ot.status = 'rejected'
+    ot.reviewed_by = user
+    ot.reviewed_at = timezone.now()
+    ot.save()
+
+
 @login_required
 def manage_overtime(request):
     _require_hr(request)
@@ -29,6 +70,50 @@ def manage_overtime(request):
         OvertimeRequest.objects.select_related('employee', 'company').order_by('-date'),
         request.user,
     )
+
+    if request.method == 'POST':
+        selected_ids = request.POST.getlist('selected_requests')
+        bulk_action = request.POST.get('bulk_action', '')
+        bulk_note = request.POST.get('bulk_manager_note', '')
+        bulk_note = bulk_note.strip()
+
+        if not selected_ids:
+            messages.warning(request, 'Select at least one overtime request.')
+            return redirect(request.get_full_path())
+
+        selected = list(
+            requests
+            .filter(pk__in=selected_ids, status='pending')
+            .select_related('employee', 'company')
+        )
+        skipped = len(selected_ids) - len(selected)
+
+        if not selected:
+            messages.warning(request, 'No pending overtime requests were selected.')
+            return redirect(request.get_full_path())
+
+        if bulk_action == 'approve':
+            for ot in selected:
+                _approve_overtime_request(
+                    ot,
+                    request.user,
+                    approved_hours=ot.requested_hours,
+                    manager_note=bulk_note,
+                )
+            _refresh_draft_payroll_for_overtime_requests(selected)
+            message = f'Approved {len(selected)} overtime request(s).'
+        elif bulk_action == 'reject':
+            for ot in selected:
+                _reject_overtime_request(ot, request.user, manager_note=bulk_note)
+            message = f'Rejected {len(selected)} overtime request(s).'
+        else:
+            messages.warning(request, 'Choose a bulk action.')
+            return redirect(request.get_full_path())
+
+        if skipped:
+            message += f' Skipped {skipped} non-pending or inaccessible request(s).'
+        messages.success(request, message)
+        return redirect(request.get_full_path())
 
     status_filter = request.GET.get('status', '')
     date_filter = request.GET.get('date', '')
@@ -69,25 +154,25 @@ def manage_overtime_detail(request, pk):
         if action == 'approve':
             raw_hours = request.POST.get('approved_hours', '').strip()
             if raw_hours:
-                from decimal import Decimal, InvalidOperation
                 try:
-                    ot.approved_hours = Decimal(raw_hours)
+                    approved_hours = Decimal(raw_hours)
                 except (InvalidOperation, ValueError):
                     messages.error(request, 'Invalid approved hours value.')
                     return redirect('overtime:manage_overtime_detail', pk=ot.pk)
             else:
-                ot.approved_hours = ot.requested_hours
-            ot.status = 'approved'
-            ot.reviewed_by = request.user
-            ot.reviewed_at = timezone.now()
-            ot.save()
+                approved_hours = ot.requested_hours
+            _approve_overtime_request(
+                ot,
+                request.user,
+                approved_hours=approved_hours,
+                manager_note=ot.manager_note,
+            )
+            _refresh_draft_payroll_for_overtime_requests([ot])
+
             messages.success(request, 'Overtime request approved.')
 
         elif action == 'reject':
-            ot.status = 'rejected'
-            ot.reviewed_by = request.user
-            ot.reviewed_at = timezone.now()
-            ot.save()
+            _reject_overtime_request(ot, request.user, manager_note=ot.manager_note)
             messages.success(request, 'Overtime request rejected.')
 
         return redirect('overtime:manage_overtime')
