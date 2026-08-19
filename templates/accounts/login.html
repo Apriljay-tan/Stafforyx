@@ -42,6 +42,32 @@
   .login-card .form-label {
     font-size: 0.9rem;
   }
+  .password-field {
+    position: relative;
+  }
+  .password-field .form-control {
+    padding-right: 3.2rem;
+  }
+  .password-toggle {
+    position: absolute;
+    top: 50%;
+    right: 0.55rem;
+    transform: translateY(-50%);
+    width: 2.25rem;
+    height: 2.25rem;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .password-toggle:hover,
+  .password-toggle:focus {
+    background: #f1f5f9;
+    color: #1565C0;
+  }
   @media (max-width: 576px) {
     .login-card {
       max-width: 100%;
@@ -78,8 +104,14 @@
       </div>
       <div class="mb-3">
         <label class="form-label fw-semibold small" for="{{ form.password.id_for_label }}">Password</label>
-        <input type="password" name="{{ form.password.html_name }}" id="{{ form.password.id_for_label }}"
-               class="form-control">
+        <div class="password-field">
+          <input type="password" name="{{ form.password.html_name }}" id="{{ form.password.id_for_label }}"
+                 class="form-control" autocomplete="current-password">
+          <button class="password-toggle" type="button" aria-label="Show password" title="Show password"
+                  data-password-toggle="{{ form.password.id_for_label }}">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
         {% if form.password.errors %}<div class="text-danger small mt-1">{{ form.password.errors.as_text }}</div>{% endif %}
       </div>
       <button type="submit" class="btn btn-primary w-100">
@@ -89,4 +121,25 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var toggle = document.querySelector('[data-password-toggle]');
+  if (!toggle) return;
+
+  var input = document.getElementById(toggle.getAttribute('data-password-toggle'));
+  var icon = toggle.querySelector('i');
+  if (!input || !icon) return;
+
+  toggle.addEventListener('click', function () {
+    var isHidden = input.type === 'password';
+    input.type = isHidden ? 'text' : 'password';
+    toggle.setAttribute('aria-label', isHidden ? 'Hide password' : 'Show password');
+    toggle.setAttribute('title', isHidden ? 'Hide password' : 'Show password');
+    icon.className = isHidden ? 'bi bi-eye-slash' : 'bi bi-eye';
+  });
+})();
+</script>
 {% endblock %}
